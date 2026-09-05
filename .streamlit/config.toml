@@ -6,7 +6,6 @@ textColor = "#FAFAFA"
 font = "sans serif"
 
 [server]
-address = "localhost"
 headless = true
 enableCORS = true
 enableXsrfProtection = true
