@@ -7,7 +7,12 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-from modules.auth import requer_login
+from modules.auth import requer_login, criar_admin_inicial
+
+try:
+    criar_admin_inicial()
+except Exception:
+    pass
 
 usuario = requer_login()
 
