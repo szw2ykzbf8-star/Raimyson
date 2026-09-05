@@ -15,11 +15,13 @@ def get_client():
 def get_spreadsheet():
     client = get_client()
     try:
-        return client.open(SPREADSHEET_NAME)
+        sh = client.open(SPREADSHEET_NAME)
     except gspread.SpreadsheetNotFound:
         sh = client.create(SPREADSHEET_NAME)
         _inicializar_abas(sh)
         return sh
+    _garantir_abas(sh)
+    return sh
 
 
 def get_sheet(nome_chave: str):
@@ -29,6 +31,7 @@ def get_sheet(nome_chave: str):
         return sh.worksheet(nome_aba)
     except gspread.WorksheetNotFound:
         ws = sh.add_worksheet(title=nome_aba, rows=1000, cols=30)
+        ws.update([_cabecalhos().get(nome_aba, [])])
         return ws
 
 
@@ -54,8 +57,8 @@ def atualizar_celula(nome_chave: str, row: int, col: int, valor):
     ws.update_cell(row, col, valor)
 
 
-def _inicializar_abas(sh):
-    cabecalhos = {
+def _cabecalhos():
+    return {
         "Produtos": ["id", "descricao", "unidade_medida", "observacao", "ativo", "data_cadastro"],
         "Fornecedores": ["id", "razao_social", "cnpj", "nome_contato", "telefone", "ativo", "data_cadastro"],
         "Unidades": ["id", "nome", "cnpj", "ativo"],
@@ -69,6 +72,10 @@ def _inicializar_abas(sh):
         "Orcamentos": ["id", "unidade", "mes", "ano", "valor"],
         "HistoricoPrecos": ["id", "produto_id", "fornecedor_id", "cotacao_id", "preco", "tipo_embalagem", "qtd_por_embalagem", "preco_normalizado", "ganhou", "data"],
     }
+
+
+def _inicializar_abas(sh):
+    cabecalhos = _cabecalhos()
     aba_padrao = sh.sheet1
     primeira_chave = list(cabecalhos.keys())[0]
     aba_padrao.update_title(primeira_chave)
@@ -77,3 +84,20 @@ def _inicializar_abas(sh):
     for nome, cols in list(cabecalhos.items())[1:]:
         ws = sh.add_worksheet(title=nome, rows=1000, cols=len(cols) + 5)
         ws.update([cols])
+
+
+def _garantir_abas(sh):
+    """Ensure all tabs exist with proper headers; fixes manually created empty sheets."""
+    cabecalhos = _cabecalhos()
+    abas_existentes = {ws.title: ws for ws in sh.worksheets()}
+
+    for nome, cols in cabecalhos.items():
+        if nome not in abas_existentes:
+            ws = sh.add_worksheet(title=nome, rows=1000, cols=len(cols) + 5)
+            ws.update([cols])
+        else:
+            ws = abas_existentes[nome]
+            primeira_linha = ws.row_values(1)
+            if primeira_linha != cols:
+                # Sheet exists but has no/wrong headers — insert header row at top
+                ws.insert_row(cols, index=1)
