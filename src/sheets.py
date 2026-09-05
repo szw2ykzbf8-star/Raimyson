@@ -1,10 +1,11 @@
+import json
 import uuid
 from datetime import datetime
 import gspread
 from google.oauth2.service_account import Credentials
 import pandas as pd
 import streamlit as st
-from src.config import GOOGLE_CREDENTIALS_PATH, SPREADSHEET_ID, SHEETS
+from src.config import GOOGLE_CREDENTIALS_PATH, GOOGLE_CREDENTIALS_JSON, SPREADSHEET_ID, SHEETS
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -13,7 +14,11 @@ SCOPES = [
 
 @st.cache_resource
 def get_client():
-    creds = Credentials.from_service_account_file(GOOGLE_CREDENTIALS_PATH, scopes=SCOPES)
+    if GOOGLE_CREDENTIALS_JSON:
+        info  = json.loads(GOOGLE_CREDENTIALS_JSON)
+        creds = Credentials.from_service_account_info(info, scopes=SCOPES)
+    else:
+        creds = Credentials.from_service_account_file(GOOGLE_CREDENTIALS_PATH, scopes=SCOPES)
     return gspread.authorize(creds)
 
 
