@@ -9,7 +9,21 @@ usuario = requer_perfil(["admin", "comprador"])
 
 st.title("📦 Cadastro de Produtos")
 
+
+def is_ativo(v):
+    return v is True or str(v).upper() == "TRUE"
+
+
 df = ler_df("produtos")
+
+df_um = ler_df("unidades_medida")
+if not df_um.empty:
+    opcoes_unidade_base = df_um[df_um["ativo"].apply(is_ativo)]["nome"].tolist()
+else:
+    opcoes_unidade_base = ["kg", "litro", "unidade"]
+
+if not opcoes_unidade_base:
+    opcoes_unidade_base = ["kg", "litro", "unidade"]
 
 tab_lista, tab_novo = st.tabs(["Lista de Produtos", "Novo Produto"])
 
@@ -17,50 +31,124 @@ with tab_lista:
     if df.empty:
         st.info("Nenhum produto cadastrado ainda.")
     else:
-        filtro = st.text_input("Filtrar por descrição")
-        mostrar_inativos = st.checkbox("Mostrar inativos")
+        col_f, col_i = st.columns([3, 1])
+        with col_f:
+            filtro = st.text_input("Filtrar por descrição")
+        with col_i:
+            mostrar_inativos = st.checkbox("Mostrar inativos")
 
         exibir = df.copy()
         if filtro:
             exibir = exibir[exibir["descricao"].str.contains(filtro, case=False, na=False)]
         if not mostrar_inativos:
-            exibir = exibir[exibir["ativo"] == True]
+            exibir = exibir[exibir["ativo"].apply(is_ativo)]
 
         for i, row in exibir.iterrows():
-            with st.expander(f"{'✅' if row['ativo'] else '❌'} {row['descricao']} — {row['unidade_medida']}"):
+            apres = row.get("apresentacao", "")
+            ub = row.get("unidade_base", "")
+            qtd = row.get("qtd_base_por_apresentacao", "")
+            icone = "✅" if is_ativo(row["ativo"]) else "❌"
+            label = f"{icone} {row['descricao']}  —  {apres}  (base: {qtd} {ub})"
+            with st.expander(label):
                 col1, col2 = st.columns([3, 1])
                 with col1:
-                    nova_desc = st.text_input("Descrição", value=row["descricao"], key=f"desc_{i}")
-                    nova_unidade = st.text_input("Unidade de medida", value=row["unidade_medida"], key=f"un_{i}")
+                    nova_desc = st.text_input("Descrição *", value=row["descricao"], key=f"desc_{i}")
+                    nova_apres = st.text_input(
+                        "Apresentação *", value=str(apres), key=f"apres_{i}",
+                        help="Como o produto é vendido. Ex: Pacote 5kg, Fardo c/6 pct"
+                    )
+                    col_a, col_b = st.columns(2)
+                    with col_a:
+                        idx_default = opcoes_unidade_base.index(ub) if ub in opcoes_unidade_base else 0
+                        nova_ub = st.selectbox(
+                            "Unidade base (comparação) *", opcoes_unidade_base,
+                            index=idx_default, key=f"ub_{i}",
+                            help="Unidade usada para normalizar e comparar preços"
+                        )
+                    with col_b:
+                        nova_qtd = st.number_input(
+                            "Qtd base por apresentação *",
+                            value=float(qtd) if qtd else 1.0,
+                            min_value=0.001, step=0.5, key=f"qtd_{i}",
+                            help="Qtd da unidade base contida na apresentação. Ex: Pacote 5kg → 5; Fardo c/6 pct de 5kg → 30"
+                        )
                     nova_obs = st.text_input("Observação", value=row.get("observacao", ""), key=f"obs_{i}")
                 with col2:
-                    ativo = st.checkbox("Ativo", value=bool(row["ativo"]), key=f"ativo_{i}")
-                    if st.button("Salvar", key=f"salvar_{i}"):
-                        df.at[i, "descricao"] = nova_desc
-                        df.at[i, "unidade_medida"] = nova_unidade
-                        df.at[i, "observacao"] = nova_obs
-                        df.at[i, "ativo"] = ativo
-                        escrever_df("produtos", df)
-                        st.success("Produto atualizado!")
-                        st.cache_resource.clear()
-                        st.rerun()
+                    st.markdown("&nbsp;", unsafe_allow_html=True)
+                    novo_ativo = st.checkbox("Ativo", value=is_ativo(row["ativo"]), key=f"ativo_{i}")
+                    if st.button("💾 Salvar", key=f"salvar_{i}", use_container_width=True):
+                        if not nova_desc or not nova_apres:
+                            st.error("Descrição e apresentação são obrigatórias.")
+                        else:
+                            df.at[i, "descricao"] = nova_desc
+                            df.at[i, "apresentacao"] = nova_apres
+                            df.at[i, "unidade_base"] = nova_ub
+                            df.at[i, "qtd_base_por_apresentacao"] = nova_qtd
+                            df.at[i, "observacao"] = nova_obs
+                            df.at[i, "ativo"] = novo_ativo
+                            escrever_df("produtos", df)
+                            st.success("Produto atualizado!")
+                            st.cache_resource.clear()
+                            st.rerun()
 
 with tab_novo:
+    st.markdown("#### Cadastrar novo produto")
+    st.caption(
+        "Separe o **nome** da **embalagem**: descrição é só o produto (ex: *Arroz*), "
+        "apresentação é como ele é vendido (ex: *Pacote 5kg*)."
+    )
+
     with st.form("novo_produto"):
-        descricao = st.text_input("Descrição *")
-        unidade_medida = st.selectbox("Unidade de medida *", ["Unidade", "Kg", "Litro", "Pacote", "Caixa", "Fardo", "Outro"])
-        observacao = st.text_input("Observação")
-        salvar = st.form_submit_button("Cadastrar Produto")
+        descricao = st.text_input(
+            "Descrição *",
+            placeholder="Ex: Arroz, Papel toalha, Detergente",
+            help="Nome do produto sem incluir embalagem ou quantidade"
+        )
+        apresentacao = st.text_input(
+            "Apresentação *",
+            placeholder="Ex: Pacote 5kg, Fardo c/6 pct, Caixa 12un",
+            help="Como o produto é normalmente vendido pelo fornecedor"
+        )
+        col1, col2 = st.columns(2)
+        with col1:
+            unidade_base = st.selectbox(
+                "Unidade base (comparação de preço) *",
+                opcoes_unidade_base,
+                help="Unidade usada para normalizar e comparar preços entre fornecedores"
+            )
+        with col2:
+            qtd_base = st.number_input(
+                "Qtd da unidade base por apresentação *",
+                min_value=0.001, value=1.0, step=0.5,
+                help=(
+                    "Quantas unidades-base cabem na apresentação:\n"
+                    "• Pacote 5kg → 5\n"
+                    "• Fardo c/6 pct de 5kg → 30\n"
+                    "• Caixa 12un → 12"
+                )
+            )
+        observacao = st.text_input(
+            "Observação",
+            placeholder="Ex: Perecível. Preferir marca X.",
+            help="Informação extra visível apenas internamente"
+        )
+        salvar = st.form_submit_button("✅ Cadastrar Produto", use_container_width=True)
 
     if salvar:
-        if not descricao:
-            st.error("Descrição é obrigatória.")
+        if not descricao.strip() or not apresentacao.strip():
+            st.error("Descrição e apresentação são obrigatórias.")
         else:
             novo_id = int(df["id"].max()) + 1 if not df.empty else 1
             append_linha("produtos", [
-                novo_id, descricao, unidade_medida, observacao,
-                True, datetime.date.today().isoformat()
+                novo_id,
+                descricao.strip(),
+                apresentacao.strip(),
+                unidade_base,
+                qtd_base,
+                observacao.strip(),
+                True,
+                datetime.date.today().isoformat(),
             ])
-            st.success(f"Produto '{descricao}' cadastrado!")
+            st.success(f"Produto '{descricao}' cadastrado com sucesso!")
             st.cache_resource.clear()
             st.rerun()

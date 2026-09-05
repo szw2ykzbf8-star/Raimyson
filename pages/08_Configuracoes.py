@@ -11,8 +11,8 @@ usuario = requer_perfil(["admin"])
 
 st.title("⚙️ Configurações")
 
-tab_unidades, tab_usuarios, tab_orcamento, tab_backup = st.tabs([
-    "Unidades", "Usuários", "Orçamentos", "Backup / Exportar"
+tab_unidades, tab_unidades_medida, tab_usuarios, tab_orcamento, tab_backup = st.tabs([
+    "Unidades Hoteleiras", "Un. de Medida", "Usuários", "Orçamentos", "Backup / Exportar"
 ])
 
 with tab_unidades:
@@ -31,6 +31,52 @@ with tab_unidades:
             st.success(f"Unidade '{nome}' adicionada!")
             st.cache_resource.clear()
             st.rerun()
+
+with tab_unidades_medida:
+    st.subheader("Unidades de Medida Base")
+    st.caption(
+        "Estas unidades são usadas para normalizar e comparar preços entre fornecedores. "
+        "Unidades padrão (kg, litro, unidade, metro) não podem ser excluídas, apenas inativadas."
+    )
+
+    UNIDADES_PROTEGIDAS = {"kg", "litro", "unidade", "metro"}
+
+    df_um = ler_df("unidades_medida")
+
+    if not df_um.empty:
+        for i, row in df_um.iterrows():
+            ativo_val = row["ativo"] is True or str(row["ativo"]).upper() == "TRUE"
+            col1, col2, col3 = st.columns([4, 2, 2])
+            with col1:
+                st.write(f"**{row['nome']}**" + (" *(padrão)*" if str(row["nome"]).lower() in UNIDADES_PROTEGIDAS else ""))
+            with col2:
+                st.write("✅ Ativa" if ativo_val else "❌ Inativa")
+            with col3:
+                btn_label = "Inativar" if ativo_val else "Ativar"
+                if st.button(btn_label, key=f"um_toggle_{i}", use_container_width=True):
+                    df_um.at[i, "ativo"] = not ativo_val
+                    escrever_df("unidades_medida", df_um)
+                    st.cache_resource.clear()
+                    st.rerun()
+
+    st.markdown("---")
+    st.markdown("**Adicionar nova unidade de medida**")
+    with st.form("nova_unidade_medida"):
+        nova_um = st.text_input(
+            "Nome da unidade *",
+            placeholder="Ex: g (grama), mL, dúzia, metro²"
+        )
+        if st.form_submit_button("Adicionar", use_container_width=True):
+            if not nova_um.strip():
+                st.error("Informe o nome da unidade.")
+            elif not df_um.empty and nova_um.strip().lower() in df_um["nome"].str.lower().tolist():
+                st.error(f"A unidade '{nova_um}' já existe.")
+            else:
+                novo_id = int(df_um["id"].max()) + 1 if not df_um.empty else 1
+                append_linha("unidades_medida", [novo_id, nova_um.strip(), True])
+                st.success(f"Unidade '{nova_um.strip()}' adicionada!")
+                st.cache_resource.clear()
+                st.rerun()
 
 with tab_usuarios:
     st.subheader("Usuários do Sistema")

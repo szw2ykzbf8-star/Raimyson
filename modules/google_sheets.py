@@ -59,7 +59,7 @@ def atualizar_celula(nome_chave: str, row: int, col: int, valor):
 
 def _cabecalhos():
     return {
-        "Produtos": ["id", "descricao", "unidade_medida", "observacao", "ativo", "data_cadastro"],
+        "Produtos": ["id", "descricao", "apresentacao", "unidade_base", "qtd_base_por_apresentacao", "observacao", "ativo", "data_cadastro"],
         "Fornecedores": ["id", "razao_social", "cnpj", "nome_contato", "telefone", "ativo", "data_cadastro"],
         "Unidades": ["id", "nome", "cnpj", "ativo"],
         "Usuarios": ["id", "nome", "login", "senha_hash", "perfil", "unidades_acesso", "ativo"],
@@ -71,6 +71,7 @@ def _cabecalhos():
         "ItensCompra": ["id", "compra_id", "produto_id", "quantidade", "preco_unitario", "preco_normalizado", "fator"],
         "Orcamentos": ["id", "unidade", "mes", "ano", "valor"],
         "HistoricoPrecos": ["id", "produto_id", "fornecedor_id", "cotacao_id", "preco", "tipo_embalagem", "qtd_por_embalagem", "preco_normalizado", "ganhou", "data"],
+        "UnidadesMedida": ["id", "nome", "ativo"],
     }
 
 
@@ -86,8 +87,16 @@ def _inicializar_abas(sh):
         ws.update([cols])
 
 
+_UNIDADES_MEDIDA_PADRAO = [
+    [1, "kg",      True],
+    [2, "litro",   True],
+    [3, "unidade", True],
+    [4, "metro",   True],
+]
+
+
 def _garantir_abas(sh):
-    """Ensure all tabs exist with proper headers; fixes manually created empty sheets."""
+    """Ensure all tabs exist with proper headers; handles schema migrations safely."""
     cabecalhos = _cabecalhos()
     abas_existentes = {ws.title: ws for ws in sh.worksheets()}
 
@@ -95,9 +104,16 @@ def _garantir_abas(sh):
         if nome not in abas_existentes:
             ws = sh.add_worksheet(title=nome, rows=1000, cols=len(cols) + 5)
             ws.update([cols])
+            if nome == "UnidadesMedida":
+                ws.append_rows(_UNIDADES_MEDIDA_PADRAO)
         else:
             ws = abas_existentes[nome]
             primeira_linha = ws.row_values(1)
             if primeira_linha != cols:
-                # Sheet exists but has no/wrong headers — insert header row at top
-                ws.insert_row(cols, index=1)
+                # Wrong or missing headers. If there's data in row 2+, insert above it.
+                # If the tab is empty/header-only, just overwrite row 1 (schema migration).
+                tem_dados = bool(ws.row_values(2))
+                if tem_dados:
+                    ws.insert_row(cols, index=1)
+                else:
+                    ws.update([cols])

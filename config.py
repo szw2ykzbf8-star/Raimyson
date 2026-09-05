@@ -25,6 +25,7 @@ SHEETS = {
     "itens_compra": "ItensCompra",
     "orcamentos":   "Orcamentos",
     "historico_precos": "HistoricoPrecos",
+    "unidades_medida":  "UnidadesMedida",
 }
 
 # Unidades cadastradas
