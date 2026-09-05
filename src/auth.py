@@ -51,15 +51,21 @@ def _verify_estado(stored: str) -> str:
 
 
 # ─── Hashing de PIN com pepper ────────────────────────────────────────────────
+# SHA-256 pré-hash garante que bcrypt recebe sempre 32 bytes (< limite de 72),
+# independente do tamanho da senha ou do pepper.
+
+
+def _preparar_pin(pin: str) -> bytes:
+    return hashlib.sha256((pin + PIN_PEPPER).encode()).digest()
 
 
 def hash_pin(pin: str) -> str:
-    return bcrypt.hashpw((pin + PIN_PEPPER).encode(), bcrypt.gensalt()).decode()
+    return bcrypt.hashpw(_preparar_pin(pin), bcrypt.gensalt()).decode()
 
 
 def verify_pin(pin: str, hashed: str) -> bool:
     try:
-        return bcrypt.checkpw((pin + PIN_PEPPER).encode(), hashed.encode())
+        return bcrypt.checkpw(_preparar_pin(pin), hashed.encode())
     except Exception:
         return False
 
