@@ -12,7 +12,8 @@ def autenticar(login: str, senha: str):
     df = ler_df("usuarios")
     if df.empty:
         return None
-    usuario = df[(df["login"] == login) & (df["senha_hash"] == hash_senha(senha)) & (df["ativo"] == True)]
+    ativo_ok = df["ativo"].apply(lambda v: v is True or str(v).upper() == "TRUE")
+    usuario = df[(df["login"] == login) & (df["senha_hash"] == hash_senha(senha)) & ativo_ok]
     if usuario.empty:
         return None
     return usuario.iloc[0].to_dict()

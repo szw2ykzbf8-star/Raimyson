@@ -37,7 +37,7 @@ def get_sheet(nome_chave: str):
 
 def ler_df(nome_chave: str) -> pd.DataFrame:
     ws = get_sheet(nome_chave)
-    data = ws.get_all_records()
+    data = ws.get_all_records(value_render_option="UNFORMATTED_VALUE")
     return pd.DataFrame(data)
 
 
