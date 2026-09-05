@@ -9,10 +9,7 @@ def hash_senha(senha: str) -> str:
 
 
 def autenticar(login: str, senha: str):
-    try:
-        df = ler_df("usuarios")
-    except Exception:
-        return None
+    df = ler_df("usuarios")
     if df.empty:
         return None
     usuario = df[(df["login"] == login) & (df["senha_hash"] == hash_senha(senha)) & (df["ativo"] == True)]
@@ -30,12 +27,15 @@ def login_page():
         login = st.text_input("Usuário")
         senha = st.text_input("Senha", type="password")
         if st.button("Entrar", use_container_width=True):
-            usuario = autenticar(login, senha)
-            if usuario:
-                st.session_state["usuario"] = usuario
-                st.rerun()
-            else:
-                st.error("Usuário ou senha inválidos.")
+            try:
+                usuario = autenticar(login, senha)
+                if usuario:
+                    st.session_state["usuario"] = usuario
+                    st.rerun()
+                else:
+                    st.error("Usuário ou senha inválidos.")
+            except Exception as e:
+                st.error(f"Erro de conexão com Google Sheets: {e}")
 
 
 def requer_login():
@@ -55,15 +55,10 @@ def requer_perfil(perfis_permitidos: list):
 
 def criar_admin_inicial():
     """Cria o usuário admin padrão se o banco estiver vazio."""
-    try:
-        df = ler_df("usuarios")
-        if not df.empty:
-            return
-    except Exception:
-        return
-
     from modules.google_sheets import append_linha
-    import datetime
+    df = ler_df("usuarios")
+    if not df.empty:
+        return
     append_linha("usuarios", [
         1, "Administrador", "admin", hash_senha("admin123"),
         "admin", "todos", True
