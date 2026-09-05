@@ -12,8 +12,8 @@ if not st.session_state.get("admin_autenticado", False):
     st.title("⚙️ Administração")
     st.warning("🔐 Esta área requer verificação dupla de identidade.")
     with st.form("admin_auth"):
-        pin_a = st.text_input("PIN de Abertura", type="password", max_chars=6)
-        pin_e = st.text_input("PIN de Exclusão", type="password", max_chars=6)
+        pin_a = st.text_input("Senha de Abertura", type="password")
+        pin_e = st.text_input("Senha de Exclusão", type="password")
         submitted = st.form_submit_button("Verificar", use_container_width=True)
     if submitted:
         hashed_a = sh.get_config(auth.PIN_ABERTURA, "")
@@ -35,15 +35,15 @@ with tabs[0]:
     st.subheader("🔑 Alterar PINs")
 
     with st.form("alter_pin_abertura"):
-        st.markdown("**PIN de Abertura**")
-        novo_a  = st.text_input("Novo PIN (6 dígitos)", type="password", max_chars=6, key="npa")
-        novo_a2 = st.text_input("Confirmar", type="password", max_chars=6, key="npa2")
-        btn_a   = st.form_submit_button("Alterar PIN de Abertura")
+        st.markdown("**Senha de Abertura**")
+        novo_a  = st.text_input("Nova senha (mín. 4 caracteres)", type="password", key="npa")
+        novo_a2 = st.text_input("Confirmar", type="password", key="npa2")
+        btn_a   = st.form_submit_button("Alterar Senha de Abertura")
     if btn_a:
-        if not novo_a.isdigit() or len(novo_a) != 6:
-            st.error("PIN deve ter exatamente 6 dígitos numéricos.")
+        if len(novo_a) < 4:
+            st.error("Senha deve ter pelo menos 4 caracteres.")
         elif novo_a != novo_a2:
-            st.error("PINs não conferem.")
+            st.error("Senhas não conferem.")
         else:
             sh.set_config(auth.PIN_ABERTURA, auth.hash_pin(novo_a))
             sh.set_config("tentativas_abertura", "0")
@@ -52,15 +52,15 @@ with tabs[0]:
     st.markdown("---")
 
     with st.form("alter_pin_exclusao"):
-        st.markdown("**PIN de Exclusão**")
-        novo_e  = st.text_input("Novo PIN (6 dígitos)", type="password", max_chars=6, key="npe")
-        novo_e2 = st.text_input("Confirmar", type="password", max_chars=6, key="npe2")
-        btn_e   = st.form_submit_button("Alterar PIN de Exclusão")
+        st.markdown("**Senha de Exclusão**")
+        novo_e  = st.text_input("Nova senha (mín. 4 caracteres)", type="password", key="npe")
+        novo_e2 = st.text_input("Confirmar", type="password", key="npe2")
+        btn_e   = st.form_submit_button("Alterar Senha de Exclusão")
     if btn_e:
-        if not novo_e.isdigit() or len(novo_e) != 6:
-            st.error("PIN deve ter exatamente 6 dígitos numéricos.")
+        if len(novo_e) < 4:
+            st.error("Senha deve ter pelo menos 4 caracteres.")
         elif novo_e != novo_e2:
-            st.error("PINs não conferem.")
+            st.error("Senhas não conferem.")
         elif auth.verify_pin(novo_e, sh.get_config(auth.PIN_ABERTURA, "")):
             st.error("PIN de exclusão não pode ser igual ao de abertura.")
         else:

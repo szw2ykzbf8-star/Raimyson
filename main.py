@@ -44,28 +44,28 @@ def tela_setup():
 
     with st.form("setup_form"):
         st.subheader("🔑 PIN de Abertura")
-        pin_a = st.text_input("PIN (6 dígitos)", type="password", max_chars=6, key="sa1")
-        pin_a2 = st.text_input("Confirmar PIN", type="password", max_chars=6, key="sa2")
+        pin_a = st.text_input("Senha", type="password", key="sa1")
+        pin_a2 = st.text_input("Confirmar senha", type="password", key="sa2")
 
         st.subheader("🔐 PIN de Exclusão")
-        st.caption("PIN diferente do anterior, usado para confirmar exclusões.")
-        pin_e = st.text_input("PIN (6 dígitos)", type="password", max_chars=6, key="se1")
-        pin_e2 = st.text_input("Confirmar PIN", type="password", max_chars=6, key="se2")
+        st.caption("Senha diferente da anterior, usada para confirmar exclusões.")
+        pin_e = st.text_input("Senha", type="password", key="se1")
+        pin_e2 = st.text_input("Confirmar senha", type="password", key="se2")
 
         submitted = st.form_submit_button("Salvar e Continuar", use_container_width=True)
 
     if submitted:
         erros = []
-        if not pin_a.isdigit() or len(pin_a) != 6:
-            erros.append("PIN de abertura deve ter exatamente 6 dígitos numéricos.")
+        if len(pin_a) < 4:
+            erros.append("Senha de abertura deve ter pelo menos 4 caracteres.")
         if pin_a != pin_a2:
-            erros.append("PINs de abertura não conferem.")
-        if not pin_e.isdigit() or len(pin_e) != 6:
-            erros.append("PIN de exclusão deve ter exatamente 6 dígitos numéricos.")
+            erros.append("Senhas de abertura não conferem.")
+        if len(pin_e) < 4:
+            erros.append("Senha de exclusão deve ter pelo menos 4 caracteres.")
         if pin_e != pin_e2:
-            erros.append("PINs de exclusão não conferem.")
+            erros.append("Senhas de exclusão não conferem.")
         if pin_a == pin_e:
-            erros.append("PIN de abertura e exclusão devem ser diferentes.")
+            erros.append("Senha de abertura e exclusão devem ser diferentes.")
 
         if erros:
             for e in erros:
@@ -90,8 +90,8 @@ def tela_login():
 
     if not bloqueado:
         with st.form("login_form"):
-            pin = st.text_input("PIN de Acesso", type="password", max_chars=6,
-                                placeholder="● ● ● ● ● ●")
+            pin = st.text_input("Senha de Acesso", type="password",
+                                placeholder="Digite sua senha")
             submitted = st.form_submit_button("Entrar", use_container_width=True)
 
         if submitted:
