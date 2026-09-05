@@ -1,6 +1,6 @@
 import os
 
-CREDENTIALS_FILE = os.path.join(os.path.dirname(__file__), "credentials.json")
+CREDENTIALS_FILE = os.path.join(os.path.dirname(__file__), "h-hoteis-compras-ab8bb9c498fc.json")
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
