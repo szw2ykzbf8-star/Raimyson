@@ -176,8 +176,8 @@ def main():
         print(f"  SPREADSHEET_ID = {spreadsheet.id}")
         print(f"  Copie esse ID para o seu .env!")
         print(f"{'='*60}\n")
-        # Torna pública para edição via service account apenas (não compartilha com todos)
-        spreadsheet.share(None, perm_type="anyone", role="reader", with_link=True)
+        # Compartilha apenas com a service account (já tem acesso por ser a criadora).
+        # NÃO torna público — dados financeiros devem ser privados.
 
     # Criar/verificar todas as abas
     print("\n→ Configurando abas...")

@@ -1,3 +1,4 @@
+import html
 import requests
 from src.config import TELEGRAM_TOKEN, TELEGRAM_CHAT_ID
 
@@ -36,7 +37,7 @@ def enviar_alerta_categoria(categoria: str, gasto: float, limite: float) -> bool
     emoji = "🚨" if gasto >= limite else "⚠️"
     texto = (
         f"{emoji} <b>FinTrack — Alerta de Categoria</b>\n\n"
-        f"Categoria: <b>{categoria}</b>\n"
+        f"Categoria: <b>{html.escape(categoria)}</b>\n"
         f"Gasto: R$ {gasto:,.2f} ({pct}% do limite)\n"
         f"Limite: R$ {limite:,.2f}"
     )
@@ -46,9 +47,9 @@ def enviar_alerta_categoria(categoria: str, gasto: float, limite: float) -> bool
 def enviar_alerta_fatura(cartao: str, valor: float, vencimento: str) -> bool:
     texto = (
         f"💳 <b>FinTrack — Fatura Próxima</b>\n\n"
-        f"Cartão: <b>{cartao}</b>\n"
+        f"Cartão: <b>{html.escape(cartao)}</b>\n"
         f"Valor: R$ {valor:,.2f}\n"
-        f"Vencimento: {vencimento}"
+        f"Vencimento: {html.escape(vencimento)}"
     )
     return enviar_mensagem(texto)
 

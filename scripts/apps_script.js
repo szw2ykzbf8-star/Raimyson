@@ -180,16 +180,21 @@ function salvarGasto(payload) {
     }
   }
 
-  const dataCompra    = String(payload.data_compra);
+  const dataCompra    = String(payload.data_compra).substring(0, 10);
   const valorTotal    = parseFloat(payload.valor_total);
-  const numParcelas   = parseInt(payload.num_parcelas) || 1;
-  const categoria     = String(payload.categoria);
-  const formaPgto     = String(payload.forma_pagamento);
-  const contaCartao   = String(payload.conta_cartao);
-  const descricao     = String(payload.descricao || "");
+  const numParcelas   = Math.min(Math.max(parseInt(payload.num_parcelas) || 1, 1), 360);
+  const categoria     = String(payload.categoria).substring(0, 100);
+  const formaPgto     = String(payload.forma_pagamento).substring(0, 20);
+  const contaCartao   = String(payload.conta_cartao).substring(0, 100);
+  const descricao     = String(payload.descricao || "").substring(0, 500);
 
-  if (isNaN(valorTotal) || valorTotal <= 0) {
+  if (isNaN(valorTotal) || valorTotal <= 0 || valorTotal > 1e7) {
     return { ok: false, error: "Valor inválido" };
+  }
+
+  // Valida formato da data (YYYY-MM-DD)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dataCompra)) {
+    return { ok: false, error: "Data inválida" };
   }
 
   const valorParcela = valorTotal / numParcelas;

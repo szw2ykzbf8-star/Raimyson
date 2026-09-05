@@ -75,8 +75,9 @@ def desbloquear():
     sh.set_config("tentativas_exclusao", "0")
     sh.set_config("codigo_desbloqueio", "")
     sh.set_config("codigo_timestamp", "")
-    if "authenticated" in st.session_state:
-        del st.session_state["authenticated"]
+    for key in ("authenticated", "admin_autenticado"):
+        if key in st.session_state:
+            del st.session_state[key]
 
 
 # ─── Autenticação de sessão ───────────────────────────────────────────────────
