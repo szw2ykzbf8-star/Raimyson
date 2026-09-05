@@ -34,7 +34,6 @@ SPREADSHEET_NAME = "FinTrack"
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive",
 ]
 
 # Categorias e fontes padrão (espelha src/config.py)
@@ -106,13 +105,13 @@ CONFIG_INICIAL = [
     ("pin_exclusao",            ""),
     ("tentativas_abertura",     "0"),
     ("tentativas_exclusao",     "0"),
-    ("estado_bloqueio",         "DESBLOQUEADO"),
+    ("bloqueio_estado",         "DESBLOQUEADO"),
     ("codigo_desbloqueio",      ""),
-    ("codigo_expiracao",        ""),
+    ("codigo_timestamp",        "0"),
+    ("codigo_tentativas",       "0"),
     ("inatividade_minutos",     "30"),
     ("meta_economia",           "0"),
     ("alertas_categorias",      "{}"),
-    ("telegram_chat_id_override", ""),
 ]
 
 # ─── Funções auxiliares ───────────────────────────────────────────────────────

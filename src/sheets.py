@@ -8,7 +8,6 @@ from src.config import GOOGLE_CREDENTIALS_PATH, SPREADSHEET_ID, SHEETS
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive",
 ]
 
 
@@ -34,7 +33,17 @@ def new_id() -> str:
     return str(uuid.uuid4())
 
 
-# ─── Cache por sessão ───────────────────────────────────────────────────────
+def _find_row(ws: gspread.Worksheet, value: str, col: int = 1) -> int:
+    """Retorna o número de linha (1-indexado) onde value aparece na coluna col.
+    Lança ValueError se não encontrado. Sempre consulta o Sheets em tempo real,
+    evitando o uso de índices de cache que podem estar desatualizados."""
+    cell = ws.find(value, in_column=col)
+    if cell is None:
+        raise ValueError(f"Valor '{value}' não encontrado na coluna {col}")
+    return cell.row
+
+
+# ─── Cache por sessão ────────────────────────────────────────────────────────
 
 
 def _cache_key(name: str) -> str:
@@ -43,9 +52,9 @@ def _cache_key(name: str) -> str:
 
 def get_df(sheet_key: str, force: bool = False) -> pd.DataFrame:
     name = SHEETS[sheet_key]
-    key = _cache_key(name)
+    key  = _cache_key(name)
     if force or key not in st.session_state:
-        ws = _sheet(name)
+        ws   = _sheet(name)
         data = ws.get_all_records(numericise_ignore=["all"])
         st.session_state[key] = pd.DataFrame(data) if data else pd.DataFrame()
     return st.session_state[key]
@@ -53,12 +62,11 @@ def get_df(sheet_key: str, force: bool = False) -> pd.DataFrame:
 
 def invalidate(sheet_key: str):
     name = SHEETS[sheet_key]
-    key = _cache_key(name)
-    if key in st.session_state:
-        del st.session_state[key]
+    key  = _cache_key(name)
+    st.session_state.pop(key, None)
 
 
-# ─── Config ─────────────────────────────────────────────────────────────────
+# ─── Config ──────────────────────────────────────────────────────────────────
 
 
 def get_config(chave: str, default=None):
@@ -71,17 +79,15 @@ def get_config(chave: str, default=None):
 
 def set_config(chave: str, valor: str):
     ws = _sheet(SHEETS["config"])
-    df = get_df("config")
-    if not df.empty and chave in df["chave"].values:
-        idx = df[df["chave"] == chave].index[0]
-        row_num = idx + 2
+    try:
+        row_num = _find_row(ws, chave, col=1)
         ws.update_cell(row_num, 2, valor)
-    else:
+    except ValueError:
         ws.append_row([chave, valor])
     invalidate("config")
 
 
-# ─── Categorias ─────────────────────────────────────────────────────────────
+# ─── Categorias ──────────────────────────────────────────────────────────────
 
 
 def get_categorias(apenas_ativas: bool = True) -> pd.DataFrame:
@@ -94,7 +100,7 @@ def get_categorias(apenas_ativas: bool = True) -> pd.DataFrame:
 
 
 def add_categoria(nome: str, icone: str = "📦") -> str:
-    ws = _sheet(SHEETS["categorias"])
+    ws  = _sheet(SHEETS["categorias"])
     rid = new_id()
     ws.append_row([rid, nome, icone, "True", _now()])
     invalidate("categorias")
@@ -102,10 +108,9 @@ def add_categoria(nome: str, icone: str = "📦") -> str:
 
 
 def delete_categoria(rid: str):
-    ws = _sheet(SHEETS["categorias"])
-    df = get_df("categorias")
-    idx = df[df["id"] == rid].index[0]
-    ws.update_cell(idx + 2, 4, "False")
+    ws      = _sheet(SHEETS["categorias"])
+    row_num = _find_row(ws, rid)
+    ws.update_cell(row_num, 4, "False")
     invalidate("categorias")
 
 
@@ -122,7 +127,7 @@ def get_fontes(apenas_ativas: bool = True) -> pd.DataFrame:
 
 
 def add_fonte(nome: str) -> str:
-    ws = _sheet(SHEETS["fontes"])
+    ws  = _sheet(SHEETS["fontes"])
     rid = new_id()
     ws.append_row([rid, nome, "True", _now()])
     invalidate("fontes")
@@ -130,10 +135,9 @@ def add_fonte(nome: str) -> str:
 
 
 def delete_fonte(rid: str):
-    ws = _sheet(SHEETS["fontes"])
-    df = get_df("fontes")
-    idx = df[df["id"] == rid].index[0]
-    ws.update_cell(idx + 2, 3, "False")
+    ws      = _sheet(SHEETS["fontes"])
+    row_num = _find_row(ws, rid)
+    ws.update_cell(row_num, 3, "False")
     invalidate("fontes")
 
 
@@ -150,7 +154,7 @@ def get_contas(apenas_ativas: bool = True) -> pd.DataFrame:
 
 
 def add_conta(nome: str, tipo: str, saldo_inicial: float = 0.0) -> str:
-    ws = _sheet(SHEETS["contas"])
+    ws  = _sheet(SHEETS["contas"])
     rid = new_id()
     ws.append_row([rid, nome, tipo, str(saldo_inicial), "True", _now()])
     invalidate("contas")
@@ -158,10 +162,9 @@ def add_conta(nome: str, tipo: str, saldo_inicial: float = 0.0) -> str:
 
 
 def delete_conta(rid: str):
-    ws = _sheet(SHEETS["contas"])
-    df = get_df("contas")
-    idx = df[df["id"] == rid].index[0]
-    ws.update_cell(idx + 2, 5, "False")
+    ws      = _sheet(SHEETS["contas"])
+    row_num = _find_row(ws, rid)
+    ws.update_cell(row_num, 5, "False")
     invalidate("contas")
 
 
@@ -178,7 +181,7 @@ def get_cartoes(apenas_ativos: bool = True) -> pd.DataFrame:
 
 
 def add_cartao(nome: str, dia_fechamento: int, dia_vencimento: int) -> str:
-    ws = _sheet(SHEETS["cartoes"])
+    ws  = _sheet(SHEETS["cartoes"])
     rid = new_id()
     ws.append_row([rid, nome, str(dia_fechamento), str(dia_vencimento), "True", _now()])
     invalidate("cartoes")
@@ -186,10 +189,9 @@ def add_cartao(nome: str, dia_fechamento: int, dia_vencimento: int) -> str:
 
 
 def delete_cartao(rid: str):
-    ws = _sheet(SHEETS["cartoes"])
-    df = get_df("cartoes")
-    idx = df[df["id"] == rid].index[0]
-    ws.update_cell(idx + 2, 5, "False")
+    ws      = _sheet(SHEETS["cartoes"])
+    row_num = _find_row(ws, rid)
+    ws.update_cell(row_num, 5, "False")
     invalidate("cartoes")
 
 
@@ -207,7 +209,7 @@ def get_fixas(apenas_ativas: bool = True) -> pd.DataFrame:
 
 def add_fixa(nome: str, valor_ref: float, categoria: str, forma_pgto: str,
              conta_cartao: str, dia_venc: int, mes_inicio: str) -> str:
-    ws = _sheet(SHEETS["fixas"])
+    ws  = _sheet(SHEETS["fixas"])
     rid = new_id()
     ws.append_row([rid, nome, str(valor_ref), categoria, forma_pgto,
                    conta_cartao, str(dia_venc), "True", mes_inicio, "", _now()])
@@ -216,18 +218,16 @@ def add_fixa(nome: str, valor_ref: float, categoria: str, forma_pgto: str,
 
 
 def delete_fixa(rid: str):
-    ws = _sheet(SHEETS["fixas"])
-    df = get_df("fixas")
-    idx = df[df["id"] == rid].index[0]
-    ws.update_cell(idx + 2, 8, "False")
+    ws      = _sheet(SHEETS["fixas"])
+    row_num = _find_row(ws, rid)
+    ws.update_cell(row_num, 8, "False")
     invalidate("fixas")
 
 
 def update_fixa_valor(rid: str, novo_valor: float):
-    ws = _sheet(SHEETS["fixas"])
-    df = get_df("fixas")
-    idx = df[df["id"] == rid].index[0]
-    ws.update_cell(idx + 2, 3, str(novo_valor))
+    ws      = _sheet(SHEETS["fixas"])
+    row_num = _find_row(ws, rid)
+    ws.update_cell(row_num, 3, str(novo_valor))
     invalidate("fixas")
 
 
@@ -246,7 +246,7 @@ def get_dividas(apenas_ativas: bool = True) -> pd.DataFrame:
 def add_divida(nome: str, valor_original: float, valor_parcela: float,
                num_parcelas: int, data_inicio: str, forma_pgto: str,
                conta_cartao: str, fonte_ajuda: str) -> str:
-    ws = _sheet(SHEETS["dividas"])
+    ws  = _sheet(SHEETS["dividas"])
     rid = new_id()
     ws.append_row([rid, nome, str(valor_original), str(valor_parcela),
                    str(num_parcelas), "0", data_inicio, forma_pgto,
@@ -259,17 +259,18 @@ def registrar_pagamento_divida(divida_id: str, valor_pago: float,
                                 data: str, is_antecipacao: bool,
                                 num_antecipadas: int, economia: float,
                                 descricao: str = "") -> str:
-    ws = _sheet(SHEETS["pgtos_divida"])
+    ws  = _sheet(SHEETS["pgtos_divida"])
     rid = new_id()
     ws.append_row([rid, divida_id, data, str(valor_pago),
                    str(is_antecipacao), str(num_antecipadas),
                    str(economia), descricao, _now()])
-    df_d = get_df("dividas")
-    idx = df_d[df_d["id"] == divida_id].index[0]
-    pagas_atuais = int(df_d.loc[idx, "num_parcelas_pagas"])
-    novas_pagas = pagas_atuais + (num_antecipadas if is_antecipacao else 1)
-    ws_d = _sheet(SHEETS["dividas"])
-    ws_d.update_cell(idx + 2, 6, str(novas_pagas))
+    # Incrementa num_parcelas_pagas buscando a linha em tempo real
+    ws_d      = _sheet(SHEETS["dividas"])
+    row_num_d = _find_row(ws_d, divida_id)
+    pagas_str = ws_d.cell(row_num_d, 6).value or "0"
+    pagas     = int(pagas_str)
+    novas_pagas = pagas + (num_antecipadas if is_antecipacao else 1)
+    ws_d.update_cell(row_num_d, 6, str(novas_pagas))
     invalidate("dividas")
     invalidate("pgtos_divida")
     return rid
@@ -285,10 +286,9 @@ def get_pgtos_divida(divida_id: str = None) -> pd.DataFrame:
 
 
 def delete_divida(rid: str):
-    ws = _sheet(SHEETS["dividas"])
-    df = get_df("dividas")
-    idx = df[df["id"] == rid].index[0]
-    ws.update_cell(idx + 2, 11, "False")
+    ws      = _sheet(SHEETS["dividas"])
+    row_num = _find_row(ws, rid)
+    ws.update_cell(row_num, 11, "False")
     invalidate("dividas")
 
 
@@ -307,7 +307,7 @@ def get_investimentos(status: str = None) -> pd.DataFrame:
 def add_investimento(nome: str, tipo: str, data_aplicacao: str,
                      valor_aplicado: float, taxa_tipo: str,
                      taxa_valor: float, data_vencimento: str) -> str:
-    ws = _sheet(SHEETS["investimentos"])
+    ws  = _sheet(SHEETS["investimentos"])
     rid = new_id()
     ws.append_row([rid, nome, tipo, data_aplicacao, str(valor_aplicado),
                    taxa_tipo, str(taxa_valor), data_vencimento,
@@ -317,20 +317,18 @@ def add_investimento(nome: str, tipo: str, data_aplicacao: str,
 
 
 def retirar_investimento(rid: str, valor_retirado: float, data_retirada: str):
-    ws = _sheet(SHEETS["investimentos"])
-    df = get_df("investimentos")
-    idx = df[df["id"] == rid].index[0]
-    ws.update_cell(idx + 2, 9, str(valor_retirado))
-    ws.update_cell(idx + 2, 10, data_retirada)
-    ws.update_cell(idx + 2, 11, "RETIRADO")
+    ws      = _sheet(SHEETS["investimentos"])
+    row_num = _find_row(ws, rid)
+    ws.update_cell(row_num, 9,  str(valor_retirado))
+    ws.update_cell(row_num, 10, data_retirada)
+    ws.update_cell(row_num, 11, "RETIRADO")
     invalidate("investimentos")
 
 
 def delete_investimento(rid: str):
-    ws = _sheet(SHEETS["investimentos"])
-    df = get_df("investimentos")
-    idx = df[df["id"] == rid].index[0]
-    ws.update_cell(idx + 2, 11, "EXCLUIDO")
+    ws      = _sheet(SHEETS["investimentos"])
+    row_num = _find_row(ws, rid)
+    ws.update_cell(row_num, 11, "EXCLUIDO")
     invalidate("investimentos")
 
 
@@ -348,7 +346,7 @@ def get_entradas(mes: str = None) -> pd.DataFrame:
 
 def add_entrada(data: str, valor: float, fonte: str,
                 conta: str, descricao: str = "") -> str:
-    ws = _sheet(SHEETS["entradas"])
+    ws  = _sheet(SHEETS["entradas"])
     rid = new_id()
     ws.append_row([rid, data, str(valor), fonte, conta, descricao, _now()])
     invalidate("entradas")
@@ -356,10 +354,9 @@ def add_entrada(data: str, valor: float, fonte: str,
 
 
 def delete_entrada(rid: str):
-    ws = _sheet(SHEETS["entradas"])
-    df = get_df("entradas")
-    idx = df[df["id"] == rid].index[0]
-    ws.delete_rows(idx + 2)
+    ws      = _sheet(SHEETS["entradas"])
+    row_num = _find_row(ws, rid)
+    ws.delete_rows(row_num)
     invalidate("entradas")
 
 
@@ -380,7 +377,7 @@ def add_gasto(data_compra: str, data_fatura: str, mes_ref: str,
               valor_total: float, categoria: str, forma_pgto: str,
               conta_cartao: str, descricao: str = "",
               id_grupo: str = None) -> str:
-    ws = _sheet(SHEETS["gastos"])
+    ws  = _sheet(SHEETS["gastos"])
     rid = new_id()
     gid = id_grupo or rid
     ws.append_row([rid, gid, data_compra, data_fatura, mes_ref,
@@ -392,19 +389,27 @@ def add_gasto(data_compra: str, data_fatura: str, mes_ref: str,
 
 
 def delete_gasto(rid: str):
-    ws = _sheet(SHEETS["gastos"])
-    df = get_df("gastos")
-    idx = df[df["id"] == rid].index[0]
-    ws.delete_rows(idx + 2)
+    ws      = _sheet(SHEETS["gastos"])
+    row_num = _find_row(ws, rid)
+    ws.delete_rows(row_num)
     invalidate("gastos")
 
 
 def delete_gasto_grupo(id_grupo: str):
     ws = _sheet(SHEETS["gastos"])
-    df = get_df("gastos")
+    # Força leitura fresca para ter row numbers corretos
+    df = get_df("gastos", force=True)
     rows = df[df["id_grupo"] == id_grupo].index.tolist()
-    for idx in sorted(rows, reverse=True):
-        ws.delete_rows(idx + 2)
+    # Busca o número real de linha de cada parcela e deleta de baixo para cima
+    row_nums = []
+    for idx in rows:
+        rid = df.loc[idx, "id"]
+        try:
+            row_nums.append(_find_row(ws, rid))
+        except ValueError:
+            pass
+    for rn in sorted(row_nums, reverse=True):
+        ws.delete_rows(rn)
     invalidate("gastos")
 
 
@@ -422,7 +427,7 @@ def get_transferencias(mes: str = None) -> pd.DataFrame:
 
 def add_transferencia(data: str, valor: float, conta_origem: str,
                       conta_destino: str, descricao: str = "") -> str:
-    ws = _sheet(SHEETS["transferencias"])
+    ws  = _sheet(SHEETS["transferencias"])
     rid = new_id()
     ws.append_row([rid, data, str(valor), conta_origem, conta_destino, descricao, _now()])
     invalidate("transferencias")
@@ -430,8 +435,7 @@ def add_transferencia(data: str, valor: float, conta_origem: str,
 
 
 def delete_transferencia(rid: str):
-    ws = _sheet(SHEETS["transferencias"])
-    df = get_df("transferencias")
-    idx = df[df["id"] == rid].index[0]
-    ws.delete_rows(idx + 2)
+    ws      = _sheet(SHEETS["transferencias"])
+    row_num = _find_row(ws, rid)
+    ws.delete_rows(row_num)
     invalidate("transferencias")

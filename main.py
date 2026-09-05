@@ -1,3 +1,4 @@
+import html as _html
 import streamlit as st
 from src import auth, sheets as sh, utils
 from src.config import INATIVIDADE_PADRAO_MIN
@@ -120,13 +121,16 @@ def tela_login():
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("Sim, enviar", use_container_width=True):
-                    codigo = auth.gerar_codigo()
-                    enviado = tg.enviar_codigo_desbloqueio(codigo)
-                    if enviado:
-                        st.success("Código enviado!")
+                    codigo, err = auth.gerar_codigo()
+                    if err:
+                        st.error(err)
                     else:
-                        st.error("Falha ao enviar. Verifique a configuração do Telegram.")
-                    st.session_state["_aguardando_codigo"] = True
+                        enviado = tg.enviar_codigo_desbloqueio(codigo)
+                        if enviado:
+                            st.success("Código enviado!")
+                        else:
+                            st.error("Falha ao enviar. Verifique a configuração do Telegram.")
+                        st.session_state["_aguardando_codigo"] = True
                     st.session_state["_confirmar_codigo"] = False
                     st.rerun()
             with col2:
@@ -293,13 +297,15 @@ def dashboard():
                 row["nome"], todas_entradas, todos_gastos_full,
                 todas_transf, contas_df
             )
-            cor = "verde" if saldo_c >= 0 else "vermelho"
+            cor   = "verde" if saldo_c >= 0 else "vermelho"
+            nome  = _html.escape(str(row["nome"]))
+            tipo  = _html.escape(str(row["tipo"]))
             with cols[i]:
                 st.markdown(f"""
                 <div class='metric-card'>
-                    <div class='metric-label'>{row['nome']}</div>
+                    <div class='metric-label'>{nome}</div>
                     <div class='metric-value {cor}'>{utils.fmt_brl(saldo_c)}</div>
-                    <div class='metric-label'>{row['tipo']}</div>
+                    <div class='metric-label'>{tipo}</div>
                 </div>""", unsafe_allow_html=True)
     else:
         st.caption("Nenhuma conta cadastrada.")

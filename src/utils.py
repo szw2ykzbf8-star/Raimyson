@@ -1,4 +1,5 @@
-from datetime import date, timedelta
+import calendar
+from datetime import date
 from dateutil.relativedelta import relativedelta
 import pandas as pd
 
@@ -53,13 +54,15 @@ def calcular_data_fatura(data_compra: date, dia_fechamento: int, dia_vencimento:
     compra_dia = data_compra.day
 
     if compra_dia >= dia_fechamento:
-        fechamento = date(data_compra.year, data_compra.month, 1) + relativedelta(months=1)
-        fechamento = fechamento.replace(day=dia_fechamento)
+        base = date(data_compra.year, data_compra.month, 1) + relativedelta(months=1)
     else:
-        fechamento = data_compra.replace(day=dia_fechamento)
+        base = date(data_compra.year, data_compra.month, 1)
+    ultimo_fec = calendar.monthrange(base.year, base.month)[1]
+    fechamento = base.replace(day=min(dia_fechamento, ultimo_fec))
 
-    vencimento = fechamento + relativedelta(months=1)
-    vencimento = vencimento.replace(day=dia_vencimento)
+    venc_base  = fechamento + relativedelta(months=1)
+    ultimo_venc = calendar.monthrange(venc_base.year, venc_base.month)[1]
+    vencimento = venc_base.replace(day=min(dia_vencimento, ultimo_venc))
     return vencimento
 
 

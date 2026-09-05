@@ -89,17 +89,12 @@
     }
 
     input:focus, select:focus { border-color: var(--green); }
-
     input[type="number"] { font-size: 1.4rem; font-weight: 700; }
 
     .row { display: flex; gap: 12px; }
     .row > * { flex: 1; }
 
-    .pill-group {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
+    .pill-group { display: flex; flex-wrap: wrap; gap: 8px; }
 
     .pill {
       padding: 8px 14px;
@@ -113,13 +108,7 @@
       user-select: none;
     }
 
-    .pill.active {
-      background: var(--green);
-      border-color: var(--green);
-      color: #000;
-      font-weight: 600;
-    }
-
+    .pill.active { background: var(--green); border-color: var(--green); color: #000; font-weight: 600; }
     .pill.credit.active { background: var(--blue); border-color: var(--blue); color: #fff; }
     .pill.debit.active  { background: var(--yellow); border-color: var(--yellow); color: #000; }
     .pill.cash.active   { background: var(--green); border-color: var(--green); color: #000; }
@@ -209,12 +198,10 @@
 </header>
 
 <main>
-  <!-- Config notice -->
   <div class="config-notice" id="config-notice" style="display:none">
     ⚙️ Configure a URL do Apps Script e o segredo em <strong>config.js</strong> antes de usar.
   </div>
 
-  <!-- Formulário de gasto -->
   <div class="card">
     <h2>Registrar Gasto</h2>
 
@@ -269,7 +256,6 @@
     </button>
   </div>
 
-  <!-- Fila offline -->
   <div class="card queue-section" id="queue-section">
     <h2>
       📤 Fila Offline
@@ -287,38 +273,31 @@
 
 <div class="toast" id="toast"></div>
 
-<!-- CONFIG: edite estas variáveis -->
-<script>
-  const APPS_SCRIPT_URL = ""; // Cole aqui a URL do Google Apps Script
-  const SECRET_KEY = "";      // Cole aqui o segredo definido no Apps Script
-</script>
+<!-- Configuração em arquivo externo (config.js) -->
+<script src="config.js"></script>
 
 <script>
   // ─── Estado ────────────────────────────────────────────────────────────────
 
   let formaPgto = "Dinheiro";
   let categorias = [];
-  let contas = [];
-  let cartoes = [];
-  let isOnline = navigator.onLine;
+  let contas     = [];
+  let cartoes    = [];
+  let isOnline   = navigator.onLine;
 
   // ─── Inicialização ─────────────────────────────────────────────────────────
 
   window.addEventListener("DOMContentLoaded", async () => {
-    // Data padrão = hoje
     document.getElementById("data").valueAsDate = new Date();
 
-    // Service Worker
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("sw.js").catch(() => {});
     }
 
-    // Verificar config
     if (!APPS_SCRIPT_URL || !SECRET_KEY) {
       document.getElementById("config-notice").style.display = "block";
     }
 
-    // Carregar dados
     await carregarDados();
     renderizarFila();
     atualizarStatus();
@@ -328,8 +307,7 @@
   window.addEventListener("offline", () => { isOnline = false; atualizarStatus(); });
 
   function atualizarStatus() {
-    const el = document.getElementById("status-indicator");
-    el.textContent = isOnline ? "🟢 Online" : "🔴 Offline";
+    document.getElementById("status-indicator").textContent = isOnline ? "🟢 Online" : "🔴 Offline";
   }
 
   // ─── Forma de pagamento ─────────────────────────────────────────────────────
@@ -344,20 +322,20 @@
   });
 
   function atualizarCampos() {
-    const contaSec = document.getElementById("conta-section");
+    const contaSec  = document.getElementById("conta-section");
     const cartaoSec = document.getElementById("cartao-section");
     const parcelaSec = document.getElementById("parcelas-section");
 
     if (formaPgto === "Crédito") {
-      contaSec.style.display = "none";
+      contaSec.style.display  = "none";
       cartaoSec.style.display = "block";
       parcelaSec.style.display = "block";
     } else if (formaPgto === "Dinheiro") {
-      contaSec.style.display = "none";
+      contaSec.style.display  = "none";
       cartaoSec.style.display = "none";
       parcelaSec.style.display = "none";
     } else {
-      contaSec.style.display = "block";
+      contaSec.style.display  = "block";
       cartaoSec.style.display = "none";
       parcelaSec.style.display = "none";
     }
@@ -366,40 +344,46 @@
   // ─── Carregar dados do Apps Script ─────────────────────────────────────────
 
   async function carregarDados() {
-    // Tenta cache local primeiro
     const cached = localStorage.getItem("fintrack_dados");
     if (cached) {
-      try {
-        const d = JSON.parse(cached);
-        popularSelects(d);
-      } catch (e) {}
+      try { popularSelects(JSON.parse(cached)); } catch (_) {}
     }
 
     if (!APPS_SCRIPT_URL || !isOnline) return;
 
     try {
-      const resp = await fetch(`${APPS_SCRIPT_URL}?secret=${encodeURIComponent(SECRET_KEY)}`);
+      // GET sem secret — retorna apenas dados de referência não sensíveis
+      const resp = await fetch(`${APPS_SCRIPT_URL}?action=dados`);
       const data = await resp.json();
-      localStorage.setItem("fintrack_dados", JSON.stringify(data));
-      popularSelects(data);
+      if (data.ok) {
+        localStorage.setItem("fintrack_dados", JSON.stringify(data));
+        popularSelects(data);
+      }
     } catch (e) {
       console.warn("Falha ao carregar dados:", e);
     }
   }
 
+  /** Cria <option> elementos via DOM (sem innerHTML) para evitar XSS. */
+  function _popularSelect(selectId, itens) {
+    const sel = document.getElementById(selectId);
+    sel.innerHTML = "";
+    itens.forEach(item => {
+      const opt = document.createElement("option");
+      opt.value       = item;
+      opt.textContent = item;
+      sel.appendChild(opt);
+    });
+  }
+
   function popularSelects(data) {
-    categorias = data.categorias || [];
-    contas = data.contas || [];
-    cartoes = data.cartoes || [];
+    categorias = (data.categorias || []).map(c => c.nome || c);
+    contas     = (data.contas     || []).map(c => c.nome || c);
+    cartoes    = (data.cartoes    || []).map(c => c.nome || c);
 
-    const catSel = document.getElementById("categoria");
-    catSel.innerHTML = categorias.map(c => `<option value="${c}">${c}</option>`).join("");
-
-    const contaSel = document.getElementById("conta-select");
-    contaSel.innerHTML = contas.map(c => `<option value="${c}">${c}</option>`).join("");
-
-    const cartSel = document.getElementById("cartao-select");
-    cartSel.innerHTML = cartoes.map(c => `<option value="${c}">${c}</option>`).join("");
+    _popularSelect("categoria",    categorias);
+    _popularSelect("conta-select", contas);
+    _popularSelect("cartao-select", cartoes);
   }
 
   // ─── Salvar gasto ──────────────────────────────────────────────────────────
@@ -418,20 +402,21 @@
       contaCartao = document.getElementById("conta-select").value;
     }
 
+    // id_grupo = UUID único gerado no mobile, usado para idempotência
     const gasto = {
-      id: crypto.randomUUID(),
-      data: document.getElementById("data").value,
-      valor: valor,
-      categoria: categoria,
+      id_grupo:        crypto.randomUUID(),
+      data_compra:     document.getElementById("data").value,
+      valor_total:     valor,
+      num_parcelas:    parseInt(document.getElementById("parcelas")?.value || 1),
+      categoria:       categoria,
       forma_pagamento: formaPgto,
-      conta_cartao: contaCartao,
-      num_parcelas: parseInt(document.getElementById("parcelas")?.value || 1),
-      descricao: document.getElementById("descricao").value.trim(),
-      timestamp: new Date().toISOString(),
+      conta_cartao:    contaCartao,
+      descricao:       document.getElementById("descricao").value.trim(),
+      timestamp:       new Date().toISOString(),
     };
 
     const btn = document.getElementById("btn-salvar");
-    btn.disabled = true;
+    btn.disabled    = true;
     btn.textContent = "Salvando...";
 
     if (isOnline && APPS_SCRIPT_URL && SECRET_KEY) {
@@ -450,19 +435,30 @@
       resetForm();
     }
 
-    btn.disabled = false;
+    btn.disabled    = false;
     btn.textContent = "💾 Salvar Gasto";
   }
 
   async function enviarParaSheets(gasto) {
     try {
       const resp = await fetch(APPS_SCRIPT_URL, {
-        method: "POST",
+        method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ secret: SECRET_KEY, gasto }),
+        body:    JSON.stringify({
+          secret:          SECRET_KEY,
+          action:          "salvar_gasto",
+          id_grupo:        gasto.id_grupo,
+          data_compra:     gasto.data_compra,
+          valor_total:     gasto.valor_total,
+          num_parcelas:    gasto.num_parcelas,
+          categoria:       gasto.categoria,
+          forma_pagamento: gasto.forma_pagamento,
+          conta_cartao:    gasto.conta_cartao,
+          descricao:       gasto.descricao,
+        }),
       });
-      const text = await resp.text();
-      return text.includes("OK");
+      const data = await resp.json();
+      return data.ok === true;
     } catch (e) {
       return false;
     }
@@ -479,7 +475,7 @@
 
   function getFilaLocal() {
     try { return JSON.parse(localStorage.getItem("fintrack_fila") || "[]"); }
-    catch (e) { return []; }
+    catch (_) { return []; }
   }
 
   async function sincronizarFila() {
@@ -490,47 +486,63 @@
     const enviados = [];
     for (const gasto of fila) {
       const ok = await enviarParaSheets(gasto);
-      if (ok) enviados.push(gasto.id);
+      if (ok) enviados.push(gasto.id_grupo);
     }
 
     if (enviados.length > 0) {
-      const nova_fila = fila.filter(g => !enviados.includes(g.id));
-      localStorage.setItem("fintrack_fila", JSON.stringify(nova_fila));
+      const novaFila = fila.filter(g => !enviados.includes(g.id_grupo));
+      localStorage.setItem("fintrack_fila", JSON.stringify(novaFila));
       renderizarFila();
       showToast(`✅ ${enviados.length} gasto(s) sincronizado(s)!`, "success");
     }
   }
 
   function renderizarFila() {
-    const fila = getFilaLocal();
-    const sec = document.getElementById("queue-section");
+    const fila  = getFilaLocal();
+    const sec   = document.getElementById("queue-section");
     const lista = document.getElementById("queue-list");
     const badge = document.getElementById("queue-count");
 
     badge.textContent = fila.length;
     sec.classList.toggle("has-items", fila.length > 0);
 
-    lista.innerHTML = fila.map(g => `
-      <div class="queue-item">
-        <strong>R$ ${parseFloat(g.valor).toFixed(2)}</strong> — ${g.categoria}
-        <br><small style="color:var(--muted)">${g.data} • ${g.forma_pagamento}${g.descricao ? ' • ' + g.descricao : ''}</small>
-      </div>
-    `).join("");
+    lista.innerHTML = "";
+    fila.forEach(g => {
+      const item   = document.createElement("div");
+      item.className = "queue-item";
+
+      const valor = document.createElement("strong");
+      valor.textContent = `R$ ${parseFloat(g.valor_total || 0).toFixed(2)} — `;
+
+      const cat  = document.createTextNode(g.categoria || "");
+      const br   = document.createElement("br");
+      const info = document.createElement("small");
+      info.style.color = "var(--muted)";
+      const desc = g.descricao ? ` • ${g.descricao}` : "";
+      info.textContent = `${g.data_compra} • ${g.forma_pagamento}${desc}`;
+
+      item.appendChild(valor);
+      item.appendChild(cat);
+      item.appendChild(br);
+      item.appendChild(info);
+      lista.appendChild(item);
+    });
   }
 
   // ─── Helpers ───────────────────────────────────────────────────────────────
 
   function resetForm() {
-    document.getElementById("valor").value = "";
-    document.getElementById("descricao").value = "";
+    document.getElementById("valor").value      = "";
+    document.getElementById("descricao").value  = "";
     document.getElementById("data").valueAsDate = new Date();
-    document.getElementById("parcelas") && (document.getElementById("parcelas").value = "1");
+    const parcSel = document.getElementById("parcelas");
+    if (parcSel) parcSel.value = "1";
   }
 
   function showToast(msg, type = "success") {
     const t = document.getElementById("toast");
     t.textContent = msg;
-    t.className = `toast ${type} show`;
+    t.className   = `toast ${type} show`;
     setTimeout(() => t.classList.remove("show"), 3500);
   }
 </script>

@@ -2,12 +2,12 @@ import streamlit as st
 import json
 from src import auth, sheets as sh, utils
 from src import telegram_bot as tg
-from src.config import CATEGORIAS_PADRAO, FONTES_PADRAO
+from src.config import CATEGORIAS_PADRAO, FONTES_PADRAO, CFG_CHAVES_SENSIVEIS
 
 st.set_page_config(page_title="Administração — FinTrack", page_icon="⚙️", layout="wide")
 auth.require_auth()
 
-# Admin exige os dois PINs verificados
+# Admin exige verificação de ambos os PINs
 if not st.session_state.get("admin_autenticado", False):
     st.title("⚙️ Administração")
     st.warning("🔐 Esta área requer verificação dupla de identidade.")
@@ -36,12 +36,12 @@ with tabs[0]:
 
     with st.form("alter_pin_abertura"):
         st.markdown("**PIN de Abertura**")
-        novo_a = st.text_input("Novo PIN (6 dígitos)", type="password", max_chars=6, key="npa")
+        novo_a  = st.text_input("Novo PIN (6 dígitos)", type="password", max_chars=6, key="npa")
         novo_a2 = st.text_input("Confirmar", type="password", max_chars=6, key="npa2")
-        btn_a = st.form_submit_button("Alterar PIN de Abertura")
+        btn_a   = st.form_submit_button("Alterar PIN de Abertura")
     if btn_a:
         if not novo_a.isdigit() or len(novo_a) != 6:
-            st.error("PIN deve ter 6 dígitos numéricos.")
+            st.error("PIN deve ter exatamente 6 dígitos numéricos.")
         elif novo_a != novo_a2:
             st.error("PINs não conferem.")
         else:
@@ -53,16 +53,16 @@ with tabs[0]:
 
     with st.form("alter_pin_exclusao"):
         st.markdown("**PIN de Exclusão**")
-        novo_e = st.text_input("Novo PIN (6 dígitos)", type="password", max_chars=6, key="npe")
+        novo_e  = st.text_input("Novo PIN (6 dígitos)", type="password", max_chars=6, key="npe")
         novo_e2 = st.text_input("Confirmar", type="password", max_chars=6, key="npe2")
-        btn_e = st.form_submit_button("Alterar PIN de Exclusão")
+        btn_e   = st.form_submit_button("Alterar PIN de Exclusão")
     if btn_e:
         if not novo_e.isdigit() or len(novo_e) != 6:
-            st.error("PIN deve ter 6 dígitos numéricos.")
+            st.error("PIN deve ter exatamente 6 dígitos numéricos.")
         elif novo_e != novo_e2:
             st.error("PINs não conferem.")
-        elif novo_e == sh.get_config(auth.PIN_ABERTURA, ""):
-            st.error("PIN de exclusão deve ser diferente do de abertura.")
+        elif auth.verify_pin(novo_e, sh.get_config(auth.PIN_ABERTURA, "")):
+            st.error("PIN de exclusão não pode ser igual ao de abertura.")
         else:
             sh.set_config(auth.PIN_EXCLUSAO, auth.hash_pin(novo_e))
             sh.set_config("tentativas_exclusao", "0")
@@ -71,7 +71,7 @@ with tabs[0]:
     st.markdown("---")
     st.subheader("🔒 Inatividade")
     timeout_atual = int(sh.get_config("inatividade_minutos", "30"))
-    novo_timeout = st.slider("Bloquear após (minutos)", 5, 120, timeout_atual)
+    novo_timeout  = st.slider("Bloquear após (minutos)", 5, 120, timeout_atual)
     if st.button("Salvar timeout"):
         sh.set_config("inatividade_minutos", str(novo_timeout))
         st.success(f"Timeout definido para {novo_timeout} minutos.")
@@ -80,40 +80,10 @@ with tabs[0]:
 
 with tabs[1]:
     st.subheader("📱 Configuração do Telegram")
-    st.info("Para alterar o Telegram de recuperação, um código será enviado para o número atual.")
-
-    chat_id_atual = sh.get_config("telegram_chat_id_override", "")
-    st.metric("Chat ID atual", chat_id_atual or "Usando .env")
-
-    with st.form("form_telegram"):
-        novo_chat_id = st.text_input("Novo Chat ID do Telegram")
-        btn_tg = st.form_submit_button("Verificar e salvar")
-
-    if btn_tg and novo_chat_id:
-        # Envia código para o chat ATUAL antes de aceitar o novo
-        codigo = auth.gerar_codigo()
-        enviado = tg.enviar_codigo_desbloqueio(codigo)
-        if enviado:
-            st.session_state["pendente_novo_chat_id"] = novo_chat_id
-            st.session_state["aguardando_codigo_tg"] = True
-            st.success("Código enviado para o Telegram atual. Digite-o abaixo para confirmar.")
-        else:
-            st.error("Falha ao enviar código. Verifique a configuração atual.")
-
-    if st.session_state.get("aguardando_codigo_tg", False):
-        with st.form("form_cod_tg"):
-            cod_input = st.text_input("Código de confirmação", max_chars=6)
-            ok_btn = st.form_submit_button("Confirmar")
-        if ok_btn:
-            ok, msg = auth.verificar_codigo(cod_input)
-            if ok:
-                novo = st.session_state.get("pendente_novo_chat_id", "")
-                sh.set_config("telegram_chat_id_override", novo)
-                st.session_state["aguardando_codigo_tg"] = False
-                st.success(f"Chat ID atualizado para {novo}!")
-                st.rerun()
-            else:
-                st.error(msg)
+    st.info(
+        "O Chat ID do Telegram é configurado exclusivamente via variável de ambiente "
+        "`TELEGRAM_CHAT_ID` no arquivo `.env`. Reinicie o app após alterar o `.env`."
+    )
 
     st.markdown("---")
     st.subheader("🧪 Testar Telegram")
@@ -122,22 +92,22 @@ with tabs[1]:
         if ok:
             st.success("Mensagem enviada com sucesso!")
         else:
-            st.error("Falha ao enviar. Verifique token e chat_id no .env")
+            st.error("Falha ao enviar. Verifique TELEGRAM_TOKEN e TELEGRAM_CHAT_ID no .env")
 
 # ─── Metas & Alertas ─────────────────────────────────────────────────────────
 
 with tabs[2]:
     st.subheader("🎯 Meta de Economia")
     meta_atual = float(sh.get_config("meta_economia", "0") or 0)
-    nova_meta = st.number_input("Meta mensal de economia (R$)", value=meta_atual,
-                                 min_value=0.0, step=50.0, format="%.2f")
+    nova_meta  = st.number_input("Meta mensal de economia (R$)", value=meta_atual,
+                                  min_value=0.0, step=50.0, format="%.2f")
     if st.button("Salvar meta"):
         sh.set_config("meta_economia", str(nova_meta))
         st.success(f"Meta definida: {utils.fmt_brl(nova_meta)}")
 
     st.markdown("---")
     st.subheader("⚠️ Alertas por Categoria")
-    st.caption("Defina um limite de gasto mensal por categoria. O sistema avisa quando atingir 80% e quando ultrapassar.")
+    st.caption("O sistema avisa quando atingir 80% do limite e quando ultrapassar.")
 
     cats_df = sh.get_categorias()
     alertas_raw = sh.get_config("alertas_categorias", "{}")
@@ -148,9 +118,9 @@ with tabs[2]:
 
     if not cats_df.empty:
         for _, row in cats_df.iterrows():
-            cat = row["nome"]
+            cat          = row["nome"]
             limite_atual = float(alertas.get(cat, 0))
-            novo_limite = st.number_input(
+            novo_limite  = st.number_input(
                 f"{cat}", value=limite_atual, min_value=0.0,
                 step=50.0, format="%.2f",
                 key=f"alerta_{cat}",
@@ -199,7 +169,7 @@ with tabs[4]:
 
     with st.form("nova_fonte"):
         nome_fonte = st.text_input("Nome da fonte (ex: Freelance)")
-        btn_fonte = st.form_submit_button("Adicionar")
+        btn_fonte  = st.form_submit_button("Adicionar")
     if btn_fonte and nome_fonte:
         sh.add_fonte(nome_fonte.strip())
         st.success(f"Fonte '{nome_fonte}' adicionada!")
@@ -223,16 +193,30 @@ with tabs[4]:
 with tabs[5]:
     st.subheader("💾 Backup e Restauração")
     st.info("Os dados ficam salvos no Google Sheets. Use as opções abaixo como backup extra.")
+    st.warning(
+        "⚠️ O backup NÃO inclui hashes de PIN nem tokens de segurança. "
+        "Configure esses itens manualmente após uma restauração."
+    )
 
     if st.button("📥 Exportar todos os dados (JSON)"):
-        import json as _json
         backup = {}
-        for key in ["config", "categorias", "fontes", "contas", "cartoes",
+        for key in ["categorias", "fontes", "contas", "cartoes",
                     "fixas", "dividas", "pgtos_divida", "investimentos",
                     "entradas", "gastos", "transferencias"]:
             df = sh.get_df(key, force=True)
             backup[key] = df.to_dict(orient="records") if not df.empty else []
-        backup_str = _json.dumps(backup, ensure_ascii=False, indent=2)
+
+        # Config: excluir chaves sensíveis
+        df_cfg = sh.get_df("config", force=True)
+        if not df_cfg.empty:
+            backup["config"] = [
+                r for _, r in df_cfg.iterrows()
+                if r["chave"] not in CFG_CHAVES_SENSIVEIS
+            ]
+        else:
+            backup["config"] = []
+
+        backup_str = json.dumps(backup, ensure_ascii=False, indent=2)
         st.download_button(
             label="⬇️ Baixar backup.json",
             data=backup_str,
@@ -245,8 +229,6 @@ with tabs[5]:
     st.warning("⚠️ A importação NÃO sobrescreve dados existentes. Apenas adiciona registros novos (sem duplicatas por ID).")
     uploaded = st.file_uploader("Selecione o arquivo JSON", type=["json"])
     if uploaded and st.button("Importar"):
-        import json as _json
-        data = _json.loads(uploaded.read())
         st.info("Importação não implementada nesta versão — abra uma issue no repositório.")
 
 # ─── Config geral ─────────────────────────────────────────────────────────────

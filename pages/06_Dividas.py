@@ -18,7 +18,7 @@ with tabs[0]:
     else:
         for _, row in df.iterrows():
             total_pagas = int(row["num_parcelas_pagas"])
-            total_parcelas = int(row["num_parcelas_total"])
+            total_parcelas = int(row["num_parcelas"])
             restantes = total_parcelas - total_pagas
             valor_parcela = float(row["valor_parcela"])
             valor_original = float(row["valor_original"])
@@ -94,10 +94,10 @@ with tabs[0]:
             if not pgtos.empty:
                 with st.expander("📋 Histórico de pagamentos"):
                     for _, p in pgtos.iterrows():
-                        antecip_str = f" (antecipação de {p['num_parcelas_antecipadas']}x)" \
+                        antecip_str = f" (antecipação de {p['num_antecipadas']}x)" \
                             if p["is_antecipacao"] == "True" else ""
-                        economia_str = f" | Economia: {utils.fmt_brl(float(p['economia_juros']))}" \
-                            if float(p.get("economia_juros", 0) or 0) > 0 else ""
+                        economia_str = f" | Economia: {utils.fmt_brl(float(p['economia']))}" \
+                            if float(p.get("economia", 0) or 0) > 0 else ""
                         st.write(f"• {p['data']} — {utils.fmt_brl(float(p['valor_pago']))}"
                                  f"{antecip_str}{economia_str}")
 

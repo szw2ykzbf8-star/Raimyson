@@ -5,23 +5,28 @@
  * 1. Abra a planilha FinTrack no Google Sheets
  * 2. Clique em Extensões → Apps Script
  * 3. Apague o conteúdo do editor e cole TODO o conteúdo deste arquivo
- * 4. Altere SECRET_KEY abaixo para uma senha forte (a mesma que colocar no index.html)
+ * 4. Altere SECRET_KEY abaixo para uma senha forte (a mesma que colocar em config.js)
  * 5. Clique em Salvar (ícone de disquete)
  * 6. Clique em Implantar → Nova implantação
  *    - Tipo: Aplicativo da Web
  *    - Executar como: Eu (sua conta Google)
  *    - Quem tem acesso: Qualquer pessoa
  * 7. Clique em Implantar e copie a URL gerada
- * 8. Cole essa URL como APPS_SCRIPT_URL no mobile/index.html
+ * 8. Cole essa URL como APPS_SCRIPT_URL em mobile/config.js
  *
  * SEGURANÇA:
  * - Toda requisição POST deve incluir o campo "secret" igual a SECRET_KEY
- * - Requisições GET retornam apenas dados públicos (categorias, contas, cartões)
- *   sem autenticação (o dispositivo já tem autenticação nativa)
- * - Em produção, considere adicionar autenticação também ao GET
+ * - GET retorna apenas dados de referência (categorias, contas, cartões)
+ *   sem necessidade de secret, pois esses dados não são financeiros sensíveis
+ * - Idempotência: reenvios com o mesmo id_grupo não duplicam registros
  */
 
 const SECRET_KEY = "TROQUE_ESTA_CHAVE_POR_UMA_SENHA_FORTE";
+
+// Limite de requisições POST por janela de tempo (proteção básica)
+const RATE_LIMIT_CACHE_KEY = "fintrack_rate_limit";
+const RATE_LIMIT_MAX       = 30;   // requisições máximas
+const RATE_LIMIT_JANELA_MS = 60000; // 60 segundos
 
 // ─── Roteador principal ───────────────────────────────────────────────────────
 
@@ -34,6 +39,11 @@ function doGet(e) {
       case "status":
         result = { ok: true, msg: "FinTrack API ativa" };
         break;
+      case "dados":
+        // Retorna categorias + contas + cartões em uma única chamada
+        result = getDados();
+        break;
+      // Manter compatibilidade com chamadas individuais
       case "categorias":
         result = getCategorias();
         break;
@@ -49,25 +59,31 @@ function doGet(e) {
 
     return jsonResponse(result);
   } catch (err) {
-    return jsonResponse({ ok: false, error: err.message });
+    return jsonResponse({ ok: false, error: "Erro interno" });
   }
 }
 
 function doPost(e) {
   try {
+    // Rate limiting
+    if (!verificarRateLimit()) {
+      return jsonResponse({ ok: false, error: "Muitas requisições. Aguarde um momento." });
+    }
+
     let payload;
     try {
       payload = JSON.parse(e.postData.contents);
     } catch (_) {
-      return jsonResponse({ ok: false, error: "JSON inválido" });
+      return jsonResponse({ ok: false, error: "Payload inválido" });
     }
 
-    // Verificação do secret
-    if (!payload.secret || payload.secret !== SECRET_KEY) {
+    // Verificação do secret (comparação de tempo constante simulada)
+    if (!payload.secret || payload.secret.length !== SECRET_KEY.length ||
+        !_secretIgual(payload.secret, SECRET_KEY)) {
       return jsonResponse({ ok: false, error: "Não autorizado" });
     }
 
-    const action = payload.action || "";
+    const action = String(payload.action || "").substring(0, 50);
     let result;
 
     switch (action) {
@@ -75,12 +91,12 @@ function doPost(e) {
         result = salvarGasto(payload);
         break;
       default:
-        result = { ok: false, error: "Ação desconhecida: " + action };
+        result = { ok: false, error: "Ação desconhecida" };
     }
 
     return jsonResponse(result);
   } catch (err) {
-    return jsonResponse({ ok: false, error: err.message });
+    return jsonResponse({ ok: false, error: "Erro interno" });
   }
 }
 
@@ -107,9 +123,7 @@ function nowIso() {
   return new Date().toISOString().replace("T", " ").substring(0, 19);
 }
 
-/**
- * Lê uma aba como array de objetos, usando a primeira linha como cabeçalhos.
- */
+/** Lê uma aba como array de objetos usando a primeira linha como cabeçalhos. */
 function sheetToObjects(ws) {
   const data = ws.getDataRange().getValues();
   if (data.length < 2) return [];
@@ -121,7 +135,50 @@ function sheetToObjects(ws) {
   });
 }
 
+/**
+ * Sanitiza string para evitar injeção de fórmula no Google Sheets.
+ * Valores que começam com = + - @ | são prefixados com apóstrofo,
+ * fazendo o Sheets tratá-los como texto literal.
+ */
+function sanitizeCelula(valor) {
+  if (typeof valor !== "string") return valor;
+  return valor.replace(/^([=+\-@|])/, "'$1");
+}
+
+/** Comparação de strings resistente a timing attacks. */
+function _secretIgual(a, b) {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+/** Rate limiting simples via CacheService (best-effort). */
+function verificarRateLimit() {
+  try {
+    const cache = CacheService.getScriptCache();
+    const val = cache.get(RATE_LIMIT_CACHE_KEY);
+    const count = val ? parseInt(val) : 0;
+    if (count >= RATE_LIMIT_MAX) return false;
+    cache.put(RATE_LIMIT_CACHE_KEY, String(count + 1), Math.ceil(RATE_LIMIT_JANELA_MS / 1000));
+    return true;
+  } catch (_) {
+    return true; // fail open se CacheService indisponível
+  }
+}
+
 // ─── Leitura de dados (GET) ───────────────────────────────────────────────────
+
+function getDados() {
+  return {
+    ok: true,
+    categorias: getCategorias().data,
+    contas: getContas().data,
+    cartoes: getCartoes().data,
+  };
+}
 
 function getCategorias() {
   const rows = sheetToObjects(getSheet("categorias"));
@@ -158,6 +215,7 @@ function getCartoes() {
  * Salva um gasto recebido do PWA mobile.
  *
  * Campos esperados no payload:
+ *   id_grupo       : UUID gerado pelo mobile (para idempotência)
  *   data_compra    : "YYYY-MM-DD"
  *   valor_total    : número
  *   num_parcelas   : inteiro (1 para à vista)
@@ -165,14 +223,9 @@ function getCartoes() {
  *   forma_pagamento: "Dinheiro" | "Pix" | "Débito" | "Crédito"
  *   conta_cartao   : string (nome da conta ou cartão)
  *   descricao      : string (opcional)
- *
- * Para compras parceladas (forma_pagamento === "Crédito" && num_parcelas > 1),
- * o script cria uma linha por parcela com mes_referencia calculado a partir
- * do cartão (dia_fechamento e dia_vencimento lidos da aba cartoes).
  */
 function salvarGasto(payload) {
-  // Validações básicas
-  const required = ["data_compra", "valor_total", "num_parcelas",
+  const required = ["id_grupo", "data_compra", "valor_total", "num_parcelas",
                     "categoria", "forma_pagamento", "conta_cartao"];
   for (const field of required) {
     if (payload[field] === undefined || payload[field] === "") {
@@ -180,33 +233,34 @@ function salvarGasto(payload) {
     }
   }
 
-  const dataCompra    = String(payload.data_compra).substring(0, 10);
-  const valorTotal    = parseFloat(payload.valor_total);
-  const numParcelas   = Math.min(Math.max(parseInt(payload.num_parcelas) || 1, 1), 360);
-  const categoria     = String(payload.categoria).substring(0, 100);
-  const formaPgto     = String(payload.forma_pagamento).substring(0, 20);
-  const contaCartao   = String(payload.conta_cartao).substring(0, 100);
-  const descricao     = String(payload.descricao || "").substring(0, 500);
+  const idGrupo      = String(payload.id_grupo).substring(0, 36);
+  const dataCompra   = String(payload.data_compra).substring(0, 10);
+  const valorTotal   = parseFloat(payload.valor_total);
+  const numParcelas  = Math.min(Math.max(parseInt(payload.num_parcelas) || 1, 1), 360);
+  const categoria    = sanitizeCelula(String(payload.categoria).substring(0, 100));
+  const formaPgto    = sanitizeCelula(String(payload.forma_pagamento).substring(0, 20));
+  const contaCartao  = sanitizeCelula(String(payload.conta_cartao).substring(0, 100));
+  const descricao    = sanitizeCelula(String(payload.descricao || "").substring(0, 500));
 
   if (isNaN(valorTotal) || valorTotal <= 0 || valorTotal > 1e7) {
     return { ok: false, error: "Valor inválido" };
   }
-
-  // Valida formato da data (YYYY-MM-DD)
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dataCompra)) {
     return { ok: false, error: "Data inválida" };
   }
 
-  const valorParcela = valorTotal / numParcelas;
-  const idGrupo      = generateId();
-  const ws           = getSheet("gastos");
+  const ws = getSheet("gastos");
 
-  // Determina data de fatura e mes_referencia para cada parcela
+  // Idempotência: verificar se id_grupo já existe
+  const existentes = sheetToObjects(ws);
+  if (existentes.some(r => r.id_grupo === idGrupo)) {
+    return { ok: true, msg: "Gasto já registrado anteriormente.", id_grupo: idGrupo };
+  }
+
   let parcelas;
   if (formaPgto === "Crédito") {
     parcelas = calcularParcelas(dataCompra, valorTotal, numParcelas, contaCartao);
   } else {
-    // À vista: data_fatura = data_compra, mes_referencia = YYYY-MM da compra
     const mesRef = dataCompra.substring(0, 7);
     parcelas = [{
       data_fatura:    dataCompra,
@@ -218,11 +272,11 @@ function salvarGasto(payload) {
   }
 
   const rows = parcelas.map(p => [
-    generateId(),         // id
-    idGrupo,              // id_grupo
-    dataCompra,           // data_compra
-    p.data_fatura,        // data_fatura
-    p.mes_referencia,     // mes_referencia
+    generateId(),
+    idGrupo,
+    dataCompra,
+    p.data_fatura,
+    p.mes_referencia,
     String(p.parcela_num),
     String(p.total_parcelas),
     String(p.valor_parcela.toFixed(2)),
@@ -231,7 +285,7 @@ function salvarGasto(payload) {
     formaPgto,
     contaCartao,
     descricao,
-    nowIso(),             // criado_em
+    nowIso(),
   ]);
 
   ws.getRange(ws.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
@@ -249,9 +303,8 @@ function salvarGasto(payload) {
  * após → vai para o PRÓXIMO ciclo.
  */
 function calcularParcelas(dataCompraStr, valorTotal, numParcelas, nomeCartao) {
-  // Busca o cartão para pegar dia_fechamento e dia_vencimento
-  let diaFechamento = 28; // fallback
-  let diaVencimento = 10; // fallback
+  let diaFechamento = 28;
+  let diaVencimento = 10;
 
   try {
     const cartoes = sheetToObjects(getSheet("cartoes"));
@@ -262,12 +315,11 @@ function calcularParcelas(dataCompraStr, valorTotal, numParcelas, nomeCartao) {
     }
   } catch (_) { /* usa fallback */ }
 
-  const compra  = new Date(dataCompraStr + "T12:00:00");
+  const compra    = new Date(dataCompraStr + "T12:00:00");
   const diaCompra = compra.getDate();
 
-  // Mês do primeiro ciclo: se diaCompra >= diaFechamento → próximo mês
-  let anoCiclo  = compra.getFullYear();
-  let mesCiclo  = compra.getMonth(); // 0-indexed
+  let anoCiclo = compra.getFullYear();
+  let mesCiclo = compra.getMonth(); // 0-indexed
 
   if (diaCompra >= diaFechamento) {
     mesCiclo += 1;
@@ -282,7 +334,6 @@ function calcularParcelas(dataCompraStr, valorTotal, numParcelas, nomeCartao) {
     let mesFat = mesCiclo + i;
     while (mesFat > 11) { mesFat -= 12; anoFat += 1; }
 
-    // Dia de vencimento pode não existir no mês (ex: 31 em fevereiro)
     const ultimoDia = new Date(anoFat, mesFat + 1, 0).getDate();
     const diaVenc   = Math.min(diaVencimento, ultimoDia);
     const dataFatura = `${anoFat}-${String(mesFat + 1).padStart(2, "0")}-${String(diaVenc).padStart(2, "0")}`;
