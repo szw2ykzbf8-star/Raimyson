@@ -1,0 +1,437 @@
+import uuid
+from datetime import datetime
+import gspread
+from google.oauth2.service_account import Credentials
+import pandas as pd
+import streamlit as st
+from src.config import GOOGLE_CREDENTIALS_PATH, SPREADSHEET_ID, SHEETS
+
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive",
+]
+
+
+@st.cache_resource
+def get_client():
+    creds = Credentials.from_service_account_file(GOOGLE_CREDENTIALS_PATH, scopes=SCOPES)
+    return gspread.authorize(creds)
+
+
+def get_spreadsheet():
+    return get_client().open_by_key(SPREADSHEET_ID)
+
+
+def _sheet(name: str):
+    return get_spreadsheet().worksheet(name)
+
+
+def _now() -> str:
+    return datetime.now().isoformat(timespec="seconds")
+
+
+def new_id() -> str:
+    return str(uuid.uuid4())
+
+
+# ─── Cache por sessão ───────────────────────────────────────────────────────
+
+
+def _cache_key(name: str) -> str:
+    return f"_sheet_cache_{name}"
+
+
+def get_df(sheet_key: str, force: bool = False) -> pd.DataFrame:
+    name = SHEETS[sheet_key]
+    key = _cache_key(name)
+    if force or key not in st.session_state:
+        ws = _sheet(name)
+        data = ws.get_all_records(numericise_ignore=["all"])
+        st.session_state[key] = pd.DataFrame(data) if data else pd.DataFrame()
+    return st.session_state[key]
+
+
+def invalidate(sheet_key: str):
+    name = SHEETS[sheet_key]
+    key = _cache_key(name)
+    if key in st.session_state:
+        del st.session_state[key]
+
+
+# ─── Config ─────────────────────────────────────────────────────────────────
+
+
+def get_config(chave: str, default=None):
+    df = get_df("config")
+    if df.empty:
+        return default
+    row = df[df["chave"] == chave]
+    return row["valor"].iloc[0] if not row.empty else default
+
+
+def set_config(chave: str, valor: str):
+    ws = _sheet(SHEETS["config"])
+    df = get_df("config")
+    if not df.empty and chave in df["chave"].values:
+        idx = df[df["chave"] == chave].index[0]
+        row_num = idx + 2
+        ws.update_cell(row_num, 2, valor)
+    else:
+        ws.append_row([chave, valor])
+    invalidate("config")
+
+
+# ─── Categorias ─────────────────────────────────────────────────────────────
+
+
+def get_categorias(apenas_ativas: bool = True) -> pd.DataFrame:
+    df = get_df("categorias")
+    if df.empty:
+        return df
+    if apenas_ativas:
+        df = df[df["ativo"] == "True"]
+    return df
+
+
+def add_categoria(nome: str, icone: str = "📦") -> str:
+    ws = _sheet(SHEETS["categorias"])
+    rid = new_id()
+    ws.append_row([rid, nome, icone, "True", _now()])
+    invalidate("categorias")
+    return rid
+
+
+def delete_categoria(rid: str):
+    ws = _sheet(SHEETS["categorias"])
+    df = get_df("categorias")
+    idx = df[df["id"] == rid].index[0]
+    ws.update_cell(idx + 2, 4, "False")
+    invalidate("categorias")
+
+
+# ─── Fontes de Renda ─────────────────────────────────────────────────────────
+
+
+def get_fontes(apenas_ativas: bool = True) -> pd.DataFrame:
+    df = get_df("fontes")
+    if df.empty:
+        return df
+    if apenas_ativas:
+        df = df[df["ativo"] == "True"]
+    return df
+
+
+def add_fonte(nome: str) -> str:
+    ws = _sheet(SHEETS["fontes"])
+    rid = new_id()
+    ws.append_row([rid, nome, "True", _now()])
+    invalidate("fontes")
+    return rid
+
+
+def delete_fonte(rid: str):
+    ws = _sheet(SHEETS["fontes"])
+    df = get_df("fontes")
+    idx = df[df["id"] == rid].index[0]
+    ws.update_cell(idx + 2, 3, "False")
+    invalidate("fontes")
+
+
+# ─── Contas Bancárias ────────────────────────────────────────────────────────
+
+
+def get_contas(apenas_ativas: bool = True) -> pd.DataFrame:
+    df = get_df("contas")
+    if df.empty:
+        return df
+    if apenas_ativas:
+        df = df[df["ativo"] == "True"]
+    return df
+
+
+def add_conta(nome: str, tipo: str, saldo_inicial: float = 0.0) -> str:
+    ws = _sheet(SHEETS["contas"])
+    rid = new_id()
+    ws.append_row([rid, nome, tipo, str(saldo_inicial), "True", _now()])
+    invalidate("contas")
+    return rid
+
+
+def delete_conta(rid: str):
+    ws = _sheet(SHEETS["contas"])
+    df = get_df("contas")
+    idx = df[df["id"] == rid].index[0]
+    ws.update_cell(idx + 2, 5, "False")
+    invalidate("contas")
+
+
+# ─── Cartões ─────────────────────────────────────────────────────────────────
+
+
+def get_cartoes(apenas_ativos: bool = True) -> pd.DataFrame:
+    df = get_df("cartoes")
+    if df.empty:
+        return df
+    if apenas_ativos:
+        df = df[df["ativo"] == "True"]
+    return df
+
+
+def add_cartao(nome: str, dia_fechamento: int, dia_vencimento: int) -> str:
+    ws = _sheet(SHEETS["cartoes"])
+    rid = new_id()
+    ws.append_row([rid, nome, str(dia_fechamento), str(dia_vencimento), "True", _now()])
+    invalidate("cartoes")
+    return rid
+
+
+def delete_cartao(rid: str):
+    ws = _sheet(SHEETS["cartoes"])
+    df = get_df("cartoes")
+    idx = df[df["id"] == rid].index[0]
+    ws.update_cell(idx + 2, 5, "False")
+    invalidate("cartoes")
+
+
+# ─── Contas Fixas ────────────────────────────────────────────────────────────
+
+
+def get_fixas(apenas_ativas: bool = True) -> pd.DataFrame:
+    df = get_df("fixas")
+    if df.empty:
+        return df
+    if apenas_ativas:
+        df = df[df["ativo"] == "True"]
+    return df
+
+
+def add_fixa(nome: str, valor_ref: float, categoria: str, forma_pgto: str,
+             conta_cartao: str, dia_venc: int, mes_inicio: str) -> str:
+    ws = _sheet(SHEETS["fixas"])
+    rid = new_id()
+    ws.append_row([rid, nome, str(valor_ref), categoria, forma_pgto,
+                   conta_cartao, str(dia_venc), "True", mes_inicio, "", _now()])
+    invalidate("fixas")
+    return rid
+
+
+def delete_fixa(rid: str):
+    ws = _sheet(SHEETS["fixas"])
+    df = get_df("fixas")
+    idx = df[df["id"] == rid].index[0]
+    ws.update_cell(idx + 2, 8, "False")
+    invalidate("fixas")
+
+
+def update_fixa_valor(rid: str, novo_valor: float):
+    ws = _sheet(SHEETS["fixas"])
+    df = get_df("fixas")
+    idx = df[df["id"] == rid].index[0]
+    ws.update_cell(idx + 2, 3, str(novo_valor))
+    invalidate("fixas")
+
+
+# ─── Dívidas ─────────────────────────────────────────────────────────────────
+
+
+def get_dividas(apenas_ativas: bool = True) -> pd.DataFrame:
+    df = get_df("dividas")
+    if df.empty:
+        return df
+    if apenas_ativas:
+        df = df[df["ativo"] == "True"]
+    return df
+
+
+def add_divida(nome: str, valor_original: float, valor_parcela: float,
+               num_parcelas: int, data_inicio: str, forma_pgto: str,
+               conta_cartao: str, fonte_ajuda: str) -> str:
+    ws = _sheet(SHEETS["dividas"])
+    rid = new_id()
+    ws.append_row([rid, nome, str(valor_original), str(valor_parcela),
+                   str(num_parcelas), "0", data_inicio, forma_pgto,
+                   conta_cartao, fonte_ajuda, "True", _now()])
+    invalidate("dividas")
+    return rid
+
+
+def registrar_pagamento_divida(divida_id: str, valor_pago: float,
+                                data: str, is_antecipacao: bool,
+                                num_antecipadas: int, economia: float,
+                                descricao: str = "") -> str:
+    ws = _sheet(SHEETS["pgtos_divida"])
+    rid = new_id()
+    ws.append_row([rid, divida_id, data, str(valor_pago),
+                   str(is_antecipacao), str(num_antecipadas),
+                   str(economia), descricao, _now()])
+    df_d = get_df("dividas")
+    idx = df_d[df_d["id"] == divida_id].index[0]
+    pagas_atuais = int(df_d.loc[idx, "num_parcelas_pagas"])
+    novas_pagas = pagas_atuais + (num_antecipadas if is_antecipacao else 1)
+    ws_d = _sheet(SHEETS["dividas"])
+    ws_d.update_cell(idx + 2, 6, str(novas_pagas))
+    invalidate("dividas")
+    invalidate("pgtos_divida")
+    return rid
+
+
+def get_pgtos_divida(divida_id: str = None) -> pd.DataFrame:
+    df = get_df("pgtos_divida")
+    if df.empty:
+        return df
+    if divida_id:
+        df = df[df["divida_id"] == divida_id]
+    return df
+
+
+def delete_divida(rid: str):
+    ws = _sheet(SHEETS["dividas"])
+    df = get_df("dividas")
+    idx = df[df["id"] == rid].index[0]
+    ws.update_cell(idx + 2, 11, "False")
+    invalidate("dividas")
+
+
+# ─── Investimentos ───────────────────────────────────────────────────────────
+
+
+def get_investimentos(status: str = None) -> pd.DataFrame:
+    df = get_df("investimentos")
+    if df.empty:
+        return df
+    if status:
+        df = df[df["status"] == status]
+    return df
+
+
+def add_investimento(nome: str, tipo: str, data_aplicacao: str,
+                     valor_aplicado: float, taxa_tipo: str,
+                     taxa_valor: float, data_vencimento: str) -> str:
+    ws = _sheet(SHEETS["investimentos"])
+    rid = new_id()
+    ws.append_row([rid, nome, tipo, data_aplicacao, str(valor_aplicado),
+                   taxa_tipo, str(taxa_valor), data_vencimento,
+                   "", "", "ATIVO", _now()])
+    invalidate("investimentos")
+    return rid
+
+
+def retirar_investimento(rid: str, valor_retirado: float, data_retirada: str):
+    ws = _sheet(SHEETS["investimentos"])
+    df = get_df("investimentos")
+    idx = df[df["id"] == rid].index[0]
+    ws.update_cell(idx + 2, 9, str(valor_retirado))
+    ws.update_cell(idx + 2, 10, data_retirada)
+    ws.update_cell(idx + 2, 11, "RETIRADO")
+    invalidate("investimentos")
+
+
+def delete_investimento(rid: str):
+    ws = _sheet(SHEETS["investimentos"])
+    df = get_df("investimentos")
+    idx = df[df["id"] == rid].index[0]
+    ws.update_cell(idx + 2, 11, "EXCLUIDO")
+    invalidate("investimentos")
+
+
+# ─── Entradas ────────────────────────────────────────────────────────────────
+
+
+def get_entradas(mes: str = None) -> pd.DataFrame:
+    df = get_df("entradas")
+    if df.empty:
+        return df
+    if mes:
+        df = df[df["data"].str.startswith(mes)]
+    return df
+
+
+def add_entrada(data: str, valor: float, fonte: str,
+                conta: str, descricao: str = "") -> str:
+    ws = _sheet(SHEETS["entradas"])
+    rid = new_id()
+    ws.append_row([rid, data, str(valor), fonte, conta, descricao, _now()])
+    invalidate("entradas")
+    return rid
+
+
+def delete_entrada(rid: str):
+    ws = _sheet(SHEETS["entradas"])
+    df = get_df("entradas")
+    idx = df[df["id"] == rid].index[0]
+    ws.delete_rows(idx + 2)
+    invalidate("entradas")
+
+
+# ─── Gastos ──────────────────────────────────────────────────────────────────
+
+
+def get_gastos(mes: str = None) -> pd.DataFrame:
+    df = get_df("gastos")
+    if df.empty:
+        return df
+    if mes:
+        df = df[df["mes_referencia"] == mes]
+    return df
+
+
+def add_gasto(data_compra: str, data_fatura: str, mes_ref: str,
+              parcela_num: int, total_parcelas: int, valor_parcela: float,
+              valor_total: float, categoria: str, forma_pgto: str,
+              conta_cartao: str, descricao: str = "",
+              id_grupo: str = None) -> str:
+    ws = _sheet(SHEETS["gastos"])
+    rid = new_id()
+    gid = id_grupo or rid
+    ws.append_row([rid, gid, data_compra, data_fatura, mes_ref,
+                   str(parcela_num), str(total_parcelas),
+                   str(valor_parcela), str(valor_total),
+                   categoria, forma_pgto, conta_cartao, descricao, _now()])
+    invalidate("gastos")
+    return rid
+
+
+def delete_gasto(rid: str):
+    ws = _sheet(SHEETS["gastos"])
+    df = get_df("gastos")
+    idx = df[df["id"] == rid].index[0]
+    ws.delete_rows(idx + 2)
+    invalidate("gastos")
+
+
+def delete_gasto_grupo(id_grupo: str):
+    ws = _sheet(SHEETS["gastos"])
+    df = get_df("gastos")
+    rows = df[df["id_grupo"] == id_grupo].index.tolist()
+    for idx in sorted(rows, reverse=True):
+        ws.delete_rows(idx + 2)
+    invalidate("gastos")
+
+
+# ─── Transferências ──────────────────────────────────────────────────────────
+
+
+def get_transferencias(mes: str = None) -> pd.DataFrame:
+    df = get_df("transferencias")
+    if df.empty:
+        return df
+    if mes:
+        df = df[df["data"].str.startswith(mes)]
+    return df
+
+
+def add_transferencia(data: str, valor: float, conta_origem: str,
+                      conta_destino: str, descricao: str = "") -> str:
+    ws = _sheet(SHEETS["transferencias"])
+    rid = new_id()
+    ws.append_row([rid, data, str(valor), conta_origem, conta_destino, descricao, _now()])
+    invalidate("transferencias")
+    return rid
+
+
+def delete_transferencia(rid: str):
+    ws = _sheet(SHEETS["transferencias"])
+    df = get_df("transferencias")
+    idx = df[df["id"] == rid].index[0]
+    ws.delete_rows(idx + 2)
+    invalidate("transferencias")

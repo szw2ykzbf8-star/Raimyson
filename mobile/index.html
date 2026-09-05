@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="theme-color" content="#2ECC71">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="FinTrack">
+  <link rel="manifest" href="manifest.json">
+  <title>FinTrack Mobile</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0E1117;
+      --surface: #1A1F2E;
+      --border: #2D3748;
+      --green: #2ECC71;
+      --red: #E74C3C;
+      --yellow: #F39C12;
+      --blue: #3498DB;
+      --text: #FAFAFA;
+      --muted: #A0AEC0;
+      --radius: 12px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100dvh;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right)
+               env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    header h1 { font-size: 1.2rem; color: var(--green); }
+    header span { font-size: 0.8rem; color: var(--muted); }
+
+    main { padding: 20px; max-width: 500px; margin: 0 auto; }
+
+    .card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    .card h2 {
+      font-size: 1rem;
+      color: var(--muted);
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    label {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+      margin-top: 14px;
+    }
+    label:first-of-type { margin-top: 0; }
+
+    input, select, textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 1rem;
+      padding: 12px 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input:focus, select:focus { border-color: var(--green); }
+
+    input[type="number"] { font-size: 1.4rem; font-weight: 700; }
+
+    .row { display: flex; gap: 12px; }
+    .row > * { flex: 1; }
+
+    .pill-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .pill {
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.15s;
+      user-select: none;
+    }
+
+    .pill.active {
+      background: var(--green);
+      border-color: var(--green);
+      color: #000;
+      font-weight: 600;
+    }
+
+    .pill.credit.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+    .pill.debit.active  { background: var(--yellow); border-color: var(--yellow); color: #000; }
+    .pill.cash.active   { background: var(--green); border-color: var(--green); color: #000; }
+
+    button.submit {
+      width: 100%;
+      background: var(--green);
+      color: #000;
+      font-size: 1.1rem;
+      font-weight: 700;
+      padding: 16px;
+      border: none;
+      border-radius: var(--radius);
+      cursor: pointer;
+      margin-top: 20px;
+      transition: opacity 0.2s;
+    }
+
+    button.submit:active { opacity: 0.8; }
+    button.submit:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+
+    .toast {
+      position: fixed;
+      bottom: calc(20px + env(safe-area-inset-bottom));
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 24px;
+      font-size: 0.95rem;
+      text-align: center;
+      transition: transform 0.3s ease;
+      z-index: 100;
+      max-width: 320px;
+      width: 90%;
+    }
+
+    .toast.show { transform: translateX(-50%) translateY(0); }
+    .toast.success { border-color: var(--green); color: var(--green); }
+    .toast.error   { border-color: var(--red); color: var(--red); }
+    .toast.offline { border-color: var(--yellow); color: var(--yellow); }
+
+    .badge {
+      display: inline-block;
+      background: var(--yellow);
+      color: #000;
+      border-radius: 999px;
+      padding: 2px 10px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+
+    .queue-section { display: none; }
+    .queue-section.has-items { display: block; }
+
+    .queue-item {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 8px;
+      font-size: 0.9rem;
+    }
+
+    .config-notice {
+      background: #2a1f00;
+      border: 1px solid var(--yellow);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 16px;
+      font-size: 0.9rem;
+      color: var(--yellow);
+    }
+
+    #parcelas-section { display: none; }
+    #conta-section, #cartao-section { display: none; }
+
+    select option { background: #1A1F2E; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>💰 FinTrack</h1>
+  <span id="status-indicator">🟢 Online</span>
+</header>
+
+<main>
+  <!-- Config notice -->
+  <div class="config-notice" id="config-notice" style="display:none">
+    ⚙️ Configure a URL do Apps Script e o segredo em <strong>config.js</strong> antes de usar.
+  </div>
+
+  <!-- Formulário de gasto -->
+  <div class="card">
+    <h2>Registrar Gasto</h2>
+
+    <label>Valor (R$)</label>
+    <input type="number" id="valor" placeholder="0,00" step="0.01" min="0.01" inputmode="decimal">
+
+    <label>Forma de Pagamento</label>
+    <div class="pill-group" id="forma-pgto">
+      <span class="pill cash active" data-val="Dinheiro">💵 Dinheiro</span>
+      <span class="pill debit" data-val="Pix">⚡ Pix</span>
+      <span class="pill debit" data-val="Débito">🏦 Débito</span>
+      <span class="pill credit" data-val="Crédito">💳 Crédito</span>
+    </div>
+
+    <div id="conta-section">
+      <label>Conta</label>
+      <select id="conta-select"><option value="">Carregando...</option></select>
+    </div>
+
+    <div id="cartao-section">
+      <label>Cartão</label>
+      <select id="cartao-select"><option value="">Carregando...</option></select>
+    </div>
+
+    <div id="parcelas-section">
+      <label>Número de Parcelas</label>
+      <select id="parcelas">
+        <option value="1">1× (à vista)</option>
+        <option value="2">2×</option>
+        <option value="3">3×</option>
+        <option value="4">4×</option>
+        <option value="5">5×</option>
+        <option value="6">6×</option>
+        <option value="10">10×</option>
+        <option value="12">12×</option>
+        <option value="18">18×</option>
+        <option value="24">24×</option>
+      </select>
+    </div>
+
+    <label>Categoria</label>
+    <select id="categoria"><option value="">Carregando...</option></select>
+
+    <label>Data</label>
+    <input type="date" id="data">
+
+    <label>Descrição (opcional)</label>
+    <input type="text" id="descricao" placeholder="Ex: Mercado, Gasolina...">
+
+    <button class="submit" id="btn-salvar" onclick="salvarGasto()">
+      💾 Salvar Gasto
+    </button>
+  </div>
+
+  <!-- Fila offline -->
+  <div class="card queue-section" id="queue-section">
+    <h2>
+      📤 Fila Offline
+      <span class="badge" id="queue-count">0</span>
+    </h2>
+    <p style="color:var(--muted);font-size:0.85rem;margin-bottom:12px">
+      Gastos salvos localmente. Serão enviados quando houver conexão.
+    </p>
+    <div id="queue-list"></div>
+    <button class="submit" onclick="sincronizarFila()" style="background:var(--yellow)">
+      🔄 Sincronizar Agora
+    </button>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<!-- CONFIG: edite estas variáveis -->
+<script>
+  const APPS_SCRIPT_URL = ""; // Cole aqui a URL do Google Apps Script
+  const SECRET_KEY = "";      // Cole aqui o segredo definido no Apps Script
+</script>
+
+<script>
+  // ─── Estado ────────────────────────────────────────────────────────────────
+
+  let formaPgto = "Dinheiro";
+  let categorias = [];
+  let contas = [];
+  let cartoes = [];
+  let isOnline = navigator.onLine;
+
+  // ─── Inicialização ─────────────────────────────────────────────────────────
+
+  window.addEventListener("DOMContentLoaded", async () => {
+    // Data padrão = hoje
+    document.getElementById("data").valueAsDate = new Date();
+
+    // Service Worker
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    }
+
+    // Verificar config
+    if (!APPS_SCRIPT_URL || !SECRET_KEY) {
+      document.getElementById("config-notice").style.display = "block";
+    }
+
+    // Carregar dados
+    await carregarDados();
+    renderizarFila();
+    atualizarStatus();
+  });
+
+  window.addEventListener("online",  () => { isOnline = true;  atualizarStatus(); sincronizarFila(); });
+  window.addEventListener("offline", () => { isOnline = false; atualizarStatus(); });
+
+  function atualizarStatus() {
+    const el = document.getElementById("status-indicator");
+    el.textContent = isOnline ? "🟢 Online" : "🔴 Offline";
+  }
+
+  // ─── Forma de pagamento ─────────────────────────────────────────────────────
+
+  document.getElementById("forma-pgto").addEventListener("click", e => {
+    const pill = e.target.closest(".pill");
+    if (!pill) return;
+    document.querySelectorAll("#forma-pgto .pill").forEach(p => p.classList.remove("active"));
+    pill.classList.add("active");
+    formaPgto = pill.dataset.val;
+    atualizarCampos();
+  });
+
+  function atualizarCampos() {
+    const contaSec = document.getElementById("conta-section");
+    const cartaoSec = document.getElementById("cartao-section");
+    const parcelaSec = document.getElementById("parcelas-section");
+
+    if (formaPgto === "Crédito") {
+      contaSec.style.display = "none";
+      cartaoSec.style.display = "block";
+      parcelaSec.style.display = "block";
+    } else if (formaPgto === "Dinheiro") {
+      contaSec.style.display = "none";
+      cartaoSec.style.display = "none";
+      parcelaSec.style.display = "none";
+    } else {
+      contaSec.style.display = "block";
+      cartaoSec.style.display = "none";
+      parcelaSec.style.display = "none";
+    }
+  }
+
+  // ─── Carregar dados do Apps Script ─────────────────────────────────────────
+
+  async function carregarDados() {
+    // Tenta cache local primeiro
+    const cached = localStorage.getItem("fintrack_dados");
+    if (cached) {
+      try {
+        const d = JSON.parse(cached);
+        popularSelects(d);
+      } catch (e) {}
+    }
+
+    if (!APPS_SCRIPT_URL || !isOnline) return;
+
+    try {
+      const resp = await fetch(`${APPS_SCRIPT_URL}?secret=${encodeURIComponent(SECRET_KEY)}`);
+      const data = await resp.json();
+      localStorage.setItem("fintrack_dados", JSON.stringify(data));
+      popularSelects(data);
+    } catch (e) {
+      console.warn("Falha ao carregar dados:", e);
+    }
+  }
+
+  function popularSelects(data) {
+    categorias = data.categorias || [];
+    contas = data.contas || [];
+    cartoes = data.cartoes || [];
+
+    const catSel = document.getElementById("categoria");
+    catSel.innerHTML = categorias.map(c => `<option value="${c}">${c}</option>`).join("");
+
+    const contaSel = document.getElementById("conta-select");
+    contaSel.innerHTML = contas.map(c => `<option value="${c}">${c}</option>`).join("");
+
+    const cartSel = document.getElementById("cartao-select");
+    cartSel.innerHTML = cartoes.map(c => `<option value="${c}">${c}</option>`).join("");
+  }
+
+  // ─── Salvar gasto ──────────────────────────────────────────────────────────
+
+  async function salvarGasto() {
+    const valor = parseFloat(document.getElementById("valor").value);
+    if (!valor || valor <= 0) { showToast("Informe um valor válido.", "error"); return; }
+
+    const categoria = document.getElementById("categoria").value;
+    if (!categoria) { showToast("Selecione uma categoria.", "error"); return; }
+
+    let contaCartao = "";
+    if (formaPgto === "Crédito") {
+      contaCartao = document.getElementById("cartao-select").value;
+    } else if (formaPgto !== "Dinheiro") {
+      contaCartao = document.getElementById("conta-select").value;
+    }
+
+    const gasto = {
+      id: crypto.randomUUID(),
+      data: document.getElementById("data").value,
+      valor: valor,
+      categoria: categoria,
+      forma_pagamento: formaPgto,
+      conta_cartao: contaCartao,
+      num_parcelas: parseInt(document.getElementById("parcelas")?.value || 1),
+      descricao: document.getElementById("descricao").value.trim(),
+      timestamp: new Date().toISOString(),
+    };
+
+    const btn = document.getElementById("btn-salvar");
+    btn.disabled = true;
+    btn.textContent = "Salvando...";
+
+    if (isOnline && APPS_SCRIPT_URL && SECRET_KEY) {
+      const ok = await enviarParaSheets(gasto);
+      if (ok) {
+        showToast("✅ Gasto salvo com sucesso!", "success");
+        resetForm();
+      } else {
+        adicionarFila(gasto);
+        showToast("⚠️ Salvo offline. Será enviado em breve.", "offline");
+        resetForm();
+      }
+    } else {
+      adicionarFila(gasto);
+      showToast("📴 Salvo offline. Será enviado quando conectar.", "offline");
+      resetForm();
+    }
+
+    btn.disabled = false;
+    btn.textContent = "💾 Salvar Gasto";
+  }
+
+  async function enviarParaSheets(gasto) {
+    try {
+      const resp = await fetch(APPS_SCRIPT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ secret: SECRET_KEY, gasto }),
+      });
+      const text = await resp.text();
+      return text.includes("OK");
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // ─── Fila offline ──────────────────────────────────────────────────────────
+
+  function adicionarFila(gasto) {
+    const fila = getFilaLocal();
+    fila.push(gasto);
+    localStorage.setItem("fintrack_fila", JSON.stringify(fila));
+    renderizarFila();
+  }
+
+  function getFilaLocal() {
+    try { return JSON.parse(localStorage.getItem("fintrack_fila") || "[]"); }
+    catch (e) { return []; }
+  }
+
+  async function sincronizarFila() {
+    if (!isOnline || !APPS_SCRIPT_URL) return;
+    const fila = getFilaLocal();
+    if (fila.length === 0) return;
+
+    const enviados = [];
+    for (const gasto of fila) {
+      const ok = await enviarParaSheets(gasto);
+      if (ok) enviados.push(gasto.id);
+    }
+
+    if (enviados.length > 0) {
+      const nova_fila = fila.filter(g => !enviados.includes(g.id));
+      localStorage.setItem("fintrack_fila", JSON.stringify(nova_fila));
+      renderizarFila();
+      showToast(`✅ ${enviados.length} gasto(s) sincronizado(s)!`, "success");
+    }
+  }
+
+  function renderizarFila() {
+    const fila = getFilaLocal();
+    const sec = document.getElementById("queue-section");
+    const lista = document.getElementById("queue-list");
+    const badge = document.getElementById("queue-count");
+
+    badge.textContent = fila.length;
+    sec.classList.toggle("has-items", fila.length > 0);
+
+    lista.innerHTML = fila.map(g => `
+      <div class="queue-item">
+        <strong>R$ ${parseFloat(g.valor).toFixed(2)}</strong> — ${g.categoria}
+        <br><small style="color:var(--muted)">${g.data} • ${g.forma_pagamento}${g.descricao ? ' • ' + g.descricao : ''}</small>
+      </div>
+    `).join("");
+  }
+
+  // ─── Helpers ───────────────────────────────────────────────────────────────
+
+  function resetForm() {
+    document.getElementById("valor").value = "";
+    document.getElementById("descricao").value = "";
+    document.getElementById("data").valueAsDate = new Date();
+    document.getElementById("parcelas") && (document.getElementById("parcelas").value = "1");
+  }
+
+  function showToast(msg, type = "success") {
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.className = `toast ${type} show`;
+    setTimeout(() => t.classList.remove("show"), 3500);
+  }
+</script>
+</body>
+</html>
