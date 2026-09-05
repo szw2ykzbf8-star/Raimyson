@@ -36,8 +36,8 @@ with tabs[0]:
 
     with st.form("alter_pin_abertura"):
         st.markdown("**Senha de Abertura**")
-        novo_a  = st.text_input("Nova senha (mín. 4 caracteres)", type="password", key="npa")
-        novo_a2 = st.text_input("Confirmar", type="password", key="npa2")
+        novo_a  = st.text_input("Nova senha (4–72 caracteres)", type="password", max_chars=72, key="npa")
+        novo_a2 = st.text_input("Confirmar", type="password", max_chars=72, key="npa2")
         btn_a   = st.form_submit_button("Alterar Senha de Abertura")
     if btn_a:
         if len(novo_a) < 4:
@@ -53,8 +53,8 @@ with tabs[0]:
 
     with st.form("alter_pin_exclusao"):
         st.markdown("**Senha de Exclusão**")
-        novo_e  = st.text_input("Nova senha (mín. 4 caracteres)", type="password", key="npe")
-        novo_e2 = st.text_input("Confirmar", type="password", key="npe2")
+        novo_e  = st.text_input("Nova senha (4–72 caracteres)", type="password", max_chars=72, key="npe")
+        novo_e2 = st.text_input("Confirmar", type="password", max_chars=72, key="npe2")
         btn_e   = st.form_submit_button("Alterar Senha de Exclusão")
     if btn_e:
         if len(novo_e) < 4:

@@ -44,13 +44,13 @@ def tela_setup():
 
     with st.form("setup_form"):
         st.subheader("🔑 PIN de Abertura")
-        pin_a = st.text_input("Senha", type="password", key="sa1")
-        pin_a2 = st.text_input("Confirmar senha", type="password", key="sa2")
+        pin_a = st.text_input("Senha (4–72 caracteres)", type="password", max_chars=72, key="sa1")
+        pin_a2 = st.text_input("Confirmar senha", type="password", max_chars=72, key="sa2")
 
         st.subheader("🔐 PIN de Exclusão")
         st.caption("Senha diferente da anterior, usada para confirmar exclusões.")
-        pin_e = st.text_input("Senha", type="password", key="se1")
-        pin_e2 = st.text_input("Confirmar senha", type="password", key="se2")
+        pin_e = st.text_input("Senha (4–72 caracteres)", type="password", max_chars=72, key="se1")
+        pin_e2 = st.text_input("Confirmar senha", type="password", max_chars=72, key="se2")
 
         submitted = st.form_submit_button("Salvar e Continuar", use_container_width=True)
 
@@ -58,10 +58,14 @@ def tela_setup():
         erros = []
         if len(pin_a) < 4:
             erros.append("Senha de abertura deve ter pelo menos 4 caracteres.")
+        elif len(pin_a) > 72:
+            erros.append("Senha de abertura deve ter no máximo 72 caracteres.")
         if pin_a != pin_a2:
             erros.append("Senhas de abertura não conferem.")
         if len(pin_e) < 4:
             erros.append("Senha de exclusão deve ter pelo menos 4 caracteres.")
+        elif len(pin_e) > 72:
+            erros.append("Senha de exclusão deve ter no máximo 72 caracteres.")
         if pin_e != pin_e2:
             erros.append("Senhas de exclusão não conferem.")
         if pin_a == pin_e:
