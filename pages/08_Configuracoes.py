@@ -16,21 +16,28 @@ tab_unidades, tab_unidades_medida, tab_usuarios, tab_orcamento, tab_backup = st.
 ])
 
 with tab_unidades:
-    st.subheader("Unidades (CNPJs)")
+    st.subheader("Unidades Hoteleiras (CNPJs)")
     df_unidades = ler_df("unidades")
 
     if not df_unidades.empty:
         st.dataframe(df_unidades, use_container_width=True, hide_index=True)
 
-    with st.form("nova_unidade"):
-        nome = st.text_input("Nome da unidade")
-        cnpj = st.text_input("CNPJ")
-        if st.form_submit_button("Adicionar Unidade"):
-            novo_id = int(df_unidades["id"].max()) + 1 if not df_unidades.empty else 1
-            append_linha("unidades", [novo_id, nome, cnpj, True])
-            st.success(f"Unidade '{nome}' adicionada!")
-            st.cache_resource.clear()
-            st.rerun()
+    if "und_form_v" not in st.session_state:
+        st.session_state["und_form_v"] = 0
+
+    with st.form(f"nova_unidade_{st.session_state['und_form_v']}"):
+        nome = st.text_input("Nome da unidade *", placeholder="Ex: Cancun")
+        cnpj = st.text_input("CNPJ", placeholder="00.000.000/0000-00")
+        if st.form_submit_button("Adicionar Unidade", use_container_width=True):
+            if not nome.strip():
+                st.error("Nome é obrigatório.")
+            else:
+                novo_id = int(df_unidades["id"].max()) + 1 if not df_unidades.empty else 1
+                append_linha("unidades", [novo_id, nome.strip(), cnpj.strip(), True])
+                st.success(f"Unidade '{nome}' adicionada!")
+                st.session_state["und_form_v"] += 1
+                st.cache_resource.clear()
+                st.rerun()
 
 with tab_unidades_medida:
     st.subheader("Unidades de Medida Base")
@@ -44,14 +51,22 @@ with tab_unidades_medida:
     df_um = ler_df("unidades_medida")
 
     if not df_um.empty:
+        col_h1, col_h2, col_h3, col_h4 = st.columns([2, 4, 2, 2])
+        col_h1.markdown("**Sigla**")
+        col_h2.markdown("**Nome completo**")
+        col_h3.markdown("**Status**")
+        st.markdown("---")
         for i, row in df_um.iterrows():
             ativo_val = row["ativo"] is True or str(row["ativo"]).upper() == "TRUE"
-            col1, col2, col3 = st.columns([4, 2, 2])
+            eh_padrao = str(row["nome"]).lower() in UNIDADES_PROTEGIDAS
+            col1, col2, col3, col4 = st.columns([2, 4, 2, 2])
             with col1:
-                st.write(f"**{row['nome']}**" + (" *(padrão)*" if str(row["nome"]).lower() in UNIDADES_PROTEGIDAS else ""))
+                st.write(f"**{row['nome']}**" + (" 🔒" if eh_padrao else ""))
             with col2:
-                st.write("✅ Ativa" if ativo_val else "❌ Inativa")
+                st.write(row.get("descricao", "") or "—")
             with col3:
+                st.write("✅ Ativa" if ativo_val else "❌ Inativa")
+            with col4:
                 btn_label = "Inativar" if ativo_val else "Ativar"
                 if st.button(btn_label, key=f"um_toggle_{i}", use_container_width=True):
                     df_um.at[i, "ativo"] = not ativo_val
@@ -61,20 +76,26 @@ with tab_unidades_medida:
 
     st.markdown("---")
     st.markdown("**Adicionar nova unidade de medida**")
-    with st.form("nova_unidade_medida"):
-        nova_um = st.text_input(
-            "Nome da unidade *",
-            placeholder="Ex: g (grama), mL, dúzia, metro²"
-        )
+
+    if "um_form_v" not in st.session_state:
+        st.session_state["um_form_v"] = 0
+
+    with st.form(f"nova_unidade_medida_{st.session_state['um_form_v']}"):
+        col_s, col_d = st.columns([2, 4])
+        with col_s:
+            nova_sigla = st.text_input("Sigla *", placeholder="Ex: g, mL, dz")
+        with col_d:
+            nova_desc_um = st.text_input("Nome completo *", placeholder="Ex: Grama, Mililitro, Dúzia")
         if st.form_submit_button("Adicionar", use_container_width=True):
-            if not nova_um.strip():
-                st.error("Informe o nome da unidade.")
-            elif not df_um.empty and nova_um.strip().lower() in df_um["nome"].str.lower().tolist():
-                st.error(f"A unidade '{nova_um}' já existe.")
+            if not nova_sigla.strip() or not nova_desc_um.strip():
+                st.error("Sigla e nome completo são obrigatórios.")
+            elif not df_um.empty and nova_sigla.strip().lower() in df_um["nome"].str.lower().tolist():
+                st.error(f"A sigla '{nova_sigla}' já existe.")
             else:
                 novo_id = int(df_um["id"].max()) + 1 if not df_um.empty else 1
-                append_linha("unidades_medida", [novo_id, nova_um.strip(), True])
-                st.success(f"Unidade '{nova_um.strip()}' adicionada!")
+                append_linha("unidades_medida", [novo_id, nova_sigla.strip(), nova_desc_um.strip(), True])
+                st.success(f"Unidade '{nova_sigla.strip()} ({nova_desc_um.strip()})' adicionada!")
+                st.session_state["um_form_v"] += 1
                 st.cache_resource.clear()
                 st.rerun()
 
@@ -90,13 +111,16 @@ with tab_usuarios:
     df_unidades = ler_df("unidades")
     unidades_nomes = df_unidades["nome"].tolist() if not df_unidades.empty else []
 
-    with st.form("novo_usuario"):
-        nome_u = st.text_input("Nome completo")
-        login_u = st.text_input("Login")
-        senha_u = st.text_input("Senha", type="password")
+    if "usr_form_v" not in st.session_state:
+        st.session_state["usr_form_v"] = 0
+
+    with st.form(f"novo_usuario_{st.session_state['usr_form_v']}"):
+        nome_u = st.text_input("Nome completo *")
+        login_u = st.text_input("Login *")
+        senha_u = st.text_input("Senha *", type="password")
         perfil_u = st.selectbox("Perfil", ["digitador", "comprador", "admin"])
         acesso_u = st.multiselect("Unidades com acesso", ["todos"] + unidades_nomes)
-        if st.form_submit_button("Criar Usuário"):
+        if st.form_submit_button("Criar Usuário", use_container_width=True):
             if not nome_u or not login_u or not senha_u:
                 st.error("Nome, login e senha são obrigatórios.")
             else:
@@ -104,6 +128,7 @@ with tab_usuarios:
                 acesso_str = "todos" if "todos" in acesso_u else ",".join(acesso_u)
                 append_linha("usuarios", [novo_id, nome_u, login_u, hash_senha(senha_u), perfil_u, acesso_str, True])
                 st.success(f"Usuário '{login_u}' criado!")
+                st.session_state["usr_form_v"] += 1
                 st.cache_resource.clear()
                 st.rerun()
 

@@ -18,12 +18,24 @@ df = ler_df("produtos")
 
 df_um = ler_df("unidades_medida")
 if not df_um.empty:
-    opcoes_unidade_base = df_um[df_um["ativo"].apply(is_ativo)]["nome"].tolist()
+    df_um_ativas = df_um[df_um["ativo"].apply(is_ativo)]
+    # "kg (Kilograma)" se tiver descricao, senão só "kg"
+    opcoes_unidade_base = [
+        f"{r['nome']} ({r['descricao']})" if r.get("descricao") else r["nome"]
+        for _, r in df_um_ativas.iterrows()
+    ]
+    # mapa label → sigla para salvar só a sigla no banco
+    mapa_sigla = {
+        f"{r['nome']} ({r['descricao']})" if r.get("descricao") else r["nome"]: r["nome"]
+        for _, r in df_um_ativas.iterrows()
+    }
 else:
     opcoes_unidade_base = ["kg", "litro", "unidade"]
+    mapa_sigla = {v: v for v in opcoes_unidade_base}
 
 if not opcoes_unidade_base:
     opcoes_unidade_base = ["kg", "litro", "unidade"]
+    mapa_sigla = {v: v for v in opcoes_unidade_base}
 
 tab_lista, tab_novo = st.tabs(["Lista de Produtos", "Novo Produto"])
 
@@ -59,12 +71,15 @@ with tab_lista:
                     )
                     col_a, col_b = st.columns(2)
                     with col_a:
-                        idx_default = opcoes_unidade_base.index(ub) if ub in opcoes_unidade_base else 0
-                        nova_ub = st.selectbox(
+                        # Produto salva sigla (ex: "kg"); label pode ser "kg (Kilograma)"
+                        label_atual = next((k for k, v in mapa_sigla.items() if v == ub), ub)
+                        idx_default = opcoes_unidade_base.index(label_atual) if label_atual in opcoes_unidade_base else 0
+                        label_ub_edit = st.selectbox(
                             "Unidade base (comparação) *", opcoes_unidade_base,
                             index=idx_default, key=f"ub_{i}",
                             help="Unidade usada para normalizar e comparar preços"
                         )
+                        nova_ub = mapa_sigla.get(label_ub_edit, label_ub_edit)
                     with col_b:
                         nova_qtd = st.number_input(
                             "Qtd base por apresentação *",
@@ -98,7 +113,10 @@ with tab_novo:
         "apresentação é como ele é vendido (ex: *Pacote 5kg*)."
     )
 
-    with st.form("novo_produto"):
+    if "prod_form_v" not in st.session_state:
+        st.session_state["prod_form_v"] = 0
+
+    with st.form(f"novo_produto_{st.session_state['prod_form_v']}"):
         descricao = st.text_input(
             "Descrição *",
             placeholder="Ex: Arroz, Papel toalha, Detergente",
@@ -111,11 +129,12 @@ with tab_novo:
         )
         col1, col2 = st.columns(2)
         with col1:
-            unidade_base = st.selectbox(
+            label_ub = st.selectbox(
                 "Unidade base (comparação de preço) *",
                 opcoes_unidade_base,
                 help="Unidade usada para normalizar e comparar preços entre fornecedores"
             )
+            unidade_base = mapa_sigla.get(label_ub, label_ub)
         with col2:
             qtd_base = st.number_input(
                 "Qtd da unidade base por apresentação *",
@@ -150,5 +169,6 @@ with tab_novo:
                 datetime.date.today().isoformat(),
             ])
             st.success(f"Produto '{descricao}' cadastrado com sucesso!")
+            st.session_state["prod_form_v"] += 1
             st.cache_resource.clear()
             st.rerun()

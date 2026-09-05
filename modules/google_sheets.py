@@ -71,7 +71,7 @@ def _cabecalhos():
         "ItensCompra": ["id", "compra_id", "produto_id", "quantidade", "preco_unitario", "preco_normalizado", "fator"],
         "Orcamentos": ["id", "unidade", "mes", "ano", "valor"],
         "HistoricoPrecos": ["id", "produto_id", "fornecedor_id", "cotacao_id", "preco", "tipo_embalagem", "qtd_por_embalagem", "preco_normalizado", "ganhou", "data"],
-        "UnidadesMedida": ["id", "nome", "ativo"],
+        "UnidadesMedida": ["id", "nome", "descricao", "ativo"],
     }
 
 
@@ -88,10 +88,10 @@ def _inicializar_abas(sh):
 
 
 _UNIDADES_MEDIDA_PADRAO = [
-    [1, "kg",      True],
-    [2, "litro",   True],
-    [3, "unidade", True],
-    [4, "metro",   True],
+    [1, "kg",      "Kilograma",  True],
+    [2, "litro",   "Litro",      True],
+    [3, "unidade", "Unidade",    True],
+    [4, "metro",   "Metro",      True],
 ]
 
 
@@ -110,10 +110,30 @@ def _garantir_abas(sh):
             ws = abas_existentes[nome]
             primeira_linha = ws.row_values(1)
             if primeira_linha != cols:
-                # Wrong or missing headers. If there's data in row 2+, insert above it.
-                # If the tab is empty/header-only, just overwrite row 1 (schema migration).
-                tem_dados = bool(ws.row_values(2))
-                if tem_dados:
-                    ws.insert_row(cols, index=1)
-                else:
+                if nome == "UnidadesMedida":
+                    # Schema change on seed table: clear and re-seed preserving custom entries.
+                    dados_atuais = ws.get_all_values()[1:]  # skip old header
+                    old_cols = primeira_linha
+                    ws.clear()
                     ws.update([cols])
+                    if dados_atuais:
+                        novas_linhas = []
+                        for r in dados_atuais:
+                            nova = []
+                            for c in cols:
+                                if c in old_cols:
+                                    val = r[old_cols.index(c)] if old_cols.index(c) < len(r) else ""
+                                else:
+                                    nova.append("")
+                                    continue
+                                nova.append(val)
+                            novas_linhas.append(nova)
+                        ws.append_rows(novas_linhas)
+                    else:
+                        ws.append_rows(_UNIDADES_MEDIDA_PADRAO)
+                elif primeira_linha and primeira_linha[0] == cols[0]:
+                    # Old schema header row — update in place, data rows stay below.
+                    ws.update([cols])
+                else:
+                    # Data row exists with no header — insert header above.
+                    ws.insert_row(cols, index=1)
