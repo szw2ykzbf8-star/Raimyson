@@ -224,49 +224,59 @@ def dashboard():
     # Meta de economia
     meta = float(sh.get_config("meta_economia", "0") or 0)
 
+    # Tooltips de detalhamento
+    if not entradas_df.empty:
+        by_fonte = entradas_df.groupby("fonte")["valor"].apply(lambda x: x.astype(float).sum())
+        tip_entradas = "Por fonte:\n" + "\n".join(
+            f"• {f}: {utils.fmt_brl(v)}" for f, v in by_fonte.items()
+        )
+    else:
+        tip_entradas = "Nenhuma entrada neste mês."
+
+    if not gastos_df.empty:
+        by_cat = gastos_df.groupby("categoria")["valor_parcela"].apply(lambda x: x.astype(float).sum())
+        tip_gastos = "Por categoria:\n" + "\n".join(
+            f"• {c}: {utils.fmt_brl(v)}" for c, v in by_cat.sort_values(ascending=False).items()
+        )
+        if comprometido_cartao > 0:
+            tip_gastos += f"\n\n💳 Comprometido futuro (cartão): {utils.fmt_brl(comprometido_cartao)}"
+    else:
+        tip_gastos = "Nenhum gasto neste mês."
+
+    tip_resultado = (
+        f"Entradas:  {utils.fmt_brl(total_entradas)}\n"
+        f"Saídas:    {utils.fmt_brl(total_gastos)}\n"
+        f"──────────────\n"
+        f"Resultado: {utils.fmt_brl(resultado_mes)}"
+    )
+
+    if not contas_df.empty:
+        saldos_por_conta = []
+        for _, row in contas_df.iterrows():
+            sc = utils.calcular_saldo_conta(row["nome"], todas_entradas_full, todos_gastos_full, todas_transf, contas_df)
+            saldos_por_conta.append(f"• {row['nome']} ({row['tipo']}): {utils.fmt_brl(sc)}")
+        tip_saldo = "Por conta:\n" + "\n".join(saldos_por_conta)
+    else:
+        tip_saldo = "Nenhuma conta cadastrada."
+
     # Cards principais
     st.markdown("---")
     c1, c2, c3, c4 = st.columns(4)
-
-    cor_resultado = "verde" if resultado_mes >= 0 else "vermelho"
-    cor_saldo = "verde" if saldo_total >= 0 else "vermelho"
-
     with c1:
-        st.markdown(f"""
-        <div class='metric-card'>
-            <div class='metric-label'>Entradas do Mês</div>
-            <div class='metric-value verde'>{utils.fmt_brl(total_entradas)}</div>
-        </div>""", unsafe_allow_html=True)
+        st.metric("💰 Entradas do Mês", utils.fmt_brl(total_entradas), help=tip_entradas)
     with c2:
-        st.markdown(f"""
-        <div class='metric-card'>
-            <div class='metric-label'>Saídas do Mês</div>
-            <div class='metric-value vermelho'>{utils.fmt_brl(total_gastos)}</div>
-        </div>""", unsafe_allow_html=True)
+        st.metric("💸 Saídas do Mês", utils.fmt_brl(total_gastos), help=tip_gastos)
     with c3:
-        st.markdown(f"""
-        <div class='metric-card'>
-            <div class='metric-label'>Resultado do Mês</div>
-            <div class='metric-value {cor_resultado}'>{utils.fmt_brl(resultado_mes)}</div>
-        </div>""", unsafe_allow_html=True)
+        delta_str = f"+{utils.fmt_brl(resultado_mes)}" if resultado_mes >= 0 else utils.fmt_brl(resultado_mes)
+        st.metric("📊 Resultado do Mês", utils.fmt_brl(resultado_mes), help=tip_resultado)
     with c4:
-        st.markdown(f"""
-        <div class='metric-card'>
-            <div class='metric-label'>Saldo Total em Contas</div>
-            <div class='metric-value {cor_saldo}'>{utils.fmt_brl(saldo_total)}</div>
-        </div>""", unsafe_allow_html=True)
-
-    # Comprometido em cartão
-    if comprometido_cartao > 0:
-        st.markdown(f"<div style='text-align:right; color:#F39C12; font-size:0.85rem; margin-top:6px'>"
-                    f"💳 Comprometido em cartão (parcelas futuras): <b>{utils.fmt_brl(comprometido_cartao)}</b></div>",
-                    unsafe_allow_html=True)
+        st.metric("🏦 Saldo Total em Contas", utils.fmt_brl(saldo_total), help=tip_saldo)
 
     st.markdown("")
 
     # Meta de economia
     if meta > 0:
-        pct_meta = min(100, int((saldo / meta) * 100)) if meta else 0
+        pct_meta = min(100, int((resultado_mes / meta) * 100)) if meta else 0
         st.markdown(f"**🎯 Meta de Economia: {utils.fmt_brl(meta)}**")
         st.progress(pct_meta / 100, text=f"{pct_meta}% atingido")
         st.markdown("")
