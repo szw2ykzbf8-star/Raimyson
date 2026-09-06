@@ -31,10 +31,17 @@ def _sheet(name: str):
 
 
 def ensure_sheet(name: str, headers: list) -> None:
-    """Cria a aba com cabeçalhos se ela não existir. Idempotente."""
+    """Cria a aba se não existir; adiciona colunas faltantes ao final preservando dados."""
     sp = get_spreadsheet()
     try:
-        sp.worksheet(name)
+        ws = sp.worksheet(name)
+        existing = ws.row_values(1)
+        missing = [h for h in headers if h not in existing]
+        if missing:
+            next_col = len(existing) + 1
+            for i, h in enumerate(missing):
+                ws.update_cell(1, next_col + i, h)
+            invalidate_by_name(name)
     except gspread.exceptions.WorksheetNotFound:
         ws = sp.add_worksheet(title=name, rows=1000, cols=len(headers))
         ws.append_row(headers)
@@ -484,11 +491,12 @@ def get_pagamentos_contas(mes: str = None) -> pd.DataFrame:
 
 
 def add_pagamento_conta(tipo: str, referencia_id: str, nome: str, mes: str,
-                        valor: float, conta_debito: str, data_pagamento: str) -> str:
+                        valor: float, conta_debito: str, data_pagamento: str,
+                        gasto_id: str = "") -> str:
     ws  = _sheet(SHEETS["pgtos_contas"])
     rid = new_id()
     ws.append_row([rid, tipo, referencia_id, nome, mes,
-                   str(valor), conta_debito, data_pagamento, _now()])
+                   str(valor), conta_debito, data_pagamento, _now(), gasto_id])
     invalidate("pgtos_contas")
     return rid
 
@@ -496,8 +504,16 @@ def add_pagamento_conta(tipo: str, referencia_id: str, nome: str, mes: str,
 def delete_pagamento_conta(rid: str):
     ws      = _sheet(SHEETS["pgtos_contas"])
     row_num = _find_row(ws, rid)
+    # Se houver gasto vinculado, excluí-lo também
+    row_vals = ws.row_values(row_num)
+    linked_gasto_id = row_vals[9] if len(row_vals) > 9 else ""
     ws.delete_rows(row_num)
     invalidate("pgtos_contas")
+    if linked_gasto_id:
+        try:
+            delete_gasto(linked_gasto_id)
+        except Exception:
+            pass
 
 
 # ─── Transferências ──────────────────────────────────────────────────────────

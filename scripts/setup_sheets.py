@@ -103,7 +103,7 @@ SHEETS_HEADERS = {
     ],
     "pagamentos_contas": [
         "id", "tipo", "referencia_id", "nome", "mes_referencia",
-        "valor", "conta_debito", "data_pagamento", "criado_em",
+        "valor", "conta_debito", "data_pagamento", "criado_em", "gasto_id",
     ],
 }
 

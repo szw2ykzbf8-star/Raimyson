@@ -143,7 +143,9 @@ def calcular_saldo_conta(conta_nome: str, entradas_df: pd.DataFrame,
 
     saidas_pgto = 0.0
     if pagamentos_df is not None and not pagamentos_df.empty and "conta_debito" in pagamentos_df.columns:
-        mask_pgto = pagamentos_df["conta_debito"] == conta_nome
+        # Apenas faturas de cartão: pagamentos de conta_fixa já impactam via gasto criado
+        mask_pgto = (pagamentos_df["conta_debito"] == conta_nome) & \
+                    (pagamentos_df["tipo"] == "fatura_cartao")
         saidas_pgto = pagamentos_df[mask_pgto]["valor"].astype(float).sum()
 
     return saldo_inicial + entradas + entradas_transf - saidas_debito - saidas_transf - saidas_invest - saidas_pgto

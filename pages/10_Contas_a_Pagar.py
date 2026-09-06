@@ -7,7 +7,7 @@ auth.require_auth()
 
 sh.ensure_sheet("pagamentos_contas", [
     "id", "tipo", "referencia_id", "nome", "mes_referencia",
-    "valor", "conta_debito", "data_pagamento", "criado_em",
+    "valor", "conta_debito", "data_pagamento", "criado_em", "gasto_id",
 ])
 
 st.title("📋 Contas a Pagar")
@@ -48,8 +48,11 @@ def _pgto_existente(tipo: str, referencia_id: str) -> dict | None:
 
 
 def _form_pagar(key_prefix: str, tipo: str, ref_id: str, nome: str,
-                valor_sugerido: float, contas: list):
-    """Exibe o formulário inline de pagamento. Retorna True se confirmado."""
+                valor_sugerido: float, contas: list,
+                categoria: str = "", forma_pagamento: str = ""):
+    """Exibe o formulário inline de pagamento.
+    Para conta_fixa: passa categoria e forma_pagamento para criar gasto automático.
+    """
     key_show = f"show_pay_{key_prefix}"
     if not st.session_state.get(key_show, False):
         if st.button("💰 Pagar", key=f"btn_pay_{key_prefix}", use_container_width=True):
@@ -73,7 +76,17 @@ def _form_pagar(key_prefix: str, tipo: str, ref_id: str, nome: str,
             cancel = st.form_submit_button("Cancelar", use_container_width=True)
 
     if ok:
-        sh.add_pagamento_conta(tipo, ref_id, nome, mes_sel, valor, conta_sel, data_pgto.isoformat())
+        gasto_id = ""
+        if tipo == "conta_fixa" and categoria:
+            fp = forma_pagamento if forma_pagamento else "Débito em Conta"
+            gasto_id = sh.add_gasto(
+                data_pgto.isoformat(), data_pgto.isoformat(), mes_sel,
+                1, 1, valor, valor,
+                categoria, fp, conta_sel,
+                f"Pgto: {nome}",
+            )
+        sh.add_pagamento_conta(tipo, ref_id, nome, mes_sel, valor, conta_sel,
+                               data_pgto.isoformat(), gasto_id)
         st.session_state.pop(key_show, None)
         st.success(f"✅ {nome} registrado como pago!")
         st.rerun()
@@ -178,7 +191,9 @@ with tabs[0]:
                     else:
                         _form_pagar(
                             f"fixa_{row['id']}", "conta_fixa", row["id"],
-                            row["nome"], valor_ref, contas_lista
+                            row["nome"], valor_ref, contas_lista,
+                            categoria=row["categoria"],
+                            forma_pagamento=row["forma_pagamento"],
                         )
 
     # ── Faturas de Cartão ─────────────────────────────────────────────────────
