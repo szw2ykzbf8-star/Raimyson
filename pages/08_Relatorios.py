@@ -3,7 +3,27 @@ import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
 import numpy as np
+import requests
 from src import auth, sheets as sh, utils
+
+SIMB_ID = {
+    "BTC": "bitcoin", "ETH": "ethereum", "SOL": "solana",
+    "ADA": "cardano", "DOT": "polkadot", "LINK": "chainlink",
+    "UNI": "uniswap", "LTC": "litecoin", "USDT": "tether", "USDC": "usd-coin",
+}
+
+@st.cache_data(ttl=3600)
+def _cotacoes_rel(ids: tuple) -> dict:
+    try:
+        r = requests.get(
+            "https://api.coingecko.com/api/v3/simple/price",
+            params={"ids": ",".join(ids), "vs_currencies": "brl"},
+            timeout=10,
+        )
+        r.raise_for_status()
+        return r.json()
+    except Exception:
+        return {}
 
 st.set_page_config(page_title="Relatórios — FinTrack", page_icon="📉", layout="wide")
 auth.require_auth()
@@ -261,66 +281,136 @@ with tabs[2]:
 # ─── Investimentos ─────────────────────────────────────────────────────────────
 
 with tabs[3]:
-    df_inv = sh.get_investimentos("ATIVO")
+    df_inv     = sh.get_investimentos("ATIVO")
     df_inv_ret = sh.get_investimentos("RETIRADO")
+    df_cr      = sh.get_criptos("ATIVO")
+    df_cr_ven  = sh.get_criptos("VENDIDO")
+    hoje = __import__("datetime").date.today().isoformat()
 
+    # ── Renda fixa ──────────────────────────────────────────────────────────────
+    dados_inv = []
     if not df_inv.empty:
-        hoje = __import__("datetime").date.today().isoformat()
-        dados_inv = []
         for _, row in df_inv.iterrows():
             res = utils.calcular_rendimento(
                 float(row["valor_aplicado"]), row["taxa_tipo"],
                 float(row["taxa_valor"]), row["data_aplicacao"], hoje
             )
             dados_inv.append({
-                "Nome": row["nome"], "Tipo": row["tipo"],
+                "Nome": row["nome"], "Tipo": row["tipo"], "Classe": "Renda Fixa",
                 "Aplicado": float(row["valor_aplicado"]),
                 "Atual": res["valor_final"],
                 "Rendimento": res["rendimento"],
                 "Rent%": res["rentabilidade_pct"],
             })
-        df_inv_proc = pd.DataFrame(dados_inv)
+    df_inv_proc = pd.DataFrame(dados_inv) if dados_inv else pd.DataFrame()
 
-        total_aplic = df_inv_proc["Aplicado"].sum()
-        total_atual = df_inv_proc["Atual"].sum()
-        total_rend = df_inv_proc["Rendimento"].sum()
+    # ── Criptomoedas ────────────────────────────────────────────────────────────
+    dados_cr = []
+    if not df_cr.empty:
+        ids_needed = tuple({SIMB_ID[s] for s in df_cr["simbolo"].tolist() if s in SIMB_ID})
+        cotacoes = _cotacoes_rel(ids_needed) if ids_needed else {}
+        for _, row in df_cr.iterrows():
+            investido = float(row["preco_compra_brl"])
+            qtd       = float(row["quantidade"])
+            cg_id     = SIMB_ID.get(row["simbolo"], "")
+            preco_atu = cotacoes.get(cg_id, {}).get("brl") if cg_id else None
+            val_atual = preco_atu * qtd if preco_atu else investido
+            lucro_cr  = val_atual - investido
+            dados_cr.append({
+                "Nome": f"{row['moeda']} ({row['exchange']})", "Tipo": row["simbolo"],
+                "Classe": "Cripto",
+                "Aplicado": investido,
+                "Atual": val_atual,
+                "Rendimento": lucro_cr,
+                "Rent%": (lucro_cr / investido * 100) if investido else 0,
+            })
+    df_cr_proc = pd.DataFrame(dados_cr) if dados_cr else pd.DataFrame()
 
-        k1, k2, k3 = st.columns(3)
+    # ── KPIs consolidados ───────────────────────────────────────────────────────
+    total_rf_aplic  = df_inv_proc["Aplicado"].sum() if not df_inv_proc.empty else 0.0
+    total_rf_atual  = df_inv_proc["Atual"].sum()    if not df_inv_proc.empty else 0.0
+    total_cr_aplic  = df_cr_proc["Aplicado"].sum()  if not df_cr_proc.empty else 0.0
+    total_cr_atual  = df_cr_proc["Atual"].sum()     if not df_cr_proc.empty else 0.0
+    total_aplic     = total_rf_aplic + total_cr_aplic
+    total_atual     = total_rf_atual + total_cr_atual
+    total_rend      = total_atual - total_aplic
+
+    if total_aplic > 0 or total_cr_aplic > 0:
+        k1, k2, k3, k4 = st.columns(4)
         with k1:
-            st.metric("Total Aplicado", utils.fmt_brl(total_aplic))
+            st.metric("Total Aplicado", utils.fmt_brl(total_aplic),
+                      help=f"Renda Fixa: {utils.fmt_brl(total_rf_aplic)} · Cripto: {utils.fmt_brl(total_cr_aplic)}")
         with k2:
-            st.metric("Valor Atual", utils.fmt_brl(total_atual),
-                      delta=f"+{utils.fmt_brl(total_rend)}")
+            st.metric("Valor Atual Estimado", utils.fmt_brl(total_atual))
         with k3:
-            rent_total = (total_rend / total_aplic * 100) if total_aplic > 0 else 0
-            st.metric("Rentabilidade Total", f"{rent_total:.2f}%")
+            st.metric("Rendimento Total", utils.fmt_brl(total_rend),
+                      delta=f"{total_rend/total_aplic*100:+.2f}%" if total_aplic else "0%")
+        with k4:
+            rf_pct = total_rf_atual / total_atual * 100 if total_atual else 0
+            cr_pct = total_cr_atual / total_atual * 100 if total_atual else 0
+            st.metric("Alocação", f"RF {rf_pct:.0f}% · Cripto {cr_pct:.0f}%",
+                      help="Proporção renda fixa vs criptomoedas no valor atual")
 
-        col_a, col_b = st.columns(2)
-        with col_a:
-            fig_tipo = px.pie(df_inv_proc, values="Atual", names="Nome",
-                              title="Composição do Portfólio (valor atual)",
-                              hole=0.4, template="plotly_dark")
-            st.plotly_chart(fig_tipo, use_container_width=True)
-        with col_b:
-            fig_rent = px.bar(df_inv_proc, x="Nome", y="Rent%", color="Tipo",
-                              title="Rentabilidade por Investimento (%)",
-                              text=df_inv_proc["Rent%"].apply(lambda x: f"{x:.2f}%"),
-                              template="plotly_dark")
-            fig_rent.update_traces(textposition="outside")
-            st.plotly_chart(fig_rent, use_container_width=True)
+        # Gráfico de alocação unificado
+        all_rows = []
+        if not df_inv_proc.empty:
+            all_rows += [{"Nome": r["Nome"], "Atual": r["Atual"], "Classe": "Renda Fixa"}
+                         for _, r in df_inv_proc.iterrows()]
+        if not df_cr_proc.empty:
+            all_rows += [{"Nome": r["Nome"], "Atual": r["Atual"], "Classe": "Cripto"}
+                         for _, r in df_cr_proc.iterrows()]
+        if all_rows:
+            df_all = pd.DataFrame(all_rows)
+            col_a, col_b = st.columns(2)
+            with col_a:
+                fig_pizza = px.pie(df_all, values="Atual", names="Nome",
+                                   color="Classe",
+                                   color_discrete_map={"Renda Fixa": "#3498DB", "Cripto": "#F39C12"},
+                                   title="Alocação por Ativo (valor atual)",
+                                   hole=0.4, template="plotly_dark")
+                fig_pizza.update_traces(textinfo="label+percent")
+                st.plotly_chart(fig_pizza, use_container_width=True)
+            with col_b:
+                df_all_bar = pd.concat([df_inv_proc, df_cr_proc], ignore_index=True) if not df_inv_proc.empty or not df_cr_proc.empty else pd.DataFrame()
+                if not df_all_bar.empty:
+                    fig_rent = px.bar(df_all_bar, x="Nome", y="Rent%", color="Classe",
+                                      color_discrete_map={"Renda Fixa": "#3498DB", "Cripto": "#F39C12"},
+                                      title="Rentabilidade por Ativo (%)",
+                                      text=df_all_bar["Rent%"].apply(lambda x: f"{x:+.2f}%"),
+                                      template="plotly_dark")
+                    fig_rent.update_traces(textposition="outside")
+                    fig_rent.add_hline(y=0, line_dash="dot", line_color="white", opacity=0.3)
+                    st.plotly_chart(fig_rent, use_container_width=True)
 
-        # Tabela detalhada
-        tbl_inv = df_inv_proc.copy()
-        tbl_inv["Aplicado"] = tbl_inv["Aplicado"].apply(utils.fmt_brl)
-        tbl_inv["Atual"] = tbl_inv["Atual"].apply(utils.fmt_brl)
+    # ── Renda fixa: detalhe ─────────────────────────────────────────────────────
+    if not df_inv_proc.empty:
+        st.markdown("---")
+        st.subheader("📊 Renda Fixa")
+        tbl_inv = df_inv_proc[["Nome", "Tipo", "Aplicado", "Atual", "Rendimento", "Rent%"]].copy()
+        tbl_inv["Aplicado"]   = tbl_inv["Aplicado"].apply(utils.fmt_brl)
+        tbl_inv["Atual"]      = tbl_inv["Atual"].apply(utils.fmt_brl)
         tbl_inv["Rendimento"] = tbl_inv["Rendimento"].apply(utils.fmt_brl)
-        tbl_inv["Rent%"] = tbl_inv["Rent%"].apply(lambda x: f"{x:.2f}%")
+        tbl_inv["Rent%"]      = tbl_inv["Rent%"].apply(lambda x: f"{x:.2f}%")
         st.dataframe(tbl_inv, use_container_width=True, hide_index=True)
-    else:
+    elif df_cr_proc.empty:
         st.info("Nenhum investimento ativo.")
 
+    # ── Criptos: detalhe ────────────────────────────────────────────────────────
+    if not df_cr_proc.empty:
+        st.markdown("---")
+        st.subheader("🪙 Criptomoedas")
+        tbl_cr = df_cr_proc[["Nome", "Tipo", "Aplicado", "Atual", "Rendimento", "Rent%"]].copy()
+        tbl_cr["Aplicado"]   = tbl_cr["Aplicado"].apply(utils.fmt_brl)
+        tbl_cr["Atual"]      = tbl_cr["Atual"].apply(utils.fmt_brl)
+        tbl_cr["Rendimento"] = tbl_cr["Rendimento"].apply(utils.fmt_brl)
+        tbl_cr["Rent%"]      = tbl_cr["Rent%"].apply(lambda x: f"{x:+.2f}%")
+        tbl_cr.columns       = ["Moeda / Exchange", "Símbolo", "Aplicado", "Atual (estimado)", "Resultado", "Rent%"]
+        st.dataframe(tbl_cr, use_container_width=True, hide_index=True)
+        st.caption("Cotações via CoinGecko · atualização a cada 1 hora")
+
+    # ── Encerrados ──────────────────────────────────────────────────────────────
     if not df_inv_ret.empty:
-        with st.expander("📋 Investimentos Encerrados"):
+        with st.expander("📋 Investimentos Renda Fixa Encerrados"):
             for _, row in df_inv_ret.iterrows():
                 if row["valor_retirado"]:
                     lucro = float(row["valor_retirado"]) - float(row["valor_aplicado"])
@@ -328,6 +418,23 @@ with tabs[3]:
                     st.write(f"{cor} **{row['nome']}**: {utils.fmt_brl(float(row['valor_aplicado']))} → "
                              f"{utils.fmt_brl(float(row['valor_retirado']))} "
                              f"({'lucro' if lucro >= 0 else 'prejuízo'}: {utils.fmt_brl(abs(lucro))})")
+
+    if not df_cr_ven.empty:
+        with st.expander("📋 Criptomoedas Vendidas"):
+            total_cr_inv_ven = df_cr_ven["preco_compra_brl"].astype(float).sum()
+            total_cr_ven_val = df_cr_ven["preco_venda_brl"].astype(float).sum()
+            lucro_cr_total   = total_cr_ven_val - total_cr_inv_ven
+            cor_t = "🟢" if lucro_cr_total >= 0 else "🔴"
+            st.write(f"{cor_t} **Total**: {utils.fmt_brl(total_cr_inv_ven)} → "
+                     f"{utils.fmt_brl(total_cr_ven_val)} "
+                     f"({'lucro' if lucro_cr_total >= 0 else 'prejuízo'}: {utils.fmt_brl(abs(lucro_cr_total))})")
+            for _, row in df_cr_ven.iterrows():
+                inv_v = float(row["preco_compra_brl"])
+                ven_v = float(row["preco_venda_brl"]) if row["preco_venda_brl"] else 0
+                l = ven_v - inv_v
+                st.write(f"{'🟢' if l >= 0 else '🔴'} **{row['moeda']}**: "
+                         f"{utils.fmt_brl(inv_v)} → {utils.fmt_brl(ven_v)} "
+                         f"({utils.fmt_data(row['data_compra'])} → {utils.fmt_data(row['data_venda'])})")
 
 
 # ─── Avançado ─────────────────────────────────────────────────────────────────
@@ -344,6 +451,7 @@ with tabs[4]:
     todos_g = sh.get_gastos()
     todas_t = sh.get_transferencias()
     df_inv_adv = sh.get_investimentos("ATIVO")
+    df_cr_adv  = sh.get_criptos("ATIVO")
     df_div_adv = sh.get_dividas()
 
     saldo_contas = sum(
@@ -360,6 +468,18 @@ with tabs[4]:
                 float(row["taxa_valor"]), row["data_aplicacao"], hoje_adv)
             valor_invest += res["valor_final"]
 
+    valor_cripto_adv = 0.0
+    if not df_cr_adv.empty:
+        ids_adv = tuple({SIMB_ID[s] for s in df_cr_adv["simbolo"].tolist() if s in SIMB_ID})
+        cot_adv = _cotacoes_rel(ids_adv) if ids_adv else {}
+        for _, row in df_cr_adv.iterrows():
+            cg_id = SIMB_ID.get(row["simbolo"], "")
+            preco = cot_adv.get(cg_id, {}).get("brl") if cg_id else None
+            if preco:
+                valor_cripto_adv += preco * float(row["quantidade"])
+            else:
+                valor_cripto_adv += float(row["preco_compra_brl"])
+
     total_dividas = 0.0
     if not df_div_adv.empty:
         for _, row in df_div_adv.iterrows():
@@ -367,18 +487,20 @@ with tabs[4]:
             total = int(row["num_parcelas"])
             total_dividas += float(row["valor_parcela"]) * (total - pagas)
 
-    patrimonio_liq = saldo_contas + valor_invest - total_dividas
+    patrimonio_liq = saldo_contas + valor_invest + valor_cripto_adv - total_dividas
 
-    p1, p2, p3, p4 = st.columns(4)
+    p1, p2, p3, p4, p5 = st.columns(5)
     with p1:
         st.metric("💰 Saldo em Contas", utils.fmt_brl(saldo_contas))
     with p2:
-        st.metric("📈 Investimentos", utils.fmt_brl(valor_invest))
+        st.metric("📈 Renda Fixa", utils.fmt_brl(valor_invest))
     with p3:
-        st.metric("🔴 Dívidas Restantes", utils.fmt_brl(total_dividas))
+        st.metric("🪙 Criptos", utils.fmt_brl(valor_cripto_adv))
     with p4:
+        st.metric("🔴 Dívidas Restantes", utils.fmt_brl(total_dividas))
+    with p5:
         st.metric("💎 Patrimônio Líquido", utils.fmt_brl(patrimonio_liq),
-                  help="Saldo em Contas + Investimentos − Dívidas restantes")
+                  help="Saldo em Contas + Renda Fixa + Criptos − Dívidas restantes")
 
     st.markdown("---")
 
