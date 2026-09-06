@@ -30,6 +30,17 @@ def _sheet(name: str):
     return get_spreadsheet().worksheet(name)
 
 
+def ensure_sheet(name: str, headers: list) -> None:
+    """Cria a aba com cabeçalhos se ela não existir. Idempotente."""
+    sp = get_spreadsheet()
+    try:
+        sp.worksheet(name)
+    except gspread.exceptions.WorksheetNotFound:
+        ws = sp.add_worksheet(title=name, rows=1000, cols=len(headers))
+        ws.append_row(headers)
+        invalidate_by_name(name)
+
+
 def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
@@ -67,8 +78,11 @@ def get_df(sheet_key: str, force: bool = False) -> pd.DataFrame:
 
 def invalidate(sheet_key: str):
     name = SHEETS[sheet_key]
-    key  = _cache_key(name)
-    st.session_state.pop(key, None)
+    st.session_state.pop(_cache_key(name), None)
+
+
+def invalidate_by_name(name: str):
+    st.session_state.pop(_cache_key(name), None)
 
 
 # ─── Config ──────────────────────────────────────────────────────────────────

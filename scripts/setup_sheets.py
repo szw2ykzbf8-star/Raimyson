@@ -85,7 +85,12 @@ SHEETS_HEADERS = {
     "investimentos": [
         "id", "nome", "tipo", "data_aplicacao", "valor_aplicado",
         "taxa_tipo", "taxa_valor", "data_vencimento",
-        "valor_retirado", "data_retirada", "status", "criado_em",
+        "valor_retirado", "data_retirada", "status", "criado_em", "conta_origem",
+    ],
+    "criptos": [
+        "id", "moeda", "simbolo", "quantidade", "preco_compra_brl",
+        "data_compra", "exchange", "conta_origem",
+        "preco_venda_brl", "data_venda", "status", "criado_em",
     ],
     "entradas": ["id", "data", "valor", "fonte", "conta", "descricao", "criado_em"],
     "gastos": [

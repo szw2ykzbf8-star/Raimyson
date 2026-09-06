@@ -7,6 +7,13 @@ from src import auth, sheets as sh, utils
 st.set_page_config(page_title="Criptos — FinTrack", page_icon="₿", layout="wide")
 auth.require_auth()
 
+# Garante que a aba existe no Google Sheets (cria automaticamente se necessário)
+sh.ensure_sheet("criptos", [
+    "id", "moeda", "simbolo", "quantidade", "preco_compra_brl",
+    "data_compra", "exchange", "conta_origem",
+    "preco_venda_brl", "data_venda", "status", "criado_em",
+])
+
 st.title("₿ Criptomoedas")
 
 # Moedas disponíveis no Nubank e mais comuns
