@@ -101,6 +101,10 @@ SHEETS_HEADERS = {
     "transferencias": [
         "id", "data", "valor", "conta_origem", "conta_destino", "descricao", "criado_em",
     ],
+    "pagamentos_contas": [
+        "id", "tipo", "referencia_id", "nome", "mes_referencia",
+        "valor", "conta_debito", "data_pagamento", "criado_em",
+    ],
 }
 
 # Valores iniciais da aba config

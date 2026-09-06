@@ -105,7 +105,8 @@ def gerar_parcelas(data_compra_str: str, valor_total: float, num_parcelas: int,
 def calcular_saldo_conta(conta_nome: str, entradas_df: pd.DataFrame,
                           gastos_df: pd.DataFrame, transferencias_df: pd.DataFrame,
                           contas_df: pd.DataFrame,
-                          investimentos_df: pd.DataFrame = None) -> float:
+                          investimentos_df: pd.DataFrame = None,
+                          pagamentos_df: pd.DataFrame = None) -> float:
     saldo_inicial = 0.0
     if not contas_df.empty:
         row = contas_df[contas_df["nome"] == conta_nome]
@@ -140,7 +141,12 @@ def calcular_saldo_conta(conta_nome: str, entradas_df: pd.DataFrame,
                        (investimentos_df["status"] == "ATIVO")
             saidas_invest = investimentos_df[mask_inv]["valor_aplicado"].astype(float).sum()
 
-    return saldo_inicial + entradas + entradas_transf - saidas_debito - saidas_transf - saidas_invest
+    saidas_pgto = 0.0
+    if pagamentos_df is not None and not pagamentos_df.empty and "conta_debito" in pagamentos_df.columns:
+        mask_pgto = pagamentos_df["conta_debito"] == conta_nome
+        saidas_pgto = pagamentos_df[mask_pgto]["valor"].astype(float).sum()
+
+    return saldo_inicial + entradas + entradas_transf - saidas_debito - saidas_transf - saidas_invest - saidas_pgto
 
 
 # ─── Cálculos de investimento ────────────────────────────────────────────────

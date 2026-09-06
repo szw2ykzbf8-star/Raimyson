@@ -471,6 +471,35 @@ def delete_gasto_grupo(id_grupo: str):
     invalidate("gastos")
 
 
+# ─── Pagamentos de Contas e Faturas ──────────────────────────────────────────
+
+
+def get_pagamentos_contas(mes: str = None) -> pd.DataFrame:
+    df = get_df("pgtos_contas")
+    if df.empty:
+        return df
+    if mes:
+        df = df[df["mes_referencia"] == mes]
+    return df
+
+
+def add_pagamento_conta(tipo: str, referencia_id: str, nome: str, mes: str,
+                        valor: float, conta_debito: str, data_pagamento: str) -> str:
+    ws  = _sheet(SHEETS["pgtos_contas"])
+    rid = new_id()
+    ws.append_row([rid, tipo, referencia_id, nome, mes,
+                   str(valor), conta_debito, data_pagamento, _now()])
+    invalidate("pgtos_contas")
+    return rid
+
+
+def delete_pagamento_conta(rid: str):
+    ws      = _sheet(SHEETS["pgtos_contas"])
+    row_num = _find_row(ws, rid)
+    ws.delete_rows(row_num)
+    invalidate("pgtos_contas")
+
+
 # ─── Transferências ──────────────────────────────────────────────────────────
 
 

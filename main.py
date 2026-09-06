@@ -206,8 +206,9 @@ def dashboard():
     todos_gastos_full = sh.get_gastos()
     todas_transf = sh.get_transferencias()
     todos_invest = sh.get_investimentos()
+    todos_pgtos  = sh.get_pagamentos_contas()
     saldo_total = sum(
-        utils.calcular_saldo_conta(row["nome"], todas_entradas_full, todos_gastos_full, todas_transf, contas_df, todos_invest)
+        utils.calcular_saldo_conta(row["nome"], todas_entradas_full, todos_gastos_full, todas_transf, contas_df, todos_invest, todos_pgtos)
         for _, row in contas_df.iterrows()
     ) if not contas_df.empty else 0
 
@@ -257,7 +258,7 @@ def dashboard():
     if not contas_df.empty:
         saldos_por_conta = []
         for _, row in contas_df.iterrows():
-            sc = utils.calcular_saldo_conta(row["nome"], todas_entradas_full, todos_gastos_full, todas_transf, contas_df)
+            sc = utils.calcular_saldo_conta(row["nome"], todas_entradas_full, todos_gastos_full, todas_transf, contas_df, pagamentos_df=todos_pgtos)
             saldos_por_conta.append(f"• {row['nome']} ({row['tipo']}): {utils.fmt_brl(sc)}")
         tip_saldo = "Por conta:\n" + "\n".join(saldos_por_conta)
     else:
@@ -337,7 +338,7 @@ def dashboard():
         for i, (_, row) in enumerate(contas_df.iterrows()):
             saldo_c = utils.calcular_saldo_conta(
                 row["nome"], todas_entradas_full, todos_gastos_full,
-                todas_transf, contas_df, todos_invest
+                todas_transf, contas_df, todos_invest, todos_pgtos
             )
             cor   = "verde" if saldo_c >= 0 else "vermelho"
             nome  = _html.escape(str(row["nome"]))

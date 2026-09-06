@@ -19,10 +19,12 @@ with tabs[0]:
         todas_entradas = sh.get_entradas()
         todos_gastos = sh.get_gastos()
         todas_transf = sh.get_transferencias()
+        todos_pgtos_c = sh.get_pagamentos_contas()
 
         for _, row in contas_df.iterrows():
             saldo = utils.calcular_saldo_conta(
-                row["nome"], todas_entradas, todos_gastos, todas_transf, contas_df
+                row["nome"], todas_entradas, todos_gastos, todas_transf, contas_df,
+                pagamentos_df=todos_pgtos_c
             )
             cor = "normal" if saldo >= 0 else "inverse"
             st.metric(
