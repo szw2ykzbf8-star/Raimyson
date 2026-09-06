@@ -399,8 +399,10 @@ def handle_update(update: dict) -> None:
 
     # Verifica autorização pelo chat_id
     chat_id = str(msg.get("chat", {}).get("id", ""))
+    log.info("Mensagem recebida de chat_id=%s (CHAT_ID configurado=%s)", chat_id, CHAT_ID or "(não definido)")
     if CHAT_ID and chat_id != CHAT_ID:
-        log.warning("Mensagem de chat_id não autorizado: %s", chat_id)
+        log.warning("chat_id %s não autorizado — ignorando.", chat_id)
+        send(f"⚠️ Bot recebeu mensagem de chat_id <code>{chat_id}</code> mas TELEGRAM_CHAT_ID={CHAT_ID}. Atualize a variável de ambiente.", chat_id=chat_id)
         return
 
     text = (msg.get("text") or "").strip()
@@ -433,7 +435,16 @@ def run() -> None:
         log.error("SPREADSHEET_ID não configurado — bot não iniciado.")
         return
 
-    log.info("FinTrack Bot iniciado. Polling...")
+    log.info("FinTrack Bot iniciado. Verificando token...")
+    me = _tg("getMe")
+    if not me.get("ok"):
+        log.error("Token inválido: %s", me)
+        return
+    log.info("Bot autenticado: @%s", me["result"].get("username"))
+
+    send("✅ FinTrack Bot iniciado e pronto para receber comandos!")
+
+    log.info("Polling...")
     offset = 0
     while True:
         try:
@@ -444,6 +455,10 @@ def run() -> None:
                 timeout=20,
                 allowed_updates=["message"],
             )
+            if not data.get("ok"):
+                log.error("getUpdates erro: %s", data)
+                time.sleep(5)
+                continue
             for upd in data.get("result", []):
                 handle_update(upd)
                 offset = upd["update_id"] + 1
