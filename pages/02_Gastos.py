@@ -34,7 +34,7 @@ with st.expander("➕ Novo Gasto", expanded=False):
     with st.form("form_gasto"):
         c1, c2, c3 = st.columns(3)
         with c1:
-            data_g = st.date_input("Data da compra", value=date.today())
+            data_g = st.date_input("Data da compra", value=date.today(), format="DD/MM/YYYY")
             categoria = st.selectbox("Categoria", cats)
         with c2:
             valor = st.number_input("Valor total (R$)", min_value=0.01, step=0.01, format="%.2f")

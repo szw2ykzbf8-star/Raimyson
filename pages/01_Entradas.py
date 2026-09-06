@@ -33,7 +33,7 @@ with st.expander("➕ Nova Entrada", expanded=False):
     with st.form("form_entrada"):
         c1, c2 = st.columns(2)
         with c1:
-            data_e = st.date_input("Data", value=date.today())
+            data_e = st.date_input("Data", value=date.today(), format="DD/MM/YYYY")
             fonte = st.selectbox("Fonte", fontes)
         with c2:
             valor = st.number_input("Valor (R$)", min_value=0.01, step=0.01, format="%.2f")

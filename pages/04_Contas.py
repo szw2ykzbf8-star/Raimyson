@@ -118,7 +118,7 @@ with tabs[2]:
                 valor = st.number_input("Valor (R$)", min_value=0.01, step=0.01, format="%.2f")
             with c2:
                 destino = st.selectbox("Para", [c for c in contas], key="transf_destino")
-                data_t = st.date_input("Data", value=date.today())
+                data_t = st.date_input("Data", value=date.today(), format="DD/MM/YYYY")
             descricao = st.text_input("Descrição (opcional)")
             submitted = st.form_submit_button("Transferir", use_container_width=True)
 

@@ -51,7 +51,7 @@ with tabs[0]:
                     c1, c2 = st.columns(2)
                     with c1:
                         data_p = st.date_input("Data do pagamento", value=date.today(),
-                                               key=f"dp_{row['id']}")
+                                               format="DD/MM/YYYY", key=f"dp_{row['id']}")
                         is_antecip = st.checkbox("Pagamento antecipado?", key=f"ant_{row['id']}")
                     with c2:
                         valor_pago = st.number_input(
@@ -139,7 +139,7 @@ with tabs[1]:
             nome_d = st.text_input("Nome da dívida (ex: Dívida Nubank)")
             valor_orig = st.number_input("Valor original total (R$)", min_value=0.01, step=0.01, format="%.2f")
             num_parc = st.number_input("Número total de parcelas", min_value=1, step=1, value=12)
-            data_ini = st.date_input("Data de início", value=date.today())
+            data_ini = st.date_input("Data de início", value=date.today(), format="DD/MM/YYYY")
         with c2:
             valor_parc = st.number_input("Valor da parcela (R$)", min_value=0.01, step=0.01, format="%.2f")
             forma = st.selectbox("Forma de pagamento", ["Pix", "Débito", "Boleto", "Crédito"])

@@ -94,7 +94,7 @@ with tabs[1]:
         with c1:
             nome_i = st.text_input("Nome / Banco (ex: CDB Nubank)")
             tipo_i = st.selectbox("Tipo", TIPOS)
-            data_aplic = st.date_input("Data da aplicação", value=date.today())
+            data_aplic = st.date_input("Data da aplicação", value=date.today(), format="DD/MM/YYYY")
             valor_aplic = st.number_input("Valor aplicado (R$)", min_value=0.01, step=0.01, format="%.2f")
         with c2:
             taxa_tipo = st.selectbox("Tipo de taxa", TAXA_TIPOS)
@@ -102,7 +102,7 @@ with tabs[1]:
                 "Taxa (%)" if taxa_tipo != "CDI" else "% do CDI (ex: 100 = 100% CDI)",
                 min_value=0.0, step=0.01, format="%.4f"
             )
-            data_venc = st.date_input("Data de vencimento prevista")
+            data_venc = st.date_input("Data de vencimento prevista", format="DD/MM/YYYY")
         submitted = st.form_submit_button("Salvar Investimento", use_container_width=True)
 
     if submitted and nome_i:
@@ -133,7 +133,7 @@ with tabs[2]:
         with st.form("form_retirada"):
             c1, c2 = st.columns(2)
             with c1:
-                data_ret = st.date_input("Data da retirada", value=date.today())
+                data_ret = st.date_input("Data da retirada", value=date.today(), format="DD/MM/YYYY")
                 valor_ret = st.number_input("Valor efetivamente recebido (R$)",
                                             value=res_est["valor_final"],
                                             min_value=0.01, step=0.01, format="%.2f")
