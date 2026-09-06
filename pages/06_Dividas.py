@@ -133,6 +133,9 @@ with tabs[1]:
     contas = contas_df["nome"].tolist() if not contas_df.empty else []
     cartoes = cartoes_df["nome"].tolist() if not cartoes_df.empty else []
 
+    forma = st.selectbox("Forma de pagamento",
+                         ["Pix", "Débito em Conta", "Débito (Cartão)", "Boleto", "Crédito"])
+
     _k = st.session_state.get("_k_divida", 0)
     with st.form(f"form_divida_{_k}"):
         c1, c2 = st.columns(2)
@@ -143,11 +146,10 @@ with tabs[1]:
             data_ini = st.date_input("Data de início", value=date.today(), format="DD/MM/YYYY")
         with c2:
             valor_parc = st.number_input("Valor da parcela (R$)", min_value=0.01, value=None, step=0.01, format="%.2f", placeholder="0,00")
-            forma = st.selectbox("Forma de pagamento", ["Pix", "Débito", "Boleto", "Crédito"])
             if forma == "Crédito":
-                cc = st.selectbox("Cartão", cartoes) if cartoes else st.text_input("Cartão")
+                cc = st.selectbox("Cartão", cartoes if cartoes else ["— nenhum cadastrado —"])
             else:
-                cc = st.selectbox("Conta", contas) if contas else st.text_input("Conta")
+                cc = st.selectbox("Conta", contas if contas else ["— nenhuma cadastrada —"])
             fonte_ajuda = st.text_input("Quem está ajudando? (opcional, ex: Mãe)")
         submitted = st.form_submit_button("Salvar Dívida", use_container_width=True)
 

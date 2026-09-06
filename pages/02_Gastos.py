@@ -31,6 +31,9 @@ with st.expander("➕ Novo Gasto", expanded=False):
     contas = contas_df["nome"].tolist() if not contas_df.empty else []
     cartoes = cartoes_df["nome"].tolist() if not cartoes_df.empty else []
 
+    forma_pgto = st.selectbox("Forma de pagamento",
+                               ["Dinheiro", "Pix", "Débito em Conta", "Débito (Cartão)", "Crédito"])
+
     _k = st.session_state.get("_k_gasto", 0)
     with st.form(f"form_gasto_{_k}"):
         c1, c2, c3 = st.columns(3)
@@ -39,16 +42,14 @@ with st.expander("➕ Novo Gasto", expanded=False):
             categoria = st.selectbox("Categoria", cats)
         with c2:
             valor = st.number_input("Valor total (R$)", min_value=0.01, value=None, step=0.01, format="%.2f", placeholder="0,00")
-            forma_pgto = st.selectbox("Forma de pagamento",
-                                       ["Dinheiro", "Pix", "Débito", "Crédito"])
-        with c3:
             num_parcelas = st.number_input("Nº de parcelas", min_value=1, max_value=72,
                                             value=1, step=1)
+        with c3:
             if forma_pgto == "Crédito":
-                conta_cartao = st.selectbox("Cartão", cartoes)
+                conta_cartao = st.selectbox("Cartão", cartoes if cartoes else ["— nenhum cadastrado —"])
             else:
-                conta_cartao = st.selectbox("Conta", contas)
-        descricao = st.text_input("Descrição (opcional)")
+                conta_cartao = st.selectbox("Conta", contas if contas else ["— nenhuma cadastrada —"])
+            descricao = st.text_input("Descrição (opcional)")
         submitted = st.form_submit_button("Salvar Gasto", use_container_width=True)
 
     if submitted:

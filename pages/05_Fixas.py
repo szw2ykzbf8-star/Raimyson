@@ -17,6 +17,9 @@ with st.expander("➕ Nova Conta Fixa", expanded=False):
     contas = contas_df["nome"].tolist() if not contas_df.empty else []
     cartoes = cartoes_df["nome"].tolist() if not cartoes_df.empty else []
 
+    forma_pgto = st.selectbox("Forma de pagamento",
+                               ["Dinheiro", "Pix", "Débito em Conta", "Débito (Cartão)", "Crédito", "Boleto"])
+
     _k = st.session_state.get("_k_fixa", 0)
     with st.form(f"form_fixa_{_k}"):
         c1, c2 = st.columns(2)
@@ -26,12 +29,10 @@ with st.expander("➕ Nova Conta Fixa", expanded=False):
             dia_venc = st.number_input("Dia de vencimento", 1, 31, 10)
         with c2:
             valor_ref = st.number_input("Valor de referência (R$)", min_value=0.01, value=None, step=0.01, format="%.2f", placeholder="0,00")
-            forma_pgto = st.selectbox("Forma de pagamento",
-                                       ["Dinheiro", "Pix", "Débito", "Crédito", "Boleto"])
             if forma_pgto == "Crédito":
-                conta_cartao = st.selectbox("Cartão", cartoes) if cartoes else st.text_input("Cartão")
+                conta_cartao = st.selectbox("Cartão", cartoes if cartoes else ["— nenhum cadastrado —"])
             else:
-                conta_cartao = st.selectbox("Conta", contas) if contas else st.text_input("Conta")
+                conta_cartao = st.selectbox("Conta", contas if contas else ["— nenhuma cadastrada —"])
         submitted = st.form_submit_button("Salvar Conta Fixa", use_container_width=True)
 
     if submitted and nome:
