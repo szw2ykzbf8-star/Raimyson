@@ -13,6 +13,8 @@ Formas de pagamento: pix · db (débito) · cr (crédito) · din (dinheiro)
 Categorias:         ali · trans · mor · sau · laz · edu · vest · com · div · inv · out
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import os
