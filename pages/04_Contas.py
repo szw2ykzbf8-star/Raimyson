@@ -48,6 +48,46 @@ with tabs[0]:
                     st.metric("− Criptos", utils.fmt_brl(bkd["saidas_cripto"]))
                     st.metric("= Saldo calculado", utils.fmt_brl(bkd["total"]))
 
+                conta_nome = row["nome"]
+                st.markdown("---")
+
+                # Entradas vinculadas
+                if not todas_entradas.empty and "conta" in todas_entradas.columns:
+                    df_e = todas_entradas[todas_entradas["conta"] == conta_nome]
+                    if not df_e.empty:
+                        st.markdown("**Entradas registradas nesta conta:**")
+                        df_show_e = df_e[["data", "fonte", "valor", "descricao"]].copy()
+                        df_show_e["valor"] = df_show_e["valor"].astype(float).apply(utils.fmt_brl)
+                        df_show_e.columns = ["Data", "Fonte", "Valor", "Descrição"]
+                        st.dataframe(df_show_e, use_container_width=True, hide_index=True)
+
+                # Gastos vinculados
+                if not todos_gastos.empty and "conta_cartao" in todos_gastos.columns:
+                    mask_g = (todos_gastos["conta_cartao"] == conta_nome) & \
+                             (todos_gastos["forma_pagamento"].isin(
+                                 ["Pix", "Débito", "Débito (Cartão)", "Débito em Conta", "Dinheiro", "Boleto"]
+                             ))
+                    df_g = todos_gastos[mask_g]
+                    if not df_g.empty:
+                        st.markdown("**Gastos/Pix/Débito registrados nesta conta:**")
+                        df_show_g = df_g[["data_compra", "descricao", "categoria", "forma_pagamento", "valor_parcela"]].copy()
+                        df_show_g["valor_parcela"] = df_show_g["valor_parcela"].astype(float).apply(utils.fmt_brl)
+                        df_show_g.columns = ["Data", "Descrição", "Categoria", "Forma Pgto", "Valor"]
+                        st.dataframe(df_show_g, use_container_width=True, hide_index=True)
+
+                # Investimentos vinculados
+                if not todos_invest_c.empty and "conta_origem" in todos_invest_c.columns:
+                    df_inv = todos_invest_c[
+                        (todos_invest_c["conta_origem"] == conta_nome) &
+                        (todos_invest_c["status"] == "ATIVO")
+                    ]
+                    if not df_inv.empty:
+                        st.markdown("**Investimentos desta conta:**")
+                        df_show_inv = df_inv[["nome", "tipo", "valor_aplicado", "data_aplicacao"]].copy()
+                        df_show_inv["valor_aplicado"] = df_show_inv["valor_aplicado"].astype(float).apply(utils.fmt_brl)
+                        df_show_inv.columns = ["Nome", "Tipo", "Valor", "Data"]
+                        st.dataframe(df_show_inv, use_container_width=True, hide_index=True)
+
         st.markdown("---")
 
         # Extrato de transferências

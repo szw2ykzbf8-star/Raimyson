@@ -53,13 +53,17 @@ with tabs[0]:
         st.plotly_chart(fig, use_container_width=True)
 
         # Lista de investimentos
+        contas_inv_port = sh.get_contas()["nome"].tolist() if not sh.get_contas().empty else []
+
         for _, row in df.iterrows():
             res = utils.calcular_rendimento(
                 float(row["valor_aplicado"]), row["taxa_tipo"],
                 float(row["taxa_valor"]), row["data_aplicacao"], hoje
             )
+            conta_orig_atual = row.get("conta_origem", "") or ""
             has_confirm = st.session_state.get(f"confirm_del_inv_{row['id']}", False)
-            with st.expander(f"📊 {row['nome']} ({row['tipo']})", expanded=has_confirm):
+            label_conta = f" · Conta: {conta_orig_atual}" if conta_orig_atual and conta_orig_atual not in ("— nenhuma cadastrada —",) else " · ⚠️ Sem conta vinculada"
+            with st.expander(f"📊 {row['nome']} ({row['tipo']}){label_conta}", expanded=has_confirm):
                 c1, c2, c3, c4 = st.columns(4)
                 with c1:
                     st.metric("Aplicado em", utils.fmt_data(row["data_aplicacao"]))
@@ -76,6 +80,21 @@ with tabs[0]:
                 with c4:
                     st.metric("Rentabilidade", utils.fmt_pct(res["rentabilidade_pct"]))
                     st.metric("Meses aplicado", str(res["meses"]))
+
+                # Editar conta de origem
+                st.markdown("---")
+                col_cc, col_btn = st.columns([3, 1])
+                with col_cc:
+                    opts = contas_inv_port if contas_inv_port else ["—"]
+                    idx_atual = opts.index(conta_orig_atual) if conta_orig_atual in opts else 0
+                    nova_conta = st.selectbox("Conta de origem (deduz do saldo)", opts,
+                                              index=idx_atual, key=f"cc_{row['id']}")
+                with col_btn:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    if st.button("💾 Salvar", key=f"save_cc_{row['id']}"):
+                        sh.update_investimento_conta(row["id"], nova_conta)
+                        st.success("Conta atualizada!")
+                        st.rerun()
 
                 st.markdown("")
                 if st.button("🗑️ Excluir investimento", key=f"del_inv_{row['id']}"):

@@ -359,6 +359,13 @@ def delete_investimento(rid: str):
     invalidate("investimentos")
 
 
+def update_investimento_conta(rid: str, conta_origem: str):
+    ws      = _sheet(SHEETS["investimentos"])
+    row_num = _find_row(ws, rid)
+    ws.update_cell(row_num, 13, conta_origem)
+    invalidate("investimentos")
+
+
 # ─── Criptos ─────────────────────────────────────────────────────────────────
 
 
