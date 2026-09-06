@@ -238,17 +238,20 @@ def dashboard():
         tip_gastos = "Por categoria:\n" + "\n".join(
             f"• {c}: {utils.fmt_brl(v)}" for c, v in by_cat.sort_values(ascending=False).items()
         )
-        if comprometido_cartao > 0:
-            tip_gastos += f"\n\n💳 Comprometido futuro (cartão): {utils.fmt_brl(comprometido_cartao)}"
     else:
         tip_gastos = "Nenhum gasto neste mês."
 
-    tip_resultado = (
-        f"Entradas:  {utils.fmt_brl(total_entradas)}\n"
-        f"Saídas:    {utils.fmt_brl(total_gastos)}\n"
-        f"──────────────\n"
-        f"Resultado: {utils.fmt_brl(resultado_mes)}"
-    )
+    if comprometido_cartao > 0 and not todos_gastos_full.empty:
+        futuros_det = todos_gastos_full[
+            (todos_gastos_full["forma_pagamento"] == "Crédito") &
+            (todos_gastos_full["mes_referencia"] > mes_atual_str)
+        ]
+        by_mes = futuros_det.groupby("mes_referencia")["valor_parcela"].apply(lambda x: x.astype(float).sum())
+        tip_comprometido = "Por mês:\n" + "\n".join(
+            f"• {utils.formatar_mes(m)}: {utils.fmt_brl(v)}" for m, v in sorted(by_mes.items())
+        )
+    else:
+        tip_comprometido = "Nenhum valor comprometido em cartão."
 
     if not contas_df.empty:
         saldos_por_conta = []
@@ -267,8 +270,7 @@ def dashboard():
     with c2:
         st.metric("💸 Saídas do Mês", utils.fmt_brl(total_gastos), help=tip_gastos)
     with c3:
-        delta_str = f"+{utils.fmt_brl(resultado_mes)}" if resultado_mes >= 0 else utils.fmt_brl(resultado_mes)
-        st.metric("📊 Resultado do Mês", utils.fmt_brl(resultado_mes), help=tip_resultado)
+        st.metric("💳 Comprometido (Cartão)", utils.fmt_brl(comprometido_cartao), help=tip_comprometido)
     with c4:
         st.metric("🏦 Saldo Total em Contas", utils.fmt_brl(saldo_total), help=tip_saldo)
 
