@@ -96,7 +96,7 @@ with tabs[1]:
             nome_i = st.text_input("Nome / Banco (ex: CDB Nubank)")
             tipo_i = st.selectbox("Tipo", TIPOS)
             data_aplic = st.date_input("Data da aplicação", value=date.today(), format="DD/MM/YYYY")
-            valor_aplic = st.number_input("Valor aplicado (R$)", min_value=0.01, step=0.01, format="%.2f")
+            valor_aplic = st.number_input("Valor aplicado (R$)", min_value=0.01, value=None, step=0.01, format="%.2f", placeholder="0,00")
         with c2:
             taxa_tipo = st.selectbox("Tipo de taxa", TAXA_TIPOS)
             taxa_val = st.number_input(
@@ -107,11 +107,14 @@ with tabs[1]:
         submitted = st.form_submit_button("Salvar Investimento", use_container_width=True)
 
     if submitted and nome_i:
-        sh.add_investimento(nome_i.strip(), tipo_i, data_aplic.isoformat(),
-                            valor_aplic, taxa_tipo, taxa_val, data_venc.isoformat())
-        st.session_state["_k_invest"] = _k + 1
-        st.success(f"Investimento '{nome_i}' cadastrado!")
-        st.rerun()
+        if valor_aplic is None or valor_aplic <= 0:
+            st.warning("Informe o valor aplicado.")
+        else:
+            sh.add_investimento(nome_i.strip(), tipo_i, data_aplic.isoformat(),
+                                valor_aplic, taxa_tipo, taxa_val, data_venc.isoformat())
+            st.session_state["_k_invest"] = _k + 1
+            st.success(f"Investimento '{nome_i}' cadastrado!")
+            st.rerun()
 
 # ─── Retirada ────────────────────────────────────────────────────────────────
 

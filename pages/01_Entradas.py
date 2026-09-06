@@ -37,7 +37,7 @@ with st.expander("➕ Nova Entrada", expanded=False):
             data_e = st.date_input("Data", value=date.today(), format="DD/MM/YYYY")
             fonte = st.selectbox("Fonte", fontes)
         with c2:
-            valor = st.number_input("Valor (R$)", min_value=0.01, step=0.01, format="%.2f")
+            valor = st.number_input("Valor (R$)", min_value=0.01, value=None, step=0.01, format="%.2f", placeholder="0,00")
             conta = st.selectbox("Conta de destino", contas)
         descricao = st.text_input("Descrição (opcional)")
         submitted = st.form_submit_button("Salvar Entrada", use_container_width=True)
@@ -45,6 +45,8 @@ with st.expander("➕ Nova Entrada", expanded=False):
     if submitted:
         if not fontes or not contas:
             st.error("Cadastre fontes de renda e contas bancárias antes de lançar entradas.")
+        elif valor is None or valor <= 0:
+            st.warning("Informe o valor da entrada.")
         else:
             sh.add_entrada(data_e.isoformat(), valor, fonte, conta, descricao)
             st.session_state["_k_entrada"] = _k + 1

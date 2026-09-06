@@ -38,7 +38,7 @@ with st.expander("➕ Novo Gasto", expanded=False):
             data_g = st.date_input("Data da compra", value=date.today(), format="DD/MM/YYYY")
             categoria = st.selectbox("Categoria", cats)
         with c2:
-            valor = st.number_input("Valor total (R$)", min_value=0.01, step=0.01, format="%.2f")
+            valor = st.number_input("Valor total (R$)", min_value=0.01, value=None, step=0.01, format="%.2f", placeholder="0,00")
             forma_pgto = st.selectbox("Forma de pagamento",
                                        ["Dinheiro", "Pix", "Débito", "Crédito"])
         with c3:
@@ -52,7 +52,9 @@ with st.expander("➕ Novo Gasto", expanded=False):
         submitted = st.form_submit_button("Salvar Gasto", use_container_width=True)
 
     if submitted:
-        if forma_pgto == "Crédito":
+        if valor is None or valor <= 0:
+            st.warning("Informe o valor do gasto.")
+        elif forma_pgto == "Crédito":
             if not cartoes_df.empty:
                 cartao_row = cartoes_df[cartoes_df["nome"] == conta_cartao].iloc[0]
                 parcelas = utils.gerar_parcelas(
@@ -73,6 +75,7 @@ with st.expander("➕ Novo Gasto", expanded=False):
                         id_grupo = rid
                 st.success(f"Compra parcelada registrada! ({int(num_parcelas)}x de {utils.fmt_brl(parcelas[0]['valor_parcela'])})")
                 st.session_state["_k_gasto"] = _k + 1
+                st.rerun()
             else:
                 st.error("Nenhum cartão cadastrado.")
         else:
@@ -83,7 +86,7 @@ with st.expander("➕ Novo Gasto", expanded=False):
             )
             st.success(f"Gasto de {utils.fmt_brl(valor)} registrado!")
             st.session_state["_k_gasto"] = _k + 1
-        st.rerun()
+            st.rerun()
 
 # ─── Lista de gastos ──────────────────────────────────────────────────────────
 

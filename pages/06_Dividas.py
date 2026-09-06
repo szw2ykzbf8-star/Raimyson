@@ -138,11 +138,11 @@ with tabs[1]:
         c1, c2 = st.columns(2)
         with c1:
             nome_d = st.text_input("Nome da dívida (ex: Dívida Nubank)")
-            valor_orig = st.number_input("Valor original total (R$)", min_value=0.01, step=0.01, format="%.2f")
+            valor_orig = st.number_input("Valor original total (R$)", min_value=0.01, value=None, step=0.01, format="%.2f", placeholder="0,00")
             num_parc = st.number_input("Número total de parcelas", min_value=1, step=1, value=12)
             data_ini = st.date_input("Data de início", value=date.today(), format="DD/MM/YYYY")
         with c2:
-            valor_parc = st.number_input("Valor da parcela (R$)", min_value=0.01, step=0.01, format="%.2f")
+            valor_parc = st.number_input("Valor da parcela (R$)", min_value=0.01, value=None, step=0.01, format="%.2f", placeholder="0,00")
             forma = st.selectbox("Forma de pagamento", ["Pix", "Débito", "Boleto", "Crédito"])
             if forma == "Crédito":
                 cc = st.selectbox("Cartão", cartoes) if cartoes else st.text_input("Cartão")
@@ -152,11 +152,16 @@ with tabs[1]:
         submitted = st.form_submit_button("Salvar Dívida", use_container_width=True)
 
     if submitted and nome_d:
-        sh.add_divida(nome_d.strip(), valor_orig, valor_parc, int(num_parc),
-                      data_ini.isoformat(), forma, cc, fonte_ajuda)
-        st.session_state["_k_divida"] = _k + 1
-        st.success(f"Dívida '{nome_d}' cadastrada!")
-        st.rerun()
+        if valor_orig is None or valor_orig <= 0:
+            st.warning("Informe o valor original da dívida.")
+        elif valor_parc is None or valor_parc <= 0:
+            st.warning("Informe o valor da parcela.")
+        else:
+            sh.add_divida(nome_d.strip(), valor_orig, valor_parc, int(num_parc),
+                          data_ini.isoformat(), forma, cc, fonte_ajuda)
+            st.session_state["_k_divida"] = _k + 1
+            st.success(f"Dívida '{nome_d}' cadastrada!")
+            st.rerun()
 
 # ─── Simulador de Antecipação ─────────────────────────────────────────────────
 

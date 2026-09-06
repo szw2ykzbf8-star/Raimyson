@@ -96,10 +96,10 @@ with tabs[1]:
     with st.form(f"form_conta_{_k}"):
         nome = st.text_input("Nome da conta (ex: Sicredi, Mercado Pago)")
         tipo = st.selectbox("Tipo", ["Corrente", "Digital", "Poupança", "Outro"])
-        saldo_inicial = st.number_input("Saldo inicial (R$)", min_value=0.0, step=0.01, format="%.2f")
+        saldo_inicial = st.number_input("Saldo inicial (R$)", min_value=0.0, value=None, step=0.01, format="%.2f", placeholder="0,00")
         submitted = st.form_submit_button("Salvar Conta", use_container_width=True)
     if submitted and nome:
-        sh.add_conta(nome.strip(), tipo, saldo_inicial)
+        sh.add_conta(nome.strip(), tipo, saldo_inicial or 0.0)
         st.session_state["_k_conta"] = _k + 1
         st.success(f"Conta '{nome}' cadastrada!")
         st.rerun()
@@ -117,7 +117,7 @@ with tabs[2]:
             c1, c2 = st.columns(2)
             with c1:
                 origem = st.selectbox("De", contas, key="transf_origem")
-                valor = st.number_input("Valor (R$)", min_value=0.01, step=0.01, format="%.2f")
+                valor = st.number_input("Valor (R$)", min_value=0.01, value=None, step=0.01, format="%.2f", placeholder="0,00")
             with c2:
                 destino = st.selectbox("Para", [c for c in contas], key="transf_destino")
                 data_t = st.date_input("Data", value=date.today(), format="DD/MM/YYYY")
@@ -125,7 +125,9 @@ with tabs[2]:
             submitted = st.form_submit_button("Transferir", use_container_width=True)
 
         if submitted:
-            if origem == destino:
+            if valor is None or valor <= 0:
+                st.warning("Informe o valor da transferência.")
+            elif origem == destino:
                 st.error("Conta de origem e destino devem ser diferentes.")
             else:
                 sh.add_transferencia(data_t.isoformat(), valor, origem, destino, descricao)

@@ -25,7 +25,7 @@ with st.expander("➕ Nova Conta Fixa", expanded=False):
             categoria = st.selectbox("Categoria", cats)
             dia_venc = st.number_input("Dia de vencimento", 1, 31, 10)
         with c2:
-            valor_ref = st.number_input("Valor de referência (R$)", min_value=0.01, step=0.01, format="%.2f")
+            valor_ref = st.number_input("Valor de referência (R$)", min_value=0.01, value=None, step=0.01, format="%.2f", placeholder="0,00")
             forma_pgto = st.selectbox("Forma de pagamento",
                                        ["Dinheiro", "Pix", "Débito", "Crédito", "Boleto"])
             if forma_pgto == "Crédito":
@@ -35,12 +35,15 @@ with st.expander("➕ Nova Conta Fixa", expanded=False):
         submitted = st.form_submit_button("Salvar Conta Fixa", use_container_width=True)
 
     if submitted and nome:
-        mes_ini = utils.mes_atual()
-        sh.add_fixa(nome.strip(), valor_ref, categoria, forma_pgto,
-                    conta_cartao, int(dia_venc), mes_ini)
-        st.session_state["_k_fixa"] = _k + 1
-        st.success(f"Conta fixa '{nome}' cadastrada!")
-        st.rerun()
+        if valor_ref is None or valor_ref <= 0:
+            st.warning("Informe o valor de referência.")
+        else:
+            mes_ini = utils.mes_atual()
+            sh.add_fixa(nome.strip(), valor_ref, categoria, forma_pgto,
+                        conta_cartao, int(dia_venc), mes_ini)
+            st.session_state["_k_fixa"] = _k + 1
+            st.success(f"Conta fixa '{nome}' cadastrada!")
+            st.rerun()
 
 # ─── Lista de contas fixas ────────────────────────────────────────────────────
 
