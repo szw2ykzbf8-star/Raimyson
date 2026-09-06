@@ -16,15 +16,17 @@ with tabs[0]:
     if contas_df.empty:
         st.info("Nenhuma conta cadastrada.")
     else:
-        todas_entradas = sh.get_entradas()
-        todos_gastos = sh.get_gastos()
-        todas_transf = sh.get_transferencias()
-        todos_pgtos_c = sh.get_pagamentos_contas()
+        todas_entradas  = sh.get_entradas()
+        todos_gastos    = sh.get_gastos()
+        todas_transf    = sh.get_transferencias()
+        todos_invest_c  = sh.get_investimentos()
+        todos_criptos_c = sh.get_criptos("ATIVO")
+        todos_pgtos_c   = sh.get_pagamentos_contas()
 
         for _, row in contas_df.iterrows():
             saldo = utils.calcular_saldo_conta(
                 row["nome"], todas_entradas, todos_gastos, todas_transf, contas_df,
-                pagamentos_df=todos_pgtos_c
+                todos_invest_c, todos_pgtos_c, todos_criptos_c
             )
             cor = "normal" if saldo >= 0 else "inverse"
             st.metric(

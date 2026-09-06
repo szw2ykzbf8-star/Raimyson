@@ -457,7 +457,7 @@ with tabs[4]:
     todos_pgtos_adv = sh.get_pagamentos_contas()
     saldo_contas = sum(
         utils.calcular_saldo_conta(row["nome"], todas_e, todos_g, todas_t, contas_df_adv,
-                                   pagamentos_df=todos_pgtos_adv)
+                                   df_inv_adv, todos_pgtos_adv, df_cr_adv)
         for _, row in contas_df_adv.iterrows()
     ) if not contas_df_adv.empty else 0
 

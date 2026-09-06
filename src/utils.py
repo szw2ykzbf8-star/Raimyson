@@ -106,7 +106,8 @@ def calcular_saldo_conta(conta_nome: str, entradas_df: pd.DataFrame,
                           gastos_df: pd.DataFrame, transferencias_df: pd.DataFrame,
                           contas_df: pd.DataFrame,
                           investimentos_df: pd.DataFrame = None,
-                          pagamentos_df: pd.DataFrame = None) -> float:
+                          pagamentos_df: pd.DataFrame = None,
+                          criptos_df: pd.DataFrame = None) -> float:
     saldo_inicial = 0.0
     if not contas_df.empty:
         row = contas_df[contas_df["nome"] == conta_nome]
@@ -148,7 +149,13 @@ def calcular_saldo_conta(conta_nome: str, entradas_df: pd.DataFrame,
                     (pagamentos_df["tipo"] == "fatura_cartao")
         saidas_pgto = pagamentos_df[mask_pgto]["valor"].astype(float).sum()
 
-    return saldo_inicial + entradas + entradas_transf - saidas_debito - saidas_transf - saidas_invest - saidas_pgto
+    saidas_cripto = 0.0
+    if criptos_df is not None and not criptos_df.empty and "conta_origem" in criptos_df.columns:
+        mask_cr = (criptos_df["conta_origem"] == conta_nome) & \
+                  (criptos_df["status"] == "ATIVO")
+        saidas_cripto = criptos_df[mask_cr]["preco_compra_brl"].astype(float).sum()
+
+    return saldo_inicial + entradas + entradas_transf - saidas_debito - saidas_transf - saidas_invest - saidas_pgto - saidas_cripto
 
 
 # ─── Cálculos de investimento ────────────────────────────────────────────────
