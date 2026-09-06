@@ -198,20 +198,28 @@ def dashboard():
 
     total_entradas = entradas_df["valor"].astype(float).sum() if not entradas_df.empty else 0
     total_gastos = gastos_df["valor_parcela"].astype(float).sum() if not gastos_df.empty else 0
+    resultado_mes = total_entradas - total_gastos
+
+    # Saldo total acumulado em todas as contas
+    contas_df = sh.get_contas()
+    todas_entradas_full = sh.get_entradas()
+    todos_gastos_full = sh.get_gastos()
+    todas_transf = sh.get_transferencias()
+    saldo_total = sum(
+        utils.calcular_saldo_conta(row["nome"], todas_entradas_full, todos_gastos_full, todas_transf, contas_df)
+        for _, row in contas_df.iterrows()
+    ) if not contas_df.empty else 0
 
     # Comprometido em cartão (meses futuros)
-    todos_gastos = sh.get_gastos()
     mes_atual_str = utils.mes_atual()
-    if not todos_gastos.empty:
-        futuros = todos_gastos[
-            (todos_gastos["forma_pagamento"] == "Crédito") &
-            (todos_gastos["mes_referencia"] > mes_atual_str)
+    if not todos_gastos_full.empty:
+        futuros = todos_gastos_full[
+            (todos_gastos_full["forma_pagamento"] == "Crédito") &
+            (todos_gastos_full["mes_referencia"] > mes_atual_str)
         ]
         comprometido_cartao = futuros["valor_parcela"].astype(float).sum()
     else:
         comprometido_cartao = 0
-
-    saldo = total_entradas - total_gastos
 
     # Meta de economia
     meta = float(sh.get_config("meta_economia", "0") or 0)
@@ -220,33 +228,39 @@ def dashboard():
     st.markdown("---")
     c1, c2, c3, c4 = st.columns(4)
 
-    cor_saldo = "verde" if saldo >= 0 else "vermelho"
-    cor_meta = "verde" if (meta == 0 or saldo >= meta) else "amarelo"
+    cor_resultado = "verde" if resultado_mes >= 0 else "vermelho"
+    cor_saldo = "verde" if saldo_total >= 0 else "vermelho"
 
     with c1:
         st.markdown(f"""
         <div class='metric-card'>
-            <div class='metric-label'>Entradas</div>
+            <div class='metric-label'>Entradas do Mês</div>
             <div class='metric-value verde'>{utils.fmt_brl(total_entradas)}</div>
         </div>""", unsafe_allow_html=True)
     with c2:
         st.markdown(f"""
         <div class='metric-card'>
-            <div class='metric-label'>Saídas</div>
+            <div class='metric-label'>Saídas do Mês</div>
             <div class='metric-value vermelho'>{utils.fmt_brl(total_gastos)}</div>
         </div>""", unsafe_allow_html=True)
     with c3:
         st.markdown(f"""
         <div class='metric-card'>
-            <div class='metric-label'>Saldo</div>
-            <div class='metric-value {cor_saldo}'>{utils.fmt_brl(saldo)}</div>
+            <div class='metric-label'>Resultado do Mês</div>
+            <div class='metric-value {cor_resultado}'>{utils.fmt_brl(resultado_mes)}</div>
         </div>""", unsafe_allow_html=True)
     with c4:
         st.markdown(f"""
         <div class='metric-card'>
-            <div class='metric-label'>Comprometido (Cartão)</div>
-            <div class='metric-value amarelo'>{utils.fmt_brl(comprometido_cartao)}</div>
+            <div class='metric-label'>Saldo Total em Contas</div>
+            <div class='metric-value {cor_saldo}'>{utils.fmt_brl(saldo_total)}</div>
         </div>""", unsafe_allow_html=True)
+
+    # Comprometido em cartão
+    if comprometido_cartao > 0:
+        st.markdown(f"<div style='text-align:right; color:#F39C12; font-size:0.85rem; margin-top:6px'>"
+                    f"💳 Comprometido em cartão (parcelas futuras): <b>{utils.fmt_brl(comprometido_cartao)}</b></div>",
+                    unsafe_allow_html=True)
 
     st.markdown("")
 
@@ -286,7 +300,7 @@ def dashboard():
             df_show["data"] = df_show["data"].apply(utils.fmt_data)
             df_show["valor"] = df_show["valor"].astype(float).apply(utils.fmt_brl)
             df_show.columns = ["Data", "Fonte", "Valor"]
-            st.dataframe(df_show.tail(5), use_container_width=True, hide_index=True)
+            st.dataframe(df_show.tail(10), use_container_width=True, hide_index=True)
         else:
             st.caption("Nenhuma entrada neste mês.")
 
@@ -298,22 +312,18 @@ def dashboard():
             df_show["data_compra"] = df_show["data_compra"].apply(utils.fmt_data)
             df_show["valor_parcela"] = df_show["valor_parcela"].astype(float).apply(utils.fmt_brl)
             df_show.columns = ["Data", "Categoria", "Pagamento", "Valor"]
-            st.dataframe(df_show.tail(5), use_container_width=True, hide_index=True)
+            st.dataframe(df_show.tail(10), use_container_width=True, hide_index=True)
         else:
             st.caption("Nenhum gasto neste mês.")
 
     # Saldos por conta
     st.markdown("---")
     st.subheader("🏦 Saldo por Conta")
-    contas_df = sh.get_contas()
     if not contas_df.empty:
-        todas_entradas = sh.get_entradas()
-        todos_gastos_full = sh.get_gastos()
-        todas_transf = sh.get_transferencias()
         cols = st.columns(len(contas_df))
         for i, (_, row) in enumerate(contas_df.iterrows()):
             saldo_c = utils.calcular_saldo_conta(
-                row["nome"], todas_entradas, todos_gastos_full,
+                row["nome"], todas_entradas_full, todos_gastos_full,
                 todas_transf, contas_df
             )
             cor   = "verde" if saldo_c >= 0 else "vermelho"
