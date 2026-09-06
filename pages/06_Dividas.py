@@ -42,8 +42,6 @@ with tabs[0]:
                 st.metric("Saldo devedor aprox.", utils.fmt_brl(restante_estimado))
 
             st.progress(progresso, text=f"{int(progresso*100)}% quitado")
-            if row["fonte_ajuda"]:
-                st.caption(f"💙 Apoio: {row['fonte_ajuda']}")
 
             # Registrar pagamento
             with st.expander(f"💳 Registrar Pagamento — {row['nome']}"):
@@ -150,7 +148,6 @@ with tabs[1]:
                 cc = st.selectbox("Cartão", cartoes if cartoes else ["— nenhum cadastrado —"])
             else:
                 cc = st.selectbox("Conta", contas if contas else ["— nenhuma cadastrada —"])
-            fonte_ajuda = st.text_input("Quem está ajudando? (opcional, ex: Mãe)")
         submitted = st.form_submit_button("Salvar Dívida", use_container_width=True)
 
     if submitted and nome_d:
@@ -160,7 +157,7 @@ with tabs[1]:
             st.warning("Informe o valor da parcela.")
         else:
             sh.add_divida(nome_d.strip(), valor_orig, valor_parc, int(num_parc),
-                          data_ini.isoformat(), forma, cc, fonte_ajuda)
+                          data_ini.isoformat(), forma, cc, "")
             st.session_state["_k_divida"] = _k + 1
             st.success(f"Dívida '{nome_d}' cadastrada!")
             st.rerun()
@@ -179,7 +176,7 @@ with tabs[2]:
         divida_sel = st.selectbox("Selecione a dívida", opcoes)
         row_d = df_d[df_d["nome"] == divida_sel].iloc[0]
         pagas = int(row_d["num_parcelas_pagas"])
-        total = int(row_d["num_parcelas_total"])
+        total = int(row_d["num_parcelas"])
         restantes_d = total - pagas
         val_parc = float(row_d["valor_parcela"])
 
