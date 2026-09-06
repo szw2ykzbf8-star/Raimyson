@@ -106,7 +106,7 @@ else:
             for _, row in grupo.iterrows():
                 col_a, col_b, col_c, col_d, col_e = st.columns([2, 3, 2, 2, 1])
                 with col_a:
-                    st.write(row["data_compra"])
+                    st.write(utils.fmt_data(row["data_compra"]))
                 with col_b:
                     desc = row["descricao"] or "—"
                     parcela_info = f" ({row['parcela_num']}/{row['total_parcelas']})" \

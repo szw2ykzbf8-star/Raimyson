@@ -61,14 +61,14 @@ with tabs[0]:
             with st.expander(f"📊 {row['nome']} ({row['tipo']})"):
                 c1, c2, c3, c4 = st.columns(4)
                 with c1:
-                    st.metric("Aplicado em", row["data_aplicacao"])
+                    st.metric("Aplicado em", utils.fmt_data(row["data_aplicacao"]))
                     st.metric("Valor aplicado", utils.fmt_brl(float(row["valor_aplicado"])))
                 with c2:
                     taxa_str = f"{row['taxa_valor']}% {row['taxa_tipo']}"
                     if row["taxa_tipo"] == "CDI":
                         taxa_str = f"{row['taxa_valor']}% do CDI"
                     st.metric("Taxa", taxa_str)
-                    st.metric("Vencimento", row["data_vencimento"] or "—")
+                    st.metric("Vencimento", utils.fmt_data(row["data_vencimento"]) if row["data_vencimento"] else "—")
                 with c3:
                     st.metric("Valor atual", utils.fmt_brl(res["valor_final"]))
                     st.metric("Rendimento", utils.fmt_brl(res["rendimento"]))

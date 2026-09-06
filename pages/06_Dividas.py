@@ -98,7 +98,7 @@ with tabs[0]:
                             if p["is_antecipacao"] == "True" else ""
                         economia_str = f" | Economia: {utils.fmt_brl(float(p['economia']))}" \
                             if float(p.get("economia", 0) or 0) > 0 else ""
-                        st.write(f"• {p['data']} — {utils.fmt_brl(float(p['valor_pago']))}"
+                        st.write(f"• {utils.fmt_data(p['data'])} — {utils.fmt_brl(float(p['valor_pago']))}"
                                  f"{antecip_str}{economia_str}")
 
             # Excluir dívida

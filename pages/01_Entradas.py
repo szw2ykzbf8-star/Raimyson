@@ -72,7 +72,7 @@ else:
             for _, row in grupo.iterrows():
                 col_a, col_b, col_c, col_d = st.columns([2, 3, 2, 1])
                 with col_a:
-                    st.write(row["data"])
+                    st.write(utils.fmt_data(row["data"]))
                 with col_b:
                     st.write(row["descricao"] or "—")
                 with col_c:

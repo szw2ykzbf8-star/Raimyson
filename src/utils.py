@@ -217,6 +217,16 @@ def simular_antecipacao(valor_parcela: float, num_parcelas_restantes: int,
 # ─── Formatação ──────────────────────────────────────────────────────────────
 
 
+def fmt_data(data_iso: str) -> str:
+    """Converte YYYY-MM-DD para DD/MM/YYYY. Retorna o valor original se inválido."""
+    try:
+        if data_iso and len(data_iso) >= 10:
+            return f"{data_iso[8:10]}/{data_iso[5:7]}/{data_iso[:4]}"
+    except Exception:
+        pass
+    return data_iso or "—"
+
+
 def fmt_brl(valor: float) -> str:
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
