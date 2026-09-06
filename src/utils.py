@@ -102,12 +102,13 @@ def gerar_parcelas(data_compra_str: str, valor_total: float, num_parcelas: int,
 # ─── Saldo de conta bancária ─────────────────────────────────────────────────
 
 
-def calcular_saldo_conta(conta_nome: str, entradas_df: pd.DataFrame,
-                          gastos_df: pd.DataFrame, transferencias_df: pd.DataFrame,
-                          contas_df: pd.DataFrame,
-                          investimentos_df: pd.DataFrame = None,
-                          pagamentos_df: pd.DataFrame = None,
-                          criptos_df: pd.DataFrame = None) -> float:
+def calcular_saldo_conta_breakdown(conta_nome: str, entradas_df: pd.DataFrame,
+                                    gastos_df: pd.DataFrame, transferencias_df: pd.DataFrame,
+                                    contas_df: pd.DataFrame,
+                                    investimentos_df: pd.DataFrame = None,
+                                    pagamentos_df: pd.DataFrame = None,
+                                    criptos_df: pd.DataFrame = None) -> dict:
+    """Retorna dicionário com todos os componentes do saldo."""
     saldo_inicial = 0.0
     if not contas_df.empty:
         row = contas_df[contas_df["nome"] == conta_nome]
@@ -120,19 +121,21 @@ def calcular_saldo_conta(conta_nome: str, entradas_df: pd.DataFrame,
         entradas = entradas_df[mask]["valor"].astype(float).sum()
 
     saidas_debito = 0.0
+    n_gastos = 0
     if not gastos_df.empty and "conta_cartao" in gastos_df.columns:
         mask = (gastos_df["conta_cartao"] == conta_nome) & \
                (gastos_df["forma_pagamento"].isin(
                    ["Pix", "Débito", "Débito (Cartão)", "Débito em Conta", "Dinheiro", "Boleto"]
                ))
         saidas_debito = gastos_df[mask]["valor_parcela"].astype(float).sum()
+        n_gastos = int(mask.sum())
 
     saidas_transf = 0.0
     entradas_transf = 0.0
     if not transferencias_df.empty:
         mask_out = transferencias_df["conta_origem"] == conta_nome
-        mask_in = transferencias_df["conta_destino"] == conta_nome
-        saidas_transf = transferencias_df[mask_out]["valor"].astype(float).sum()
+        mask_in  = transferencias_df["conta_destino"] == conta_nome
+        saidas_transf   = transferencias_df[mask_out]["valor"].astype(float).sum()
         entradas_transf = transferencias_df[mask_in]["valor"].astype(float).sum()
 
     saidas_invest = 0.0
@@ -155,7 +158,33 @@ def calcular_saldo_conta(conta_nome: str, entradas_df: pd.DataFrame,
                   (criptos_df["status"] == "ATIVO")
         saidas_cripto = criptos_df[mask_cr]["preco_compra_brl"].astype(float).sum()
 
-    return saldo_inicial + entradas + entradas_transf - saidas_debito - saidas_transf - saidas_invest - saidas_pgto - saidas_cripto
+    total = (saldo_inicial + entradas + entradas_transf
+             - saidas_debito - saidas_transf - saidas_invest - saidas_pgto - saidas_cripto)
+
+    return {
+        "saldo_inicial":   saldo_inicial,
+        "entradas":        entradas,
+        "entradas_transf": entradas_transf,
+        "saidas_debito":   saidas_debito,
+        "n_gastos":        n_gastos,
+        "saidas_transf":   saidas_transf,
+        "saidas_invest":   saidas_invest,
+        "saidas_pgto":     saidas_pgto,
+        "saidas_cripto":   saidas_cripto,
+        "total":           total,
+    }
+
+
+def calcular_saldo_conta(conta_nome: str, entradas_df: pd.DataFrame,
+                          gastos_df: pd.DataFrame, transferencias_df: pd.DataFrame,
+                          contas_df: pd.DataFrame,
+                          investimentos_df: pd.DataFrame = None,
+                          pagamentos_df: pd.DataFrame = None,
+                          criptos_df: pd.DataFrame = None) -> float:
+    return calcular_saldo_conta_breakdown(
+        conta_nome, entradas_df, gastos_df, transferencias_df, contas_df,
+        investimentos_df, pagamentos_df, criptos_df
+    )["total"]
 
 
 # ─── Cálculos de investimento ────────────────────────────────────────────────

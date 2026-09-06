@@ -24,16 +24,29 @@ with tabs[0]:
         todos_pgtos_c   = sh.get_pagamentos_contas()
 
         for _, row in contas_df.iterrows():
-            saldo = utils.calcular_saldo_conta(
+            bkd = utils.calcular_saldo_conta_breakdown(
                 row["nome"], todas_entradas, todos_gastos, todas_transf, contas_df,
                 todos_invest_c, todos_pgtos_c, todos_criptos_c
             )
-            cor = "normal" if saldo >= 0 else "inverse"
             st.metric(
                 label=f"🏦 {row['nome']} ({row['tipo']})",
-                value=utils.fmt_brl(saldo),
+                value=utils.fmt_brl(bkd["total"]),
                 delta=f"Saldo inicial: {utils.fmt_brl(float(row['saldo_inicial']))}"
             )
+            with st.expander("🔍 Detalhamento do saldo", expanded=False):
+                d1, d2, d3 = st.columns(3)
+                with d1:
+                    st.metric("Saldo inicial", utils.fmt_brl(bkd["saldo_inicial"]))
+                    st.metric("+ Entradas", utils.fmt_brl(bkd["entradas"]))
+                    st.metric("+ Transf. recebidas", utils.fmt_brl(bkd["entradas_transf"]))
+                with d2:
+                    st.metric(f"− Gastos/Pix/Débito ({bkd['n_gastos']})", utils.fmt_brl(bkd["saidas_debito"]))
+                    st.metric("− Transf. enviadas", utils.fmt_brl(bkd["saidas_transf"]))
+                    st.metric("− Fat. cartão pagas", utils.fmt_brl(bkd["saidas_pgto"]))
+                with d3:
+                    st.metric("− Investimentos", utils.fmt_brl(bkd["saidas_invest"]))
+                    st.metric("− Criptos", utils.fmt_brl(bkd["saidas_cripto"]))
+                    st.metric("= Saldo calculado", utils.fmt_brl(bkd["total"]))
 
         st.markdown("---")
 
