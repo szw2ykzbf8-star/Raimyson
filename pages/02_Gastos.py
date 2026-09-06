@@ -108,7 +108,8 @@ else:
     for cat in df["categoria"].unique():
         grupo = df[df["categoria"] == cat]
         total_cat = grupo["valor_parcela"].astype(float).sum()
-        with st.expander(f"**{cat}** — {utils.fmt_brl(total_cat)}"):
+        has_confirm = any(st.session_state.get(f"confirm_del_g_{r['id']}", False) for _, r in grupo.iterrows())
+        with st.expander(f"**{cat}** — {utils.fmt_brl(total_cat)}", expanded=has_confirm):
             for _, row in grupo.iterrows():
                 col_a, col_b, col_c, col_d, col_e = st.columns([2, 3, 2, 2, 1])
                 with col_a:
