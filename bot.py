@@ -117,16 +117,17 @@ def _mes_atual() -> str:
 # ─── Telegram ─────────────────────────────────────────────────────────────────
 
 
-def _tg(method: str, **kwargs) -> dict:
+def _tg(method: str, _req_timeout: int = 15, **kwargs) -> dict:
     url  = f"https://api.telegram.org/bot{TOKEN}/{method}"
-    resp = requests.post(url, json=kwargs, timeout=20)
+    resp = requests.post(url, json=kwargs, timeout=_req_timeout)
     return resp.json()
 
 
-def send(text: str) -> None:
-    if not CHAT_ID or not TOKEN:
+def send(text: str, chat_id: str = None) -> None:
+    dest = chat_id or CHAT_ID
+    if not dest or not TOKEN:
         return
-    _tg("sendMessage", chat_id=CHAT_ID, text=text, parse_mode="HTML")
+    _tg("sendMessage", chat_id=dest, text=text, parse_mode="HTML")
 
 
 # ─── Formatação ───────────────────────────────────────────────────────────────
@@ -419,7 +420,7 @@ def handle_update(update: dict) -> None:
         log.exception("Erro ao processar %s", cmd)
         reply = f"❌ Erro interno ao processar o comando.\n<code>{exc}</code>"
 
-    send(reply)
+    send(reply, chat_id=chat_id)
 
 
 def run() -> None:
@@ -436,8 +437,9 @@ def run() -> None:
         try:
             data = _tg(
                 "getUpdates",
+                _req_timeout=25,
                 offset=offset,
-                timeout=30,
+                timeout=20,
                 allowed_updates=["message"],
             )
             for upd in data.get("result", []):
