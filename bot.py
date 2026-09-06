@@ -18,9 +18,10 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from dotenv import load_dotenv
 
@@ -30,14 +31,20 @@ import requests
 import gspread
 from google.oauth2.service_account import Credentials
 
+try:
+    import anthropic as _anthropic
+except ImportError:
+    _anthropic = None
+
 # ─── Configuração ─────────────────────────────────────────────────────────────
 
-TOKEN       = os.getenv("TELEGRAM_TOKEN", "")
-CHAT_ID     = str(os.getenv("TELEGRAM_CHAT_ID", ""))
-CREDS_PATH  = os.getenv("GOOGLE_CREDENTIALS_PATH", "credentials.json")
-CREDS_JSON  = os.getenv("GOOGLE_CREDENTIALS_JSON", "")
-SHEET_ID    = os.getenv("SPREADSHEET_ID", "")
-APP_URL     = os.getenv("APP_URL", "")
+TOKEN           = os.getenv("TELEGRAM_TOKEN", "")
+CHAT_ID         = str(os.getenv("TELEGRAM_CHAT_ID", ""))
+CREDS_PATH      = os.getenv("GOOGLE_CREDENTIALS_PATH", "credentials.json")
+CREDS_JSON      = os.getenv("GOOGLE_CREDENTIALS_JSON", "")
+SHEET_ID        = os.getenv("SPREADSHEET_ID", "")
+APP_URL         = os.getenv("APP_URL", "")
+ANTHROPIC_KEY   = os.getenv("ANTHROPIC_API_KEY", "")
 SCOPES      = ["https://www.googleapis.com/auth/spreadsheets"]
 
 # Abreviações de categoria → nome completo (igual às categorias do app)
@@ -357,6 +364,231 @@ def cmd_resumo(_: list[str]) -> str:
     return "\n".join(linhas)
 
 
+# ─── Horário de Brasília ──────────────────────────────────────────────────────
+
+
+def _br_now() -> datetime:
+    return datetime.utcnow() - timedelta(hours=3)
+
+
+# ─── Resumo diário automático ─────────────────────────────────────────────────
+
+_last_daily_date: str = ""
+
+
+def _build_daily_summary() -> str:
+    agora     = _br_now()
+    hoje_str  = agora.strftime("%Y-%m-%d")
+    mes       = agora.strftime("%Y-%m")
+
+    entradas_rows = _get_all("entradas")
+    gastos_rows   = _get_all("gastos")
+
+    gastos_hoje = [r for r in gastos_rows if str(r.get("data", "")).startswith(hoje_str)]
+    total_hoje  = sum(float(r.get("valor_parcela", 0) or 0) for r in gastos_hoje)
+
+    total_ent_mes = sum(
+        float(r.get("valor", 0) or 0)
+        for r in entradas_rows
+        if str(r.get("data", "")).startswith(mes)
+    )
+    total_gas_mes = sum(
+        float(r.get("valor_parcela", 0) or 0)
+        for r in gastos_rows
+        if str(r.get("mes_referencia", "")).startswith(mes)
+    )
+    saldo_mes   = total_ent_mes - total_gas_mes
+    emoji_saldo = "✅" if saldo_mes >= 0 else "⚠️"
+
+    cats_hoje: dict[str, float] = {}
+    for r in gastos_hoje:
+        cat = r.get("categoria", "Outros")
+        cats_hoje[cat] = cats_hoje.get(cat, 0) + float(r.get("valor_parcela", 0) or 0)
+
+    linhas = [f"🌙 <b>Resumo do Dia — {agora.strftime('%d/%m/%Y')}</b>\n"]
+    if total_hoje > 0:
+        linhas.append(f"💸 <b>Gastos hoje:</b> {_fmt(total_hoje)}")
+        for cat, val in sorted(cats_hoje.items(), key=lambda x: -x[1]):
+            linhas.append(f"  └ {cat}: {_fmt(val)}")
+    else:
+        linhas.append("💸 Nenhum gasto registrado hoje.")
+
+    linhas.append(f"\n📊 <b>Mês {mes}:</b>")
+    linhas.append(f"  💰 Receitas: {_fmt(total_ent_mes)}")
+    linhas.append(f"  💸 Despesas: {_fmt(total_gas_mes)}")
+    linhas.append(f"  {emoji_saldo} Saldo: {_fmt(saldo_mes)}")
+    return "\n".join(linhas)
+
+
+def _daily_summary_loop() -> None:
+    global _last_daily_date
+    while True:
+        try:
+            agora    = _br_now()
+            hoje_str = agora.strftime("%Y-%m-%d")
+            if agora.hour == 20 and agora.minute < 5 and _last_daily_date != hoje_str:
+                if CHAT_ID and TOKEN:
+                    send(_build_daily_summary())
+                    _last_daily_date = hoje_str
+                    log.info("Resumo diário enviado.")
+        except Exception as exc:
+            log.warning("Erro no resumo diário: %s", exc)
+        time.sleep(60)
+
+
+# ─── NLP via Claude ───────────────────────────────────────────────────────────
+
+_ac_client = None
+
+
+def _get_ac():
+    global _ac_client
+    if _ac_client is None and _anthropic and ANTHROPIC_KEY:
+        _ac_client = _anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+    return _ac_client
+
+
+_NLP_SYSTEM = """\
+Você é um assistente de finanças pessoais. O usuário vai enviar uma mensagem descrevendo \
+uma transação em português informal. Extraia as informações e responda APENAS com um JSON \
+válido, sem markdown, sem explicações, somente o objeto JSON.
+
+Campos obrigatórios:
+{
+  "tipo": "gasto" | "entrada" | "desconhecido",
+  "valor": número float (ex: 45.50),
+  "categoria": uma de: Alimentação, Transporte, Moradia, Saúde, Lazer, Educação, Vestuário, \
+Comunicação, Dívidas, Investimentos, Outros,
+  "descricao": string curta do item (ex: "uber", "mercado", "salário"),
+  "forma": "Pix" | "Débito" | "Crédito" | "Dinheiro"  (infira pelo contexto; padrão = Pix),
+  "conta": string com banco/cartão se mencionado, senão "",
+  "parcelas": inteiro (1 se não mencionado),
+  "fonte": string (só para tipo=entrada, ex: "Salário", "Freelance"; senão "")
+}
+
+Regras:
+- Se for menção de pagamento com cartão/crédito, forma = "Crédito"
+- Se for menção de débito/conta, forma = "Débito"
+- Se citar "pix" explicitamente, forma = "Pix"
+- Dinheiro apenas se explicitamente citado
+- Para tipo=desconhecido, preencha os outros campos com valores padrão (valor=0)
+"""
+
+
+def _parse_nlp(text: str) -> dict | None:
+    ac = _get_ac()
+    if not ac:
+        return None
+    try:
+        resp = ac.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=300,
+            system=_NLP_SYSTEM,
+            messages=[{"role": "user", "content": text}],
+        )
+        raw = resp.content[0].text.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.lower().startswith("json"):
+                raw = raw[4:]
+        return json.loads(raw)
+    except Exception as exc:
+        log.warning("NLP parse error: %s", exc)
+        return None
+
+
+def handle_natural_language(text: str, chat_id: str) -> None:
+    ac = _get_ac()
+    if not ac:
+        send(
+            "⚠️ Interpretação em linguagem natural não configurada.\n\n"
+            "Use os comandos diretos:\n"
+            "<code>/gasto 45 ali mercado pix</code>\n"
+            "<code>/entrada 3000 Salário nubank</code>\n"
+            "<code>/ajuda</code> para ver todos.",
+            chat_id=chat_id,
+        )
+        return
+
+    result = _parse_nlp(text)
+
+    if result is None:
+        send(
+            "❌ Não consegui interpretar. Tente:\n"
+            "• <i>\"gastei 45 no mercado\"</i>\n"
+            "• <i>\"paguei 80 de uber no débito\"</i>\n"
+            "• <i>\"recebi 3000 de salário\"</i>\n\n"
+            "Ou use <code>/ajuda</code>.",
+            chat_id=chat_id,
+        )
+        return
+
+    tipo = result.get("tipo", "desconhecido")
+
+    if tipo not in ("gasto", "entrada"):
+        send(
+            "ℹ️ Não identifiquei uma transação nessa mensagem.\n\n"
+            "Exemplos que funcionam:\n"
+            "• <i>\"gastei 45 no mercado\"</i>\n"
+            "• <i>\"paguei 80 de uber no crédito\"</i>\n"
+            "• <i>\"recebi 3000 de salário\"</i>",
+            chat_id=chat_id,
+        )
+        return
+
+    valor = float(result.get("valor", 0) or 0)
+    if valor <= 0:
+        send("❌ Não consegui identificar o valor. Tente ser mais específico (ex: <i>\"gastei 45 no mercado\"</i>).", chat_id=chat_id)
+        return
+
+    hoje = datetime.now().strftime("%Y-%m-%d")
+    mes  = datetime.now().strftime("%Y-%m")
+
+    if tipo == "gasto":
+        categoria = result.get("categoria", "Outros") or "Outros"
+        descricao = result.get("descricao", "sem descrição") or "sem descrição"
+        forma     = result.get("forma", "Pix") or "Pix"
+        conta     = result.get("conta", "") or "—"
+        parcelas  = max(1, int(result.get("parcelas", 1) or 1))
+
+        valor_parcela = round(valor / parcelas, 2)
+        id_grupo      = _new_id()
+        ws            = _ws("gastos")
+
+        for i in range(1, parcelas + 1):
+            ws.append_row([
+                _new_id(), id_grupo, hoje, hoje, mes,
+                str(i), str(parcelas),
+                str(valor_parcela), str(valor),
+                categoria, forma, conta, descricao, _now(),
+            ])
+
+        prc_txt = f" em {parcelas}x de {_fmt(valor_parcela)}" if parcelas > 1 else ""
+        send(
+            f"✅ <b>Gasto registrado</b>\n\n"
+            f"💸 {_fmt(valor)}{prc_txt}\n"
+            f"📂 {categoria}\n"
+            f"💳 {forma} — {conta}\n"
+            f"📝 {descricao}",
+            chat_id=chat_id,
+        )
+
+    elif tipo == "entrada":
+        fonte = result.get("fonte", "") or result.get("descricao", "Outros") or "Outros"
+        conta = result.get("conta", "") or "—"
+        ws    = _ws("entradas")
+        rid   = _new_id()
+        ws.append_row([rid, hoje, str(valor), fonte, conta, "", _now()])
+
+        send(
+            f"✅ <b>Entrada registrada</b>\n\n"
+            f"💰 {_fmt(valor)}\n"
+            f"📌 {fonte}\n"
+            f"🏦 {conta}",
+            chat_id=chat_id,
+        )
+
+
 def cmd_link(_: list[str]) -> str:
     if APP_URL:
         return (
@@ -391,7 +623,12 @@ def cmd_ajuda(_: list[str]) -> str:
         "<code>/saldo</code>  — saldo do mês atual\n"
         "<code>/resumo</code> — gastos por categoria\n\n"
         "<b>🔗 Acesso:</b>\n"
-        "<code>/link</code> — link de acesso ao app"
+        "<code>/link</code> — link de acesso ao app\n\n"
+        "<b>💬 Linguagem natural:</b>\n"
+        "Envie qualquer mensagem sem <code>/</code> e o bot interpreta automaticamente:\n"
+        "  <i>\"gastei 45 no mercado\"</i>\n"
+        "  <i>\"paguei 200 de luz no débito\"</i>\n"
+        "  <i>\"recebi 3000 de salário\"</i>"
     )
 
 
@@ -423,11 +660,20 @@ def handle_update(update: dict) -> None:
         return
 
     text = (msg.get("text") or "").strip()
+    if not text:
+        return
+
     if not text.startswith("/"):
+        log.info("Mensagem livre (NLP): %.60s", text)
+        try:
+            handle_natural_language(text, chat_id)
+        except Exception as exc:
+            log.exception("Erro no NLP")
+            send(f"❌ Erro ao processar mensagem.\n<code>{exc}</code>", chat_id=chat_id)
         return
 
     parts = text.split()
-    cmd   = parts[0].split("@")[0].lower()  # remove @BotName se presente
+    cmd   = parts[0].split("@")[0].lower()
     args  = parts[1:]
 
     handler = COMMANDS.get(cmd)
@@ -459,7 +705,12 @@ def run() -> None:
         return
     log.info("Bot autenticado: @%s", me["result"].get("username"))
 
-    send("✅ FinTrack Bot iniciado e pronto para receber comandos!")
+    t = threading.Thread(target=_daily_summary_loop, daemon=True, name="daily-summary")
+    t.start()
+    log.info("Agendador de resumo diário iniciado (envia às 20h horário de Brasília).")
+
+    nlp_status = "✅ NLP ativo" if (_anthropic and ANTHROPIC_KEY) else "⚠️ NLP desativado (ANTHROPIC_API_KEY não configurado)"
+    send(f"✅ FinTrack Bot iniciado e pronto para receber comandos!\n{nlp_status}")
 
     log.info("Polling...")
     offset = 0

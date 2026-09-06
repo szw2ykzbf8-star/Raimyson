@@ -4,6 +4,7 @@ import plotly.express as px
 import pandas as pd
 import numpy as np
 import requests
+from datetime import datetime as _dt
 from src import auth, sheets as sh, utils
 
 SIMB_ID = {
@@ -29,7 +30,7 @@ auth.require_auth()
 
 st.title("📉 Relatórios & Análises")
 
-tabs = st.tabs(["Fluxo Mensal", "Categorias", "Cartões", "Investimentos", "Avançado", "Projeção"])
+tabs = st.tabs(["Fluxo Mensal", "Categorias", "Cartões", "Investimentos", "Avançado", "Projeção", "DRE"])
 
 
 def safe_float(v):
@@ -820,3 +821,272 @@ with tabs[5]:
         "Parcelas = já lançadas no sistema · "
         "Contas Fixas = soma das fixas cadastradas (recorrentes)"
     )
+
+# ─── DRE ─────────────────────────────────────────────────────────────────────
+
+with tabs[6]:
+    from io import BytesIO
+    import os as _os
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors as _rl_colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.lib.enums import TA_RIGHT, TA_LEFT, TA_CENTER
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    def _reg_unicode_font():
+        for path in [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+        ]:
+            if _os.path.exists(path):
+                try:
+                    pdfmetrics.registerFont(TTFont("UnicodeF", path))
+                    return "UnicodeF"
+                except Exception:
+                    pass
+        return "Helvetica"
+
+    _BASE_FONT = _reg_unicode_font()
+    _BOLD_FONT = _BASE_FONT + "-Bold" if _BASE_FONT == "Helvetica" else _BASE_FONT
+
+    st.subheader("📋 DRE — Demonstrativo de Resultado Pessoal")
+
+    meses_dre_list = utils.ultimos_meses(24)
+    idx_dre = st.selectbox(
+        "Mês de referência",
+        range(len(meses_dre_list)),
+        format_func=lambda i: utils.formatar_mes(meses_dre_list[i]),
+        index=0,
+        key="dre_mes_sel",
+    )
+    mes_dre = meses_dre_list[idx_dre]
+
+    df_ent_dre = sh.get_entradas(mes_dre)
+    df_gas_dre = sh.get_gastos(mes_dre)
+    df_fix_dre = sh.get_fixas()
+
+    # Receitas
+    rec_por_fonte: dict[str, float] = {}
+    if not df_ent_dre.empty:
+        for _, r in df_ent_dre.iterrows():
+            f = str(r.get("fonte", "Outros") or "Outros")
+            rec_por_fonte[f] = rec_por_fonte.get(f, 0) + safe_float(r.get("valor", 0))
+    total_receitas_dre = sum(rec_por_fonte.values())
+
+    # Despesas
+    desp_por_cat: dict[str, float] = {}
+    if not df_gas_dre.empty:
+        for _, r in df_gas_dre.iterrows():
+            c = str(r.get("categoria", "Outros") or "Outros")
+            desp_por_cat[c] = desp_por_cat.get(c, 0) + safe_float(r.get("valor_parcela", 0))
+    total_despesas_dre = sum(desp_por_cat.values())
+
+    resultado_dre = total_receitas_dre - total_despesas_dre
+    taxa_poup = (resultado_dre / total_receitas_dre * 100) if total_receitas_dre > 0 else 0
+    total_fixas_dre = df_fix_dre["valor_referencia"].apply(safe_float).sum() if not df_fix_dre.empty else 0
+
+    cor_res = "#2ECC71" if resultado_dre >= 0 else "#E74C3C"
+
+    # ── Visual ───────────────────────────────────────────────────────────────
+
+    def _dre_row(label: str, val: float, indent: bool = False, bold: bool = False, pct: float | None = None) -> str:
+        pad = "padding-left:20px;" if indent else ""
+        fw  = "font-weight:bold;" if bold else ""
+        pct_str = f" <span style='color:#888;font-size:0.85em'>({pct:.0f}%)</span>" if pct is not None else ""
+        col = cor_res if (bold and "RESULTADO" in label) else ("inherit")
+        return (
+            f"<div style='display:flex;justify-content:space-between;{pad}{fw}color:{col};"
+            f"padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.04)'>"
+            f"<span>{label}</span>"
+            f"<span>{utils.fmt_brl(val)}{pct_str}</span>"
+            f"</div>"
+        )
+
+    html_dre = "<div style='font-family:monospace;font-size:0.9em;'>"
+
+    # Receitas
+    html_dre += "<div style='background:rgba(46,204,113,0.1);border-radius:8px;padding:10px;margin-bottom:8px'>"
+    html_dre += "<div style='font-weight:bold;color:#2ECC71;margin-bottom:6px;text-transform:uppercase;font-size:0.8em;letter-spacing:1px'>(+) Receitas</div>"
+    if rec_por_fonte:
+        for fonte, val in sorted(rec_por_fonte.items(), key=lambda x: -x[1]):
+            pct_f = val / total_receitas_dre * 100 if total_receitas_dre > 0 else 0
+            html_dre += _dre_row(fonte, val, indent=True, pct=pct_f)
+    else:
+        html_dre += "<div style='color:#888;padding:3px 20px'>Nenhuma receita registrada</div>"
+    html_dre += _dre_row("= TOTAL RECEITAS", total_receitas_dre, bold=True)
+    html_dre += "</div>"
+
+    # Despesas
+    html_dre += "<div style='background:rgba(231,76,60,0.1);border-radius:8px;padding:10px;margin-bottom:8px'>"
+    html_dre += "<div style='font-weight:bold;color:#E74C3C;margin-bottom:6px;text-transform:uppercase;font-size:0.8em;letter-spacing:1px'>(-) Despesas por Categoria</div>"
+    if desp_por_cat:
+        for cat, val in sorted(desp_por_cat.items(), key=lambda x: -x[1]):
+            pct_c = val / total_despesas_dre * 100 if total_despesas_dre > 0 else 0
+            html_dre += _dre_row(cat, val, indent=True, pct=pct_c)
+    else:
+        html_dre += "<div style='color:#888;padding:3px 20px'>Nenhuma despesa registrada</div>"
+    html_dre += _dre_row("= TOTAL DESPESAS", total_despesas_dre, bold=True)
+    html_dre += "</div>"
+
+    # Resultado
+    html_dre += (
+        f"<div style='background:rgba(255,255,255,0.07);border-radius:8px;padding:10px;margin-bottom:8px;"
+        f"border:1px solid {cor_res}40'>"
+        f"<div style='display:flex;justify-content:space-between;font-weight:bold;font-size:1.1em;color:{cor_res}'>"
+        f"<span>= RESULTADO DO MÊS</span><span>{utils.fmt_brl(resultado_dre)}</span></div>"
+        f"<div style='color:#888;font-size:0.85em;margin-top:4px'>Taxa de poupança: {taxa_poup:.1f}%</div>"
+        f"</div>"
+    )
+
+    # Fixas referência
+    if not df_fix_dre.empty:
+        html_dre += "<div style='background:rgba(52,152,219,0.08);border-radius:8px;padding:10px'>"
+        html_dre += "<div style='font-weight:bold;color:#3498DB;margin-bottom:6px;font-size:0.8em;text-transform:uppercase;letter-spacing:1px'>ℹ Contas Fixas Cadastradas (referência)</div>"
+        for _, fr in df_fix_dre.iterrows():
+            html_dre += _dre_row(str(fr["nome"]), safe_float(fr["valor_referencia"]), indent=True)
+        html_dre += _dre_row("Total mensal (referência)", total_fixas_dre, bold=True)
+        html_dre += "</div>"
+
+    html_dre += "</div>"
+    st.markdown(html_dre, unsafe_allow_html=True)
+
+    st.markdown("---")
+    k1, k2, k3, k4 = st.columns(4)
+    with k1:
+        st.metric("💰 Receitas", utils.fmt_brl(total_receitas_dre))
+    with k2:
+        st.metric("💸 Despesas", utils.fmt_brl(total_despesas_dre))
+    with k3:
+        delta_label = f"{taxa_poup:.1f}% poupado" if resultado_dre >= 0 else f"{abs(taxa_poup):.1f}% acima da renda"
+        st.metric("📊 Resultado", utils.fmt_brl(resultado_dre), delta=delta_label)
+    with k4:
+        st.metric("📋 Fixas ref.", utils.fmt_brl(total_fixas_dre), help="Referência das contas fixas cadastradas")
+
+    # ── PDF ──────────────────────────────────────────────────────────────────
+
+    def _gerar_pdf_dre() -> bytes:
+        buf = BytesIO()
+        doc = SimpleDocTemplate(
+            buf, pagesize=A4,
+            rightMargin=2 * cm, leftMargin=2 * cm,
+            topMargin=2 * cm, bottomMargin=2 * cm,
+        )
+        styles = getSampleStyleSheet()
+        title_s = ParagraphStyle("t", parent=styles["Heading1"], fontSize=16,
+                                 textColor=_rl_colors.HexColor("#2C3E50"), spaceAfter=2,
+                                 fontName=_BOLD_FONT)
+        sub_s = ParagraphStyle("s", parent=styles["Normal"], fontSize=10,
+                               textColor=_rl_colors.HexColor("#7F8C8D"), spaceAfter=12,
+                               fontName=_BASE_FONT)
+        story: list = [
+            Paragraph("FinTrack — DRE Pessoal", title_s),
+            Paragraph(utils.formatar_mes(mes_dre), sub_s),
+            Spacer(1, 0.3 * cm),
+        ]
+
+        def _make_table(rows, top_bg, total_bg, line_color):
+            t = Table(rows, colWidths=[12 * cm, 4 * cm])
+            ts = TableStyle([
+                ("FONTNAME", (0, 0), (-1, -1), _BASE_FONT),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+                ("FONTNAME", (0, 0), (-1, 0), _BOLD_FONT),
+                ("FONTNAME", (0, -1), (-1, -1), _BOLD_FONT),
+                ("BACKGROUND", (0, 0), (-1, 0), top_bg),
+                ("BACKGROUND", (0, -1), (-1, -1), total_bg),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("LINEBELOW", (0, -1), (-1, -1), 1, line_color),
+            ])
+            t.setStyle(ts)
+            return t
+
+        # Receitas table
+        rec_rows = [["(+) RECEITAS", ""]]
+        rec_rows += [[f"  {f}", utils.fmt_brl(v)]
+                     for f, v in sorted(rec_por_fonte.items(), key=lambda x: -x[1])]
+        rec_rows.append(["= TOTAL RECEITAS", utils.fmt_brl(total_receitas_dre)])
+        story.append(_make_table(rec_rows,
+                                 _rl_colors.HexColor("#D5F5E3"),
+                                 _rl_colors.HexColor("#A9DFBF"),
+                                 _rl_colors.HexColor("#27AE60")))
+        story.append(Spacer(1, 0.3 * cm))
+
+        # Despesas table
+        desp_rows = [["(-) DESPESAS", ""]]
+        desp_rows += [[f"  {c}", utils.fmt_brl(v)]
+                      for c, v in sorted(desp_por_cat.items(), key=lambda x: -x[1])]
+        desp_rows.append(["= TOTAL DESPESAS", utils.fmt_brl(total_despesas_dre)])
+        story.append(_make_table(desp_rows,
+                                 _rl_colors.HexColor("#FADBD8"),
+                                 _rl_colors.HexColor("#F1948A"),
+                                 _rl_colors.HexColor("#E74C3C")))
+        story.append(Spacer(1, 0.3 * cm))
+
+        # Resultado table
+        cor_r = _rl_colors.HexColor("#27AE60") if resultado_dre >= 0 else _rl_colors.HexColor("#E74C3C")
+        res_rows = [
+            ["= RESULTADO DO MES", utils.fmt_brl(resultado_dre)],
+            [f"  Taxa de poupanca", f"{taxa_poup:.1f}%"],
+        ]
+        t_res = Table(res_rows, colWidths=[12 * cm, 4 * cm])
+        t_res.setStyle(TableStyle([
+            ("FONTNAME", (0, 0), (-1, 0), _BOLD_FONT),
+            ("FONTNAME", (0, 1), (-1, 1), _BASE_FONT),
+            ("FONTSIZE", (0, 0), (-1, 0), 10),
+            ("FONTSIZE", (0, 1), (-1, 1), 9),
+            ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+            ("TEXTCOLOR", (0, 0), (-1, 0), cor_r),
+            ("TEXTCOLOR", (1, 0), (1, 0), cor_r),
+            ("TEXTCOLOR", (0, 1), (-1, 1), _rl_colors.HexColor("#7F8C8D")),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("LINEABOVE", (0, 0), (-1, 0), 1.5, cor_r),
+            ("LINEBELOW", (0, 0), (-1, 0), 1.5, cor_r),
+        ]))
+        story.append(t_res)
+        story.append(Spacer(1, 0.5 * cm))
+
+        # Fixas referência
+        if not df_fix_dre.empty:
+            fix_rows = [["CONTAS FIXAS (referencia)", ""]]
+            fix_rows += [[f"  {fr['nome']}", utils.fmt_brl(safe_float(fr["valor_referencia"]))]
+                         for _, fr in df_fix_dre.iterrows()]
+            fix_rows.append(["  Total mensal", utils.fmt_brl(total_fixas_dre)])
+            story.append(_make_table(fix_rows,
+                                     _rl_colors.HexColor("#EAF2FF"),
+                                     _rl_colors.HexColor("#D6EAF8"),
+                                     _rl_colors.HexColor("#2E86C1")))
+
+        # Footer
+        story.append(Spacer(1, 1 * cm))
+        footer_s = ParagraphStyle("f", parent=styles["Normal"], fontSize=7,
+                                  textColor=_rl_colors.HexColor("#BDC3C7"),
+                                  fontName=_BASE_FONT)
+        story.append(Paragraph(
+            f"Gerado em {_dt.now().strftime('%d/%m/%Y as %H:%M')} — FinTrack",
+            footer_s,
+        ))
+
+        doc.build(story)
+        buf.seek(0)
+        return buf.getvalue()
+
+    col_dl1, col_dl2 = st.columns([3, 1])
+    with col_dl1:
+        st.markdown(f"**Exportar DRE de {utils.formatar_mes(mes_dre)} em PDF**")
+        st.caption("Documento com receitas, despesas por categoria, resultado e contas fixas de referência.")
+    with col_dl2:
+        pdf_bytes = _gerar_pdf_dre()
+        st.download_button(
+            "📄 Baixar PDF",
+            data=pdf_bytes,
+            file_name=f"DRE_{mes_dre}.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
