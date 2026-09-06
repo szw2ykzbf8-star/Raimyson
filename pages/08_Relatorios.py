@@ -112,11 +112,12 @@ with tabs[0]:
     ) if any(not sh.get_gastos(m).empty for m in meses_per) else pd.DataFrame()
 
     if not todos_gas_per.empty:
+        todos_gas_per["valor_parcela"] = todos_gas_per["valor_parcela"].astype(float)
         top = todos_gas_per.nlargest(10, "valor_parcela")[
             ["data_compra", "descricao", "categoria", "forma_pagamento", "valor_parcela"]
         ].copy()
         top["data_compra"] = top["data_compra"].apply(utils.fmt_data)
-        top["valor_parcela"] = top["valor_parcela"].astype(float).apply(utils.fmt_brl)
+        top["valor_parcela"] = top["valor_parcela"].apply(utils.fmt_brl)
         top["descricao"] = top["descricao"].fillna("—")
         top.columns = ["Data", "Descrição", "Categoria", "Pagamento", "Valor"]
         st.dataframe(top, use_container_width=True, hide_index=True)
