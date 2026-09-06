@@ -43,6 +43,9 @@ def ensure_sheet(name: str, headers: list) -> None:
         existing = ws.row_values(1)
         missing = [h for h in headers if h not in existing]
         if missing:
+            new_total_cols = len(existing) + len(missing)
+            if ws.col_count < new_total_cols:
+                ws.resize(rows=ws.row_count, cols=new_total_cols)
             next_col = len(existing) + 1
             for i, h in enumerate(missing):
                 ws.update_cell(1, next_col + i, h)
