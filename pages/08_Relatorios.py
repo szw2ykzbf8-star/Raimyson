@@ -12,7 +12,6 @@ st.title("📉 Relatórios & Análises")
 
 tabs = st.tabs(["Fluxo Mensal", "Categorias", "Cartões", "Investimentos", "Avançado"])
 
-# ─── Helpers ─────────────────────────────────────────────────────────────────
 
 def safe_float(v):
     try:
@@ -29,16 +28,38 @@ def build_monthly_data(n_meses: int = 12):
         gas = sh.get_gastos(m)
         total_e = ent["valor"].apply(safe_float).sum() if not ent.empty else 0
         total_g = gas["valor_parcela"].apply(safe_float).sum() if not gas.empty else 0
-        rows.append({"mes": m, "label": utils.formatar_mes(m)[:7],
+        rows.append({"mes": m, "label": utils.formatar_mes(m),
                      "entradas": total_e, "gastos": total_g, "saldo": total_e - total_g})
     return pd.DataFrame(rows)
 
 
-# ─── Fluxo Mensal ────────────────────────────────────────────────────────────
+# ─── Fluxo Mensal ─────────────────────────────────────────────────────────────
 
 with tabs[0]:
     n = st.slider("Últimos N meses", 3, 24, 12, key="sl_fluxo")
     df_m = build_monthly_data(n)
+
+    # KPIs do período
+    total_e_per = df_m["entradas"].sum()
+    total_g_per = df_m["gastos"].sum()
+    media_e = df_m["entradas"].mean()
+    media_g = df_m["gastos"].mean()
+    taxa_poup_per = ((total_e_per - total_g_per) / total_e_per * 100) if total_e_per > 0 else 0
+
+    k1, k2, k3, k4 = st.columns(4)
+    with k1:
+        st.metric("Total Entradas (período)", utils.fmt_brl(total_e_per),
+                  help=f"Média mensal: {utils.fmt_brl(media_e)}")
+    with k2:
+        st.metric("Total Gastos (período)", utils.fmt_brl(total_g_per),
+                  help=f"Média mensal: {utils.fmt_brl(media_g)}")
+    with k3:
+        st.metric("Resultado (período)", utils.fmt_brl(total_e_per - total_g_per))
+    with k4:
+        st.metric("Taxa de Poupança", f"{taxa_poup_per:.1f}%",
+                  help="(Total entradas − Total gastos) ÷ Total entradas × 100")
+
+    st.markdown("")
 
     # Barras: entradas vs gastos
     fig1 = go.Figure()
@@ -47,31 +68,63 @@ with tabs[0]:
     fig1.add_trace(go.Bar(x=df_m["label"], y=df_m["gastos"],
                            name="Gastos", marker_color="#E74C3C"))
     fig1.update_layout(barmode="group", title="Entradas × Gastos por Mês",
-                       template="plotly_dark", xaxis_title="Mês", yaxis_title="R$")
+                       template="plotly_dark", xaxis_title="Mês", yaxis_title="R$",
+                       hovermode="x unified")
     st.plotly_chart(fig1, use_container_width=True)
 
-    # Saldo acumulado
+    # Saldo mensal + acumulado
     df_m["saldo_acum"] = df_m["saldo"].cumsum()
+    df_m["taxa_poup"] = df_m.apply(
+        lambda r: (r["saldo"] / r["entradas"] * 100) if r["entradas"] > 0 else 0, axis=1)
+
     fig2 = go.Figure()
-    fig2.add_trace(go.Scatter(x=df_m["label"], y=df_m["saldo"],
-                               name="Saldo mensal", mode="lines+markers",
-                               line=dict(color="#3498DB")))
+    fig2.add_trace(go.Bar(x=df_m["label"], y=df_m["saldo"], name="Resultado do mês",
+                           marker_color=["#2ECC71" if v >= 0 else "#E74C3C" for v in df_m["saldo"]]))
     fig2.add_trace(go.Scatter(x=df_m["label"], y=df_m["saldo_acum"],
-                               name="Saldo acumulado", mode="lines",
-                               line=dict(color="#F39C12", dash="dash")))
-    fig2.update_layout(title="Evolução do Saldo", template="plotly_dark",
-                       xaxis_title="Mês", yaxis_title="R$")
+                               name="Acumulado", mode="lines+markers",
+                               line=dict(color="#F39C12", width=2), yaxis="y2"))
+    fig2.update_layout(
+        title="Resultado Mensal & Acumulado",
+        template="plotly_dark",
+        xaxis_title="Mês",
+        yaxis=dict(title="Resultado (R$)"),
+        yaxis2=dict(title="Acumulado (R$)", overlaying="y", side="right"),
+        hovermode="x unified",
+    )
     st.plotly_chart(fig2, use_container_width=True)
 
-    # Tabela resumo
-    df_show = df_m[["label", "entradas", "gastos", "saldo"]].copy()
+    # Tabela resumo com taxa de poupança
+    df_show = df_m[["label", "entradas", "gastos", "saldo", "taxa_poup"]].copy()
     df_show["entradas"] = df_show["entradas"].apply(utils.fmt_brl)
     df_show["gastos"] = df_show["gastos"].apply(utils.fmt_brl)
     df_show["saldo"] = df_show["saldo"].apply(utils.fmt_brl)
-    df_show.columns = ["Mês", "Entradas", "Gastos", "Saldo"]
+    df_show["taxa_poup"] = df_show["taxa_poup"].apply(lambda x: f"{x:.1f}%")
+    df_show.columns = ["Mês", "Entradas", "Gastos", "Resultado", "Taxa de Poupança"]
     st.dataframe(df_show, use_container_width=True, hide_index=True)
 
-# ─── Categorias ──────────────────────────────────────────────────────────────
+    # Top 10 maiores gastos individuais do período
+    st.markdown("---")
+    st.subheader("🔝 Maiores Gastos do Período")
+    meses_per = df_m["mes"].tolist()
+    todos_gas_per = pd.concat(
+        [sh.get_gastos(m) for m in meses_per if not sh.get_gastos(m).empty],
+        ignore_index=True
+    ) if any(not sh.get_gastos(m).empty for m in meses_per) else pd.DataFrame()
+
+    if not todos_gas_per.empty:
+        top = todos_gas_per.nlargest(10, "valor_parcela")[
+            ["data_compra", "descricao", "categoria", "forma_pagamento", "valor_parcela"]
+        ].copy()
+        top["data_compra"] = top["data_compra"].apply(utils.fmt_data)
+        top["valor_parcela"] = top["valor_parcela"].astype(float).apply(utils.fmt_brl)
+        top["descricao"] = top["descricao"].fillna("—")
+        top.columns = ["Data", "Descrição", "Categoria", "Pagamento", "Valor"]
+        st.dataframe(top, use_container_width=True, hide_index=True)
+    else:
+        st.caption("Nenhum gasto no período.")
+
+
+# ─── Categorias ───────────────────────────────────────────────────────────────
 
 with tabs[1]:
     mes_sel = st.session_state.get("mes_atual", utils.mes_atual())
@@ -90,19 +143,36 @@ with tabs[1]:
                     unsafe_allow_html=True)
 
     df_cat_mes = sh.get_gastos(mes_cat)
+    ent_cat_mes = sh.get_entradas(mes_cat)
+    total_renda = ent_cat_mes["valor"].apply(safe_float).sum() if not ent_cat_mes.empty else 0
+
     n_comp = st.slider("Comparar com últimos N meses", 1, 12, 3, key="sl_cat")
     meses_comp = utils.ultimos_meses(n_comp)
 
     if not df_cat_mes.empty:
-        # Pizza: distribuição do mês
         cat_group = df_cat_mes.groupby("categoria")["valor_parcela"].apply(
             lambda s: s.apply(safe_float).sum()).reset_index()
         cat_group.columns = ["Categoria", "Valor"]
-        fig_pizza = px.pie(cat_group, values="Valor", names="Categoria",
-                           title=f"Gastos por Categoria — {utils.formatar_mes(mes_cat)}",
-                           hole=0.4)
-        fig_pizza.update_layout(template="plotly_dark")
-        st.plotly_chart(fig_pizza, use_container_width=True)
+        cat_group = cat_group.sort_values("Valor", ascending=False)
+        if total_renda > 0:
+            cat_group["% da Renda"] = (cat_group["Valor"] / total_renda * 100).round(1)
+
+        col_a, col_b = st.columns(2)
+        with col_a:
+            fig_pizza = px.pie(cat_group, values="Valor", names="Categoria",
+                               title=f"Distribuição por Categoria",
+                               hole=0.4, template="plotly_dark")
+            fig_pizza.update_traces(textinfo="label+percent", hovertemplate="%{label}: R$ %{value:,.2f}")
+            st.plotly_chart(fig_pizza, use_container_width=True)
+
+        with col_b:
+            # Tabela com % da renda
+            tbl = cat_group.copy()
+            tbl["Valor"] = tbl["Valor"].apply(utils.fmt_brl)
+            if "% da Renda" in tbl.columns:
+                tbl["% da Renda"] = tbl["% da Renda"].apply(lambda x: f"{x:.1f}%")
+            st.markdown(f"**Renda do mês: {utils.fmt_brl(total_renda)}**")
+            st.dataframe(tbl, use_container_width=True, hide_index=True)
 
         # Comparativo: mês atual vs média dos últimos N
         gastos_hist = []
@@ -116,7 +186,7 @@ with tabs[1]:
                 lambda s: s.apply(safe_float).mean()).reset_index()
             media_cat.columns = ["Categoria", "Média"]
 
-            df_comp_cat = cat_group.merge(media_cat, on="Categoria", how="outer").fillna(0)
+            df_comp_cat = cat_group[["Categoria", "Valor"]].merge(media_cat, on="Categoria", how="outer").fillna(0)
             fig_comp_cat = go.Figure()
             fig_comp_cat.add_trace(go.Bar(x=df_comp_cat["Categoria"], y=df_comp_cat["Valor"],
                                            name=utils.formatar_mes(mes_cat),
@@ -126,12 +196,13 @@ with tabs[1]:
                                            marker_color="#3498DB"))
             fig_comp_cat.update_layout(barmode="group",
                                         title="Mês Atual × Média Histórica por Categoria",
-                                        template="plotly_dark")
+                                        template="plotly_dark", hovermode="x unified")
             st.plotly_chart(fig_comp_cat, use_container_width=True)
     else:
         st.info("Nenhum gasto neste mês.")
 
-# ─── Cartões ─────────────────────────────────────────────────────────────────
+
+# ─── Cartões ──────────────────────────────────────────────────────────────────
 
 with tabs[2]:
     cartoes_df = sh.get_cartoes()
@@ -140,15 +211,7 @@ with tabs[2]:
     if cartoes_df.empty or todos_gastos.empty:
         st.info("Nenhum dado disponível.")
     else:
-        # Comprometimento por cartão nos próximos 12 meses
-        proximos = [utils.mes_atual()] + [
-            utils.proximo_mes(utils.mes_str(
-                int(utils.mes_atual()[:4]),
-                int(utils.mes_atual()[5:7])
-            ) if i == 0 else "")
-            for i in range(11)
-        ]
-        # Gera lista de próximos 12 meses
+        # Próximos 12 meses
         proximos_12 = []
         m = utils.mes_atual()
         for _ in range(12):
@@ -160,16 +223,23 @@ with tabs[2]:
             mask = (todos_gastos["conta_cartao"] == cartao) & \
                    (todos_gastos["forma_pagamento"] == "Crédito")
             df_c = todos_gastos[mask]
-            for m in proximos_12:
-                val = df_c[df_c["mes_referencia"] == m]["valor_parcela"].apply(safe_float).sum()
-                rows_comp.append({"Cartão": cartao, "Mês": m, "Valor": val})
+            for mes_f in proximos_12:
+                val = df_c[df_c["mes_referencia"] == mes_f]["valor_parcela"].apply(safe_float).sum()
+                rows_comp.append({"Cartão": cartao, "Mês": utils.formatar_mes(mes_f), "Valor": val})
 
         df_faturas = pd.DataFrame(rows_comp)
         if not df_faturas.empty and df_faturas["Valor"].sum() > 0:
             fig_fat = px.bar(df_faturas, x="Mês", y="Valor", color="Cartão",
                              title="Faturas por Cartão — Próximos 12 Meses",
-                             template="plotly_dark")
+                             template="plotly_dark", barmode="stack",
+                             hover_data={"Valor": ":.2f"})
             st.plotly_chart(fig_fat, use_container_width=True)
+
+            # Tabela resumo por cartão
+            resumo = df_faturas.groupby("Cartão")["Valor"].sum().reset_index()
+            resumo["Valor"] = resumo["Valor"].apply(utils.fmt_brl)
+            resumo.columns = ["Cartão", "Total Comprometido (12 meses)"]
+            st.dataframe(resumo, use_container_width=True, hide_index=True)
         else:
             st.info("Nenhuma parcela futura registrada.")
 
@@ -178,15 +248,16 @@ with tabs[2]:
         if not gastos_por_cartao.empty:
             gc = gastos_por_cartao.groupby("conta_cartao")["valor_parcela"].apply(
                 lambda s: s.apply(safe_float).sum()).reset_index()
-            gc.columns = ["Cartão", "Total Histórico"]
-            fig_gc = px.bar(gc, x="Cartão", y="Total Histórico",
-                            text=gc["Total Histórico"].apply(utils.fmt_brl),
+            gc.columns = ["Cartão", "Total"]
+            fig_gc = px.bar(gc, x="Cartão", y="Total",
+                            text=gc["Total"].apply(utils.fmt_brl),
                             title="Total Gasto por Cartão (Histórico)",
                             template="plotly_dark", color="Cartão")
             fig_gc.update_traces(textposition="outside")
             st.plotly_chart(fig_gc, use_container_width=True)
 
-# ─── Investimentos ────────────────────────────────────────────────────────────
+
+# ─── Investimentos ─────────────────────────────────────────────────────────────
 
 with tabs[3]:
     df_inv = sh.get_investimentos("ATIVO")
@@ -209,28 +280,106 @@ with tabs[3]:
             })
         df_inv_proc = pd.DataFrame(dados_inv)
 
-        # Patrimônio por tipo
-        fig_tipo = px.treemap(df_inv_proc, path=["Tipo", "Nome"],
-                              values="Atual", title="Distribuição do Patrimônio",
-                              template="plotly_dark")
-        st.plotly_chart(fig_tipo, use_container_width=True)
+        total_aplic = df_inv_proc["Aplicado"].sum()
+        total_atual = df_inv_proc["Atual"].sum()
+        total_rend = df_inv_proc["Rendimento"].sum()
 
-        # Rentabilidade comparada
-        fig_rent = px.bar(df_inv_proc, x="Nome", y="Rent%", color="Tipo",
-                          title="Rentabilidade por Investimento (%)",
-                          text=df_inv_proc["Rent%"].apply(lambda x: f"{x:.2f}%"),
-                          template="plotly_dark")
-        fig_rent.update_traces(textposition="outside")
-        st.plotly_chart(fig_rent, use_container_width=True)
+        k1, k2, k3 = st.columns(3)
+        with k1:
+            st.metric("Total Aplicado", utils.fmt_brl(total_aplic))
+        with k2:
+            st.metric("Valor Atual", utils.fmt_brl(total_atual),
+                      delta=f"+{utils.fmt_brl(total_rend)}")
+        with k3:
+            rent_total = (total_rend / total_aplic * 100) if total_aplic > 0 else 0
+            st.metric("Rentabilidade Total", f"{rent_total:.2f}%")
+
+        col_a, col_b = st.columns(2)
+        with col_a:
+            fig_tipo = px.pie(df_inv_proc, values="Atual", names="Nome",
+                              title="Composição do Portfólio (valor atual)",
+                              hole=0.4, template="plotly_dark")
+            st.plotly_chart(fig_tipo, use_container_width=True)
+        with col_b:
+            fig_rent = px.bar(df_inv_proc, x="Nome", y="Rent%", color="Tipo",
+                              title="Rentabilidade por Investimento (%)",
+                              text=df_inv_proc["Rent%"].apply(lambda x: f"{x:.2f}%"),
+                              template="plotly_dark")
+            fig_rent.update_traces(textposition="outside")
+            st.plotly_chart(fig_rent, use_container_width=True)
+
+        # Tabela detalhada
+        tbl_inv = df_inv_proc.copy()
+        tbl_inv["Aplicado"] = tbl_inv["Aplicado"].apply(utils.fmt_brl)
+        tbl_inv["Atual"] = tbl_inv["Atual"].apply(utils.fmt_brl)
+        tbl_inv["Rendimento"] = tbl_inv["Rendimento"].apply(utils.fmt_brl)
+        tbl_inv["Rent%"] = tbl_inv["Rent%"].apply(lambda x: f"{x:.2f}%")
+        st.dataframe(tbl_inv, use_container_width=True, hide_index=True)
     else:
         st.info("Nenhum investimento ativo.")
 
-# ─── Avançado ────────────────────────────────────────────────────────────────
+    if not df_inv_ret.empty:
+        with st.expander("📋 Investimentos Encerrados"):
+            for _, row in df_inv_ret.iterrows():
+                if row["valor_retirado"]:
+                    lucro = float(row["valor_retirado"]) - float(row["valor_aplicado"])
+                    cor = "🟢" if lucro >= 0 else "🔴"
+                    st.write(f"{cor} **{row['nome']}**: {utils.fmt_brl(float(row['valor_aplicado']))} → "
+                             f"{utils.fmt_brl(float(row['valor_retirado']))} "
+                             f"({'lucro' if lucro >= 0 else 'prejuízo'}: {utils.fmt_brl(abs(lucro))})")
+
+
+# ─── Avançado ─────────────────────────────────────────────────────────────────
 
 with tabs[4]:
     st.subheader("🔬 Análises Avançadas")
-    n_adv = st.slider("Análisar últimos N meses", 3, 24, 6, key="sl_adv")
+    n_adv = st.slider("Analisar últimos N meses", 3, 24, 6, key="sl_adv")
     df_adv = build_monthly_data(n_adv)
+
+    # Patrimônio líquido
+    st.subheader("💎 Patrimônio Líquido")
+    contas_df_adv = sh.get_contas()
+    todas_e = sh.get_entradas()
+    todos_g = sh.get_gastos()
+    todas_t = sh.get_transferencias()
+    df_inv_adv = sh.get_investimentos("ATIVO")
+    df_div_adv = sh.get_dividas()
+
+    saldo_contas = sum(
+        utils.calcular_saldo_conta(row["nome"], todas_e, todos_g, todas_t, contas_df_adv)
+        for _, row in contas_df_adv.iterrows()
+    ) if not contas_df_adv.empty else 0
+
+    valor_invest = 0.0
+    if not df_inv_adv.empty:
+        hoje_adv = __import__("datetime").date.today().isoformat()
+        for _, row in df_inv_adv.iterrows():
+            res = utils.calcular_rendimento(
+                float(row["valor_aplicado"]), row["taxa_tipo"],
+                float(row["taxa_valor"]), row["data_aplicacao"], hoje_adv)
+            valor_invest += res["valor_final"]
+
+    total_dividas = 0.0
+    if not df_div_adv.empty:
+        for _, row in df_div_adv.iterrows():
+            pagas = int(row["num_parcelas_pagas"])
+            total = int(row["num_parcelas"])
+            total_dividas += float(row["valor_parcela"]) * (total - pagas)
+
+    patrimonio_liq = saldo_contas + valor_invest - total_dividas
+
+    p1, p2, p3, p4 = st.columns(4)
+    with p1:
+        st.metric("💰 Saldo em Contas", utils.fmt_brl(saldo_contas))
+    with p2:
+        st.metric("📈 Investimentos", utils.fmt_brl(valor_invest))
+    with p3:
+        st.metric("🔴 Dívidas Restantes", utils.fmt_brl(total_dividas))
+    with p4:
+        st.metric("💎 Patrimônio Líquido", utils.fmt_brl(patrimonio_liq),
+                  help="Saldo em Contas + Investimentos − Dívidas restantes")
+
+    st.markdown("---")
 
     if len(df_adv) < 3:
         st.info("Acumule pelo menos 3 meses de dados para análises avançadas.")
@@ -239,12 +388,20 @@ with tabs[4]:
         st.subheader("📊 Previsão de Gastos (Próximo Mês)")
         media_gastos = df_adv["gastos"].mean()
         std_gastos = df_adv["gastos"].std()
-        st.metric("Previsão (média histórica)", utils.fmt_brl(media_gastos))
-        st.caption(f"Desvio padrão: {utils.fmt_brl(std_gastos)}")
-        st.info(f"Intervalo provável: {utils.fmt_brl(max(0, media_gastos - std_gastos))} "
-                f"– {utils.fmt_brl(media_gastos + std_gastos)}")
+        tendencia = df_adv["gastos"].iloc[-1] - df_adv["gastos"].iloc[0]
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.metric("Previsão (média histórica)", utils.fmt_brl(media_gastos))
+        with c2:
+            st.metric("Intervalo provável",
+                      f"{utils.fmt_brl(max(0, media_gastos - std_gastos))} – {utils.fmt_brl(media_gastos + std_gastos)}")
+        with c3:
+            st.metric("Tendência (período)", utils.fmt_brl(tendencia),
+                      delta=f"{'↑ aumentando' if tendencia > 0 else '↓ reduzindo'}",
+                      delta_color="inverse")
 
-        # Heatmap: gastos por categoria × mês
+        # Heatmap
+        st.markdown("---")
         st.subheader("🗓️ Heatmap de Gastos por Categoria")
         meses_heat = utils.ultimos_meses(n_adv)
         cats_df = sh.get_categorias()
@@ -261,19 +418,23 @@ with tabs[4]:
                 heat_data[m] = {c: gc.get(c, 0) for c in cats}
 
         df_heat = pd.DataFrame(heat_data, index=cats).T
-        if not df_heat.empty:
+        if not df_heat.empty and df_heat.values.sum() > 0:
             fig_heat = px.imshow(df_heat.values,
-                                  x=cats, y=[utils.formatar_mes(m)[:7] for m in meses_heat],
+                                  x=cats,
+                                  y=[utils.formatar_mes(m) for m in meses_heat],
                                   color_continuous_scale="RdYlGn_r",
                                   title="Intensidade de Gasto por Categoria (R$)",
-                                  aspect="auto")
+                                  aspect="auto",
+                                  text_auto=".0f")
             fig_heat.update_layout(template="plotly_dark")
             st.plotly_chart(fig_heat, use_container_width=True)
 
         # Anomalias
+        st.markdown("---")
         st.subheader("🚨 Detecção de Anomalias")
-        mes_atual = utils.mes_atual()
-        df_atual = sh.get_gastos(mes_atual)
+        mes_atual_adv = utils.mes_atual()
+        df_atual = sh.get_gastos(mes_atual_adv)
+        anomalias_encontradas = False
         if not df_atual.empty:
             for cat in cats:
                 vals_hist = []
@@ -285,24 +446,25 @@ with tabs[4]:
                 if vals_hist:
                     media_h = np.mean(vals_hist)
                     val_atual = df_atual[df_atual["categoria"] == cat]["valor_parcela"].apply(safe_float).sum()
-                    if media_h > 0 and val_atual > media_h * 2:
+                    if media_h > 0 and val_atual > media_h * 1.5:
                         multiplo = val_atual / media_h
                         st.warning(f"⚠️ **{cat}**: {utils.fmt_brl(val_atual)} "
                                    f"({multiplo:.1f}× a média de {utils.fmt_brl(media_h)})")
-        else:
-            st.info("Nenhum gasto no mês atual para análise.")
+                        anomalias_encontradas = True
+        if not anomalias_encontradas:
+            st.success("✅ Nenhuma anomalia detectada nos gastos do mês atual.")
 
-        # Sankey: fluxo financeiro
+        # Sankey
+        st.markdown("---")
         st.subheader("🌊 Fluxo Financeiro (Sankey)")
-        mes_sankey = mes_atual
-        df_ent_s = sh.get_entradas(mes_sankey)
-        df_gas_s = sh.get_gastos(mes_sankey)
+        df_ent_s = sh.get_entradas(mes_atual_adv)
+        df_gas_s = sh.get_gastos(mes_atual_adv)
 
         if not df_ent_s.empty and not df_gas_s.empty:
             fontes_sankey = df_ent_s["fonte"].unique().tolist()
             cats_sankey = df_gas_s["categoria"].unique().tolist()
             nodes = fontes_sankey + ["Renda Total"] + cats_sankey
-            ni = {n: i for i, n in enumerate(nodes)}
+            ni = {nd: i for i, nd in enumerate(nodes)}
 
             sources, targets, values = [], [], []
             for fonte in fontes_sankey:
@@ -313,9 +475,13 @@ with tabs[4]:
                 sources.append(ni["Renda Total"]); targets.append(ni[cat]); values.append(val)
 
             fig_sk = go.Figure(go.Sankey(
-                node=dict(label=nodes, color=["#2ECC71"]*len(fontes_sankey) +
-                          ["#F39C12"] + ["#E74C3C"]*len(cats_sankey)),
-                link=dict(source=sources, target=targets, value=values)
+                node=dict(label=nodes,
+                          color=["#2ECC71"] * len(fontes_sankey) + ["#F39C12"] + ["#E74C3C"] * len(cats_sankey)),
+                link=dict(source=sources, target=targets, value=values,
+                          color="rgba(255,255,255,0.1)")
             ))
-            fig_sk.update_layout(title="Fluxo Financeiro do Mês", template="plotly_dark")
+            fig_sk.update_layout(title=f"Fluxo Financeiro — {utils.formatar_mes(mes_atual_adv)}",
+                                  template="plotly_dark")
             st.plotly_chart(fig_sk, use_container_width=True)
+        else:
+            st.info("Lance entradas e gastos no mês atual para ver o fluxo Sankey.")

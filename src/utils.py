@@ -112,7 +112,9 @@ def calcular_saldo_conta(conta_nome: str, entradas_df: pd.DataFrame,
     saidas_debito = 0.0
     if not gastos_df.empty and "conta_cartao" in gastos_df.columns:
         mask = (gastos_df["conta_cartao"] == conta_nome) & \
-               (gastos_df["forma_pagamento"].isin(["Pix", "Débito", "Dinheiro"]))
+               (gastos_df["forma_pagamento"].isin(
+                   ["Pix", "Débito", "Débito (Cartão)", "Débito em Conta", "Dinheiro", "Boleto"]
+               ))
         saidas_debito = gastos_df[mask]["valor_parcela"].astype(float).sum()
 
     saidas_transf = 0.0
