@@ -23,6 +23,7 @@ SHEETS = {
     "dividas":       "dividas",
     "pgtos_divida":  "pagamentos_divida",
     "investimentos": "investimentos",
+    "criptos":       "criptos",
     "entradas":      "entradas",
     "gastos":        "gastos",
     "transferencias":"transferencias",

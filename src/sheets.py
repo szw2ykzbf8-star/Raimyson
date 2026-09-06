@@ -338,6 +338,44 @@ def delete_investimento(rid: str):
     invalidate("investimentos")
 
 
+# ─── Criptos ─────────────────────────────────────────────────────────────────
+
+
+def get_criptos(status: str = None) -> pd.DataFrame:
+    df = get_df("criptos")
+    if df.empty:
+        return df
+    if status:
+        df = df[df["status"] == status]
+    return df
+
+
+def add_cripto(moeda: str, simbolo: str, quantidade: float, preco_compra_brl: float,
+               data_compra: str, exchange: str, conta_origem: str) -> str:
+    ws  = _sheet(SHEETS["criptos"])
+    rid = new_id()
+    ws.append_row([rid, moeda, simbolo, str(quantidade), str(preco_compra_brl),
+                   data_compra, exchange, conta_origem, "", "", "ATIVO", _now()])
+    invalidate("criptos")
+    return rid
+
+
+def vender_cripto(rid: str, preco_venda_brl: float, data_venda: str):
+    ws      = _sheet(SHEETS["criptos"])
+    row_num = _find_row(ws, rid)
+    ws.update_cell(row_num, 9,  str(preco_venda_brl))
+    ws.update_cell(row_num, 10, data_venda)
+    ws.update_cell(row_num, 11, "VENDIDO")
+    invalidate("criptos")
+
+
+def delete_cripto(rid: str):
+    ws      = _sheet(SHEETS["criptos"])
+    row_num = _find_row(ws, rid)
+    ws.update_cell(row_num, 11, "EXCLUIDO")
+    invalidate("criptos")
+
+
 # ─── Entradas ────────────────────────────────────────────────────────────────
 
 
