@@ -392,7 +392,7 @@ pg = st.navigation(
         "Patrimônio": [
             st.Page("pages/08_Contas.py",          title="Contas Bancárias", icon="🏦"),
             st.Page("pages/09_Investimentos.py",   title="Investimentos",    icon="📈"),
-            st.Page("pages/10_Criptos.py",         title="Criptomoedas",     icon="₿"),
+            st.Page("pages/10_Criptos.py",         title="Criptomoedas",     icon="🪙"),
         ],
         "Análises": [
             st.Page("pages/11_Relatorios.py",      title="Relatórios",     icon="📊"),
