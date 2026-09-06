@@ -304,6 +304,100 @@ def dashboard():
         except Exception:
             pass
 
+    # ── Alertas Inteligentes ──────────────────────────────────────────────────
+    import calendar as _cal
+    from datetime import date as _date, timedelta as _td
+
+    _insights = []
+    _hoje_d = _date.today()
+    _dias_mes = _cal.monthrange(_hoje_d.year, _hoje_d.month)[1]
+    _pct_mes = _hoje_d.day / _dias_mes * 100
+
+    # 1. Velocidade de gastos vs % do mês
+    if total_entradas > 0 and total_gastos > 0:
+        _pct_gasto = total_gastos / total_entradas * 100
+        if _pct_gasto > _pct_mes + 15:
+            _proj_fim = total_gastos * (_dias_mes / _hoje_d.day)
+            _insights.append(("⚡", "warning",
+                f"**Ritmo acelerado:** {_pct_gasto:.0f}% da renda gasta com {_pct_mes:.0f}% do mês. "
+                f"Projeção fim do mês: **{utils.fmt_brl(_proj_fim)}**."))
+        elif _pct_gasto < _pct_mes - 25 and _pct_mes > 50:
+            _insights.append(("✅", "success",
+                f"**Ritmo saudável:** só {_pct_gasto:.0f}% da renda gasta com {_pct_mes:.0f}% do mês passado."))
+
+    # 2. Saldo projetado negativo no fim do mês
+    if total_gastos > 0 and _hoje_d.day > 1:
+        _proj_gastos_fim = total_gastos * (_dias_mes / _hoje_d.day)
+        _saldo_proj = total_entradas - _proj_gastos_fim
+        if _saldo_proj < 0:
+            _insights.append(("🚨", "error",
+                f"**Saldo negativo projetado:** no ritmo atual você fechará o mês com déficit de "
+                f"**{utils.fmt_brl(abs(_saldo_proj))}**."))
+
+    # 3. Conta com saldo negativo
+    for _, _c_row in contas_df.iterrows():
+        _sc = utils.calcular_saldo_conta(
+            _c_row["nome"], todas_entradas_full, todos_gastos_full,
+            todas_transf, contas_df, todos_invest, todos_pgtos, todos_criptos)
+        if _sc < 0:
+            _insights.append(("🔴", "error",
+                f"**{_c_row['nome']}** está com saldo negativo: **{utils.fmt_brl(_sc)}**."))
+
+    # 4. Contas fixas como % da renda
+    if total_entradas > 0:
+        _df_fx = sh.get_fixas()
+        if not _df_fx.empty and "valor" in _df_fx.columns:
+            _total_fixas = _df_fx["valor"].astype(float).sum()
+            _pct_fixas = _total_fixas / total_entradas * 100
+            if _pct_fixas > 40:
+                _insights.append(("⚠️", "warning",
+                    f"**Comprometimento alto:** suas fixas ({utils.fmt_brl(_total_fixas)}) "
+                    f"representam **{_pct_fixas:.0f}%** da renda do mês (recomendado: < 30%)."))
+
+    # 5. Investimentos vencendo em até 15 dias
+    if not todos_invest.empty and "data_vencimento" in todos_invest.columns:
+        _em_15 = (_date.today() + _td(days=15)).isoformat()
+        _hoje_iso = _date.today().isoformat()
+        _venc = todos_invest[
+            (todos_invest["status"] == "ATIVO") &
+            (todos_invest["data_vencimento"].astype(str) >= _hoje_iso) &
+            (todos_invest["data_vencimento"].astype(str) <= _em_15)
+        ]
+        for _, _irow in _venc.iterrows():
+            _insights.append(("📅", "warning",
+                f"**Investimento vencendo:** **{_irow['nome']}** vence em "
+                f"**{utils.fmt_data(str(_irow['data_vencimento']))}** "
+                f"({utils.fmt_brl(float(_irow['valor_aplicado']))})."))
+
+    # 6. Categoria acima de 130% da média dos últimos 3 meses
+    if not gastos_df.empty:
+        _meses_hist3 = [utils.mes_anterior(mes),
+                        utils.mes_anterior(utils.mes_anterior(mes)),
+                        utils.mes_anterior(utils.mes_anterior(utils.mes_anterior(mes)))]
+        for _cat in gastos_df["categoria"].unique():
+            _val_atual = gastos_df[gastos_df["categoria"] == _cat]["valor_parcela"].astype(float).sum()
+            _vals_h = []
+            for _mh in _meses_hist3:
+                _dfh = sh.get_gastos(_mh)
+                if not _dfh.empty:
+                    _vh = _dfh[_dfh["categoria"] == _cat]["valor_parcela"].astype(float).sum()
+                    if _vh > 0:
+                        _vals_h.append(_vh)
+            if _vals_h:
+                _media_h = sum(_vals_h) / len(_vals_h)
+                if _media_h > 0 and _val_atual > _media_h * 1.3:
+                    _mult = _val_atual / _media_h
+                    _insights.append(("📊", "warning",
+                        f"**{_cat} acima da média:** {utils.fmt_brl(_val_atual)} "
+                        f"({_mult:.1f}× a média de {utils.fmt_brl(_media_h)} dos últimos {len(_vals_h)} meses)."))
+
+    # Exibir alertas
+    if _insights:
+        st.markdown("---")
+        st.subheader("💡 Insights")
+        for _icon, _level, _msg in _insights:
+            getattr(st, _level)(f"{_icon} {_msg}")
+
     st.markdown("---")
     col_l, col_r = st.columns(2)
 

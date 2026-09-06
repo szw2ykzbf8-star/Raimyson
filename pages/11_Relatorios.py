@@ -29,7 +29,7 @@ auth.require_auth()
 
 st.title("📉 Relatórios & Análises")
 
-tabs = st.tabs(["Fluxo Mensal", "Categorias", "Cartões", "Investimentos", "Avançado"])
+tabs = st.tabs(["Fluxo Mensal", "Categorias", "Cartões", "Investimentos", "Avançado", "Projeção"])
 
 
 def safe_float(v):
@@ -218,6 +218,33 @@ with tabs[1]:
                                         title="Mês Atual × Média Histórica por Categoria",
                                         template="plotly_dark", hovermode="x unified")
             st.plotly_chart(fig_comp_cat, use_container_width=True)
+        # Tendência por categoria (linha)
+        st.markdown("---")
+        st.subheader("📈 Tendência por Categoria")
+        cats_df_tend = sh.get_categorias()
+        cats_tend = cats_df_tend["nome"].tolist() if not cats_df_tend.empty else []
+        n_tend = st.slider("Últimos N meses", 3, 12, 6, key="sl_tend")
+        meses_tend = utils.ultimos_meses(n_tend)
+
+        tend_rows = []
+        for m_t in meses_tend:
+            dfm_t = sh.get_gastos(m_t)
+            if not dfm_t.empty:
+                for cat in cats_tend:
+                    val = dfm_t[dfm_t["categoria"] == cat]["valor_parcela"].apply(safe_float).sum()
+                    if val > 0:
+                        tend_rows.append({"Mês": utils.formatar_mes(m_t), "Categoria": cat, "Valor": val})
+
+        if tend_rows:
+            df_tend = pd.DataFrame(tend_rows)
+            fig_tend = px.line(df_tend, x="Mês", y="Valor", color="Categoria",
+                               title="Evolução dos Gastos por Categoria",
+                               template="plotly_dark", markers=True)
+            fig_tend.update_layout(yaxis_title="R$", hovermode="x unified")
+            st.plotly_chart(fig_tend, use_container_width=True)
+        else:
+            st.info("Dados insuficientes para análise de tendência.")
+
     else:
         st.info("Nenhum gasto neste mês.")
 
@@ -609,3 +636,187 @@ with tabs[4]:
             st.plotly_chart(fig_sk, use_container_width=True)
         else:
             st.info("Lance entradas e gastos no mês atual para ver o fluxo Sankey.")
+
+# ─── Projeção ─────────────────────────────────────────────────────────────────
+
+with tabs[5]:
+    import calendar as _cal
+    from datetime import date as _date
+
+    st.subheader("🔮 Projeção Financeira")
+
+    # ── Evolução patrimonial histórica ────────────────────────────────────────
+    st.markdown("#### 💎 Evolução Patrimonial")
+    n_pat = st.slider("Histórico (meses)", 3, 12, 6, key="sl_pat")
+    meses_pat = utils.ultimos_meses(n_pat)
+
+    todas_e_p  = sh.get_entradas()
+    todos_g_p  = sh.get_gastos()
+    contas_p   = sh.get_contas()
+    df_inv_p   = sh.get_investimentos("ATIVO")
+    df_cr_p    = sh.get_criptos("ATIVO")
+    df_div_p   = sh.get_dividas()
+    todos_pgtos_p = sh.get_pagamentos_contas()
+
+    saldo_base = contas_p["saldo_inicial"].astype(float).sum() if not contas_p.empty else 0
+
+    pat_rows = []
+    cum_result = 0.0
+    for m_p in meses_pat:
+        ent_m = 0.0
+        if not todas_e_p.empty and "data" in todas_e_p.columns:
+            ent_m = todas_e_p[todas_e_p["data"].str.startswith(m_p)]["valor"].apply(safe_float).sum()
+
+        gas_m = 0.0
+        if not todos_g_p.empty and "data_compra" in todos_g_p.columns:
+            mask_gp = todos_g_p["data_compra"].str.startswith(m_p) & \
+                      todos_g_p["forma_pagamento"].isin(
+                          ["Pix", "Débito", "Débito (Cartão)", "Débito em Conta", "Dinheiro", "Boleto"])
+            gas_m = todos_g_p[mask_gp]["valor_parcela"].apply(safe_float).sum()
+
+        cum_result += ent_m - gas_m
+        pat_rows.append({
+            "label": utils.formatar_mes(m_p),
+            "entradas": ent_m,
+            "gastos": gas_m,
+            "resultado": ent_m - gas_m,
+            "saldo_contas": saldo_base + cum_result,
+        })
+
+    df_pat = pd.DataFrame(pat_rows)
+
+    # Valor atual dos investimentos
+    val_inv_p = 0.0
+    hoje_p = _date.today().isoformat()
+    if not df_inv_p.empty:
+        for _, irow in df_inv_p.iterrows():
+            res_p = utils.calcular_rendimento(
+                float(irow["valor_aplicado"]), irow["taxa_tipo"],
+                float(irow["taxa_valor"]), irow["data_aplicacao"], hoje_p)
+            val_inv_p += res_p["valor_final"]
+
+    val_cr_p = df_cr_p["preco_compra_brl"].astype(float).sum() if not df_cr_p.empty else 0.0
+
+    total_div_p = 0.0
+    if not df_div_p.empty:
+        for _, drow in df_div_p.iterrows():
+            pagas = int(drow["num_parcelas_pagas"])
+            total = int(drow["num_parcelas"])
+            total_div_p += float(drow["valor_parcela"]) * (total - pagas)
+
+    # Gráfico stacked: contas + investimentos + criptos
+    fig_pat = go.Figure()
+    fig_pat.add_trace(go.Scatter(
+        x=df_pat["label"], y=df_pat["saldo_contas"],
+        name="Saldo em Contas", fill="tozeroy",
+        line=dict(color="#3498DB"), fillcolor="rgba(52,152,219,0.25)"
+    ))
+    # Show investment + crypto as constant reference lines (current values)
+    fig_pat.add_hline(y=val_inv_p, line_dash="dash", line_color="#2ECC71",
+                      annotation_text=f"Investimentos: {utils.fmt_brl(val_inv_p)}", annotation_position="top right")
+    if val_cr_p > 0:
+        fig_pat.add_hline(y=val_cr_p, line_dash="dot", line_color="#F39C12",
+                          annotation_text=f"Criptos: {utils.fmt_brl(val_cr_p)}", annotation_position="bottom right")
+    fig_pat.update_layout(
+        title="Evolução do Saldo em Contas",
+        template="plotly_dark", yaxis_title="R$", hovermode="x unified"
+    )
+    st.plotly_chart(fig_pat, use_container_width=True)
+
+    # KPIs do patrimônio atual
+    patrimonio_liq_p = (df_pat.iloc[-1]["saldo_contas"] if not df_pat.empty else 0) + val_inv_p + val_cr_p - total_div_p
+    p1, p2, p3, p4, p5 = st.columns(5)
+    with p1:
+        st.metric("💰 Saldo Contas", utils.fmt_brl(df_pat.iloc[-1]["saldo_contas"] if not df_pat.empty else 0))
+    with p2:
+        st.metric("📈 Investimentos", utils.fmt_brl(val_inv_p))
+    with p3:
+        st.metric("🪙 Criptos", utils.fmt_brl(val_cr_p))
+    with p4:
+        st.metric("🔴 Dívidas", utils.fmt_brl(total_div_p))
+    with p5:
+        st.metric("💎 Patrimônio Líquido", utils.fmt_brl(patrimonio_liq_p),
+                  help="Saldo em Contas + Investimentos + Criptos − Dívidas restantes")
+
+    # ── Fluxo de Caixa Projetado ──────────────────────────────────────────────
+    st.markdown("---")
+    st.subheader("📅 Fluxo de Caixa Projetado — Próximos 3 Meses")
+
+    todos_g_proj   = sh.get_gastos()
+    df_fixas_proj  = sh.get_fixas()
+
+    # Renda estimada = média dos últimos 3 meses
+    meses_3 = utils.ultimos_meses(3)
+    total_renda_3 = 0.0
+    meses_com_renda = 0
+    for m3 in meses_3:
+        e3 = sh.get_entradas(m3)
+        if not e3.empty:
+            val3 = e3["valor"].apply(safe_float).sum()
+            if val3 > 0:
+                total_renda_3 += val3
+                meses_com_renda += 1
+    media_renda_proj = total_renda_3 / meses_com_renda if meses_com_renda > 0 else 0
+
+    # Fixas mensais
+    total_fixas_proj = df_fixas_proj["valor"].astype(float).sum() if not df_fixas_proj.empty else 0
+
+    # Próximos 3 meses
+    next_months = []
+    m_next = utils.proximo_mes(utils.mes_atual())
+    for _ in range(3):
+        next_months.append(m_next)
+        m_next = utils.proximo_mes(m_next)
+
+    proj_rows = []
+    for m_proj in next_months:
+        cartao_mes = 0.0
+        if not todos_g_proj.empty and "mes_referencia" in todos_g_proj.columns:
+            mask_cr = (todos_g_proj["mes_referencia"] == m_proj) & \
+                      (todos_g_proj["forma_pagamento"] == "Crédito")
+            cartao_mes = todos_g_proj[mask_cr]["valor_parcela"].apply(safe_float).sum()
+
+        total_saidas = cartao_mes + total_fixas_proj
+        saldo_est = media_renda_proj - total_saidas
+        proj_rows.append({
+            "label": utils.formatar_mes(m_proj),
+            "renda_estimada": media_renda_proj,
+            "parcelas_cartao": cartao_mes,
+            "contas_fixas": total_fixas_proj,
+            "total_saidas": total_saidas,
+            "saldo_estimado": saldo_est,
+        })
+
+    df_proj = pd.DataFrame(proj_rows)
+
+    fig_proj = go.Figure()
+    fig_proj.add_trace(go.Bar(x=df_proj["label"], y=df_proj["renda_estimada"],
+                               name="Renda Estimada", marker_color="#2ECC71"))
+    fig_proj.add_trace(go.Bar(x=df_proj["label"], y=df_proj["parcelas_cartao"],
+                               name="Parcelas Cartão", marker_color="#E74C3C"))
+    fig_proj.add_trace(go.Bar(x=df_proj["label"], y=df_proj["contas_fixas"],
+                               name="Contas Fixas", marker_color="#E67E22"))
+    fig_proj.add_trace(go.Scatter(
+        x=df_proj["label"], y=df_proj["saldo_estimado"],
+        name="Saldo Estimado", mode="lines+markers+text",
+        line=dict(color="#F39C12", width=2),
+        text=df_proj["saldo_estimado"].apply(utils.fmt_brl),
+        textposition="top center"
+    ))
+    fig_proj.update_layout(
+        barmode="stack",
+        title="Projeção: Receitas × Compromissos Conhecidos",
+        template="plotly_dark", yaxis_title="R$", hovermode="x unified"
+    )
+    st.plotly_chart(fig_proj, use_container_width=True)
+
+    df_proj_show = df_proj.copy()
+    for col in ["renda_estimada", "parcelas_cartao", "contas_fixas", "total_saidas", "saldo_estimado"]:
+        df_proj_show[col] = df_proj_show[col].apply(utils.fmt_brl)
+    df_proj_show.columns = ["Mês", "Renda Estimada", "Parcelas Cartão", "Contas Fixas", "Total Saídas", "Saldo Estimado"]
+    st.dataframe(df_proj_show, use_container_width=True, hide_index=True)
+    st.caption(
+        "Renda estimada = média dos últimos 3 meses · "
+        "Parcelas = já lançadas no sistema · "
+        "Contas Fixas = soma das fixas cadastradas (recorrentes)"
+    )
