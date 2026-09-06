@@ -60,7 +60,14 @@ def calcular_data_fatura(data_compra: date, dia_fechamento: int, dia_vencimento:
     ultimo_fec = calendar.monthrange(base.year, base.month)[1]
     fechamento = base.replace(day=min(dia_fechamento, ultimo_fec))
 
-    venc_base  = fechamento + relativedelta(months=1)
+    # Se dia_vencimento > dia_fechamento, vence no mesmo mês do fechamento
+    # (ex: fecha dia 1, vence dia 11 → Sep 1 fecha, Sep 11 vence)
+    # Caso contrário, vence no mês seguinte
+    # (ex: fecha dia 25, vence dia 5 → Sep 25 fecha, Out 5 vence)
+    if dia_vencimento > dia_fechamento:
+        venc_base = fechamento
+    else:
+        venc_base = fechamento + relativedelta(months=1)
     ultimo_venc = calendar.monthrange(venc_base.year, venc_base.month)[1]
     vencimento = venc_base.replace(day=min(dia_vencimento, ultimo_venc))
     return vencimento
