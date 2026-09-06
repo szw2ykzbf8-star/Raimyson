@@ -58,7 +58,8 @@ with tabs[0]:
                 float(row["valor_aplicado"]), row["taxa_tipo"],
                 float(row["taxa_valor"]), row["data_aplicacao"], hoje
             )
-            with st.expander(f"📊 {row['nome']} ({row['tipo']})"):
+            has_confirm = st.session_state.get(f"confirm_del_inv_{row['id']}", False)
+            with st.expander(f"📊 {row['nome']} ({row['tipo']})", expanded=has_confirm):
                 c1, c2, c3, c4 = st.columns(4)
                 with c1:
                     st.metric("Aplicado em", utils.fmt_data(row["data_aplicacao"]))
@@ -76,6 +77,29 @@ with tabs[0]:
                     st.metric("Rentabilidade", utils.fmt_pct(res["rentabilidade_pct"]))
                     st.metric("Meses aplicado", str(res["meses"]))
 
+                st.markdown("")
+                if st.button("🗑️ Excluir investimento", key=f"del_inv_{row['id']}"):
+                    st.session_state[f"confirm_del_inv_{row['id']}"] = True
+
+                if has_confirm:
+                    pin = st.text_input("PIN de exclusão", type="password",
+                                        max_chars=72, key=f"pin_inv_{row['id']}")
+                    c_ok, c_cancel = st.columns(2)
+                    with c_ok:
+                        if st.button("Confirmar exclusão", key=f"ok_inv_{row['id']}"):
+                            ok, msg = auth.verificar_pin_exclusao(pin)
+                            if ok:
+                                sh.delete_investimento(row["id"])
+                                del st.session_state[f"confirm_del_inv_{row['id']}"]
+                                st.success("Investimento excluído.")
+                                st.rerun()
+                            else:
+                                st.error(msg)
+                    with c_cancel:
+                        if st.button("Cancelar", key=f"cancel_inv_{row['id']}"):
+                            del st.session_state[f"confirm_del_inv_{row['id']}"]
+                            st.rerun()
+
     # Investimentos retirados
     if not df_ret.empty:
         with st.expander("📋 Investimentos Encerrados"):
@@ -92,11 +116,10 @@ with tabs[1]:
     _k = st.session_state.get("_k_invest", 0)
     contas_df_inv = sh.get_contas()
     contas_inv = contas_df_inv["nome"].tolist() if not contas_df_inv.empty else []
-    conta_origem_inv = st.selectbox(
-        "Retirar de qual conta?",
-        contas_inv if contas_inv else ["— nenhuma cadastrada —"],
-        key="conta_origem_inv"
-    )
+
+    # taxa_tipo fora do form para atualizar o label dinamicamente
+    taxa_tipo = st.selectbox("Tipo de taxa", TAXA_TIPOS, key="taxa_tipo_inv")
+
     with st.form(f"form_invest_{_k}"):
         c1, c2 = st.columns(2)
         with c1:
@@ -105,17 +128,20 @@ with tabs[1]:
             data_aplic = st.date_input("Data da aplicação", value=date.today(), format="DD/MM/YYYY")
             valor_aplic = st.number_input("Valor aplicado (R$)", min_value=0.01, value=None, step=0.01, format="%.2f", placeholder="0,00")
         with c2:
-            taxa_tipo = st.selectbox("Tipo de taxa", TAXA_TIPOS)
-            taxa_val = st.number_input(
-                "Taxa (%)" if taxa_tipo != "CDI" else "% do CDI (ex: 100 = 100% CDI)",
-                min_value=0.0, step=0.01, format="%.4f"
-            )
+            taxa_label = "% do CDI (ex: 103 = 103% CDI)" if taxa_tipo == "CDI" else "Taxa (%)"
+            taxa_val = st.number_input(taxa_label, min_value=0.0, value=None, step=0.01, format="%.4f", placeholder="0,0000")
             data_venc = st.date_input("Data de vencimento prevista", format="DD/MM/YYYY")
+            conta_origem_inv = st.selectbox(
+                "Retirar de qual conta?",
+                contas_inv if contas_inv else ["— nenhuma cadastrada —"]
+            )
         submitted = st.form_submit_button("Salvar Investimento", use_container_width=True)
 
     if submitted and nome_i:
         if valor_aplic is None or valor_aplic <= 0:
             st.warning("Informe o valor aplicado.")
+        elif taxa_val is None or taxa_val <= 0:
+            st.warning("Informe a taxa.")
         else:
             sh.add_investimento(nome_i.strip(), tipo_i, data_aplic.isoformat(),
                                 valor_aplic, taxa_tipo, taxa_val, data_venc.isoformat(),
