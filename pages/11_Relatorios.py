@@ -759,7 +759,7 @@ with tabs[5]:
     media_renda_proj = total_renda_3 / meses_com_renda if meses_com_renda > 0 else 0
 
     # Fixas mensais
-    total_fixas_proj = df_fixas_proj["valor"].astype(float).sum() if not df_fixas_proj.empty else 0
+    total_fixas_proj = df_fixas_proj["valor_referencia"].astype(float).sum() if not df_fixas_proj.empty else 0
 
     # Próximos 3 meses
     next_months = []

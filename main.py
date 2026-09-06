@@ -346,8 +346,8 @@ def dashboard():
     # 4. Contas fixas como % da renda
     if total_entradas > 0:
         _df_fx = sh.get_fixas()
-        if not _df_fx.empty and "valor" in _df_fx.columns:
-            _total_fixas = _df_fx["valor"].astype(float).sum()
+        if not _df_fx.empty and "valor_referencia" in _df_fx.columns:
+            _total_fixas = _df_fx["valor_referencia"].astype(float).sum()
             _pct_fixas = _total_fixas / total_entradas * 100
             if _pct_fixas > 40:
                 _insights.append(("⚠️", "warning",
