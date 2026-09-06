@@ -22,6 +22,7 @@ def get_client():
     return gspread.authorize(creds)
 
 
+@st.cache_resource
 def get_spreadsheet():
     return get_client().open_by_key(SPREADSHEET_ID)
 
@@ -31,7 +32,11 @@ def _sheet(name: str):
 
 
 def ensure_sheet(name: str, headers: list) -> None:
-    """Cria a aba se não existir; adiciona colunas faltantes ao final preservando dados."""
+    """Cria a aba se não existir; adiciona colunas faltantes ao final preservando dados.
+    Executa no máximo uma vez por sessão por aba para não esgotar a cota da API."""
+    flag = f"_ensured_{name}"
+    if st.session_state.get(flag):
+        return
     sp = get_spreadsheet()
     try:
         ws = sp.worksheet(name)
@@ -46,6 +51,7 @@ def ensure_sheet(name: str, headers: list) -> None:
         ws = sp.add_worksheet(title=name, rows=1000, cols=len(headers))
         ws.append_row(headers)
         invalidate_by_name(name)
+    st.session_state[flag] = True
 
 
 def _now() -> str:
