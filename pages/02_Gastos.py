@@ -31,7 +31,8 @@ with st.expander("➕ Novo Gasto", expanded=False):
     contas = contas_df["nome"].tolist() if not contas_df.empty else []
     cartoes = cartoes_df["nome"].tolist() if not cartoes_df.empty else []
 
-    with st.form("form_gasto"):
+    _k = st.session_state.get("_k_gasto", 0)
+    with st.form(f"form_gasto_{_k}"):
         c1, c2, c3 = st.columns(3)
         with c1:
             data_g = st.date_input("Data da compra", value=date.today(), format="DD/MM/YYYY")
@@ -71,6 +72,7 @@ with st.expander("➕ Novo Gasto", expanded=False):
                     if id_grupo is None:
                         id_grupo = rid
                 st.success(f"Compra parcelada registrada! ({int(num_parcelas)}x de {utils.fmt_brl(parcelas[0]['valor_parcela'])})")
+                st.session_state["_k_gasto"] = _k + 1
             else:
                 st.error("Nenhum cartão cadastrado.")
         else:
@@ -80,6 +82,7 @@ with st.expander("➕ Novo Gasto", expanded=False):
                 1, 1, valor, valor, categoria, forma_pgto, conta_cartao, descricao
             )
             st.success(f"Gasto de {utils.fmt_brl(valor)} registrado!")
+            st.session_state["_k_gasto"] = _k + 1
         st.rerun()
 
 # ─── Lista de gastos ──────────────────────────────────────────────────────────

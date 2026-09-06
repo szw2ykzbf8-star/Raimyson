@@ -89,7 +89,8 @@ with tabs[0]:
 # ─── Novo Investimento ────────────────────────────────────────────────────────
 
 with tabs[1]:
-    with st.form("form_invest"):
+    _k = st.session_state.get("_k_invest", 0)
+    with st.form(f"form_invest_{_k}"):
         c1, c2 = st.columns(2)
         with c1:
             nome_i = st.text_input("Nome / Banco (ex: CDB Nubank)")
@@ -108,6 +109,7 @@ with tabs[1]:
     if submitted and nome_i:
         sh.add_investimento(nome_i.strip(), tipo_i, data_aplic.isoformat(),
                             valor_aplic, taxa_tipo, taxa_val, data_venc.isoformat())
+        st.session_state["_k_invest"] = _k + 1
         st.success(f"Investimento '{nome_i}' cadastrado!")
         st.rerun()
 

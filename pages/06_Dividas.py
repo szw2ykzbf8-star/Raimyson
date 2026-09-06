@@ -133,7 +133,8 @@ with tabs[1]:
     contas = contas_df["nome"].tolist() if not contas_df.empty else []
     cartoes = cartoes_df["nome"].tolist() if not cartoes_df.empty else []
 
-    with st.form("form_divida"):
+    _k = st.session_state.get("_k_divida", 0)
+    with st.form(f"form_divida_{_k}"):
         c1, c2 = st.columns(2)
         with c1:
             nome_d = st.text_input("Nome da dívida (ex: Dívida Nubank)")
@@ -153,6 +154,7 @@ with tabs[1]:
     if submitted and nome_d:
         sh.add_divida(nome_d.strip(), valor_orig, valor_parc, int(num_parc),
                       data_ini.isoformat(), forma, cc, fonte_ajuda)
+        st.session_state["_k_divida"] = _k + 1
         st.success(f"Dívida '{nome_d}' cadastrada!")
         st.rerun()
 

@@ -92,13 +92,15 @@ with tabs[0]:
 # ─── Nova Conta ───────────────────────────────────────────────────────────────
 
 with tabs[1]:
-    with st.form("form_conta"):
+    _k = st.session_state.get("_k_conta", 0)
+    with st.form(f"form_conta_{_k}"):
         nome = st.text_input("Nome da conta (ex: Sicredi, Mercado Pago)")
         tipo = st.selectbox("Tipo", ["Corrente", "Digital", "Poupança", "Outro"])
         saldo_inicial = st.number_input("Saldo inicial (R$)", min_value=0.0, step=0.01, format="%.2f")
         submitted = st.form_submit_button("Salvar Conta", use_container_width=True)
     if submitted and nome:
         sh.add_conta(nome.strip(), tipo, saldo_inicial)
+        st.session_state["_k_conta"] = _k + 1
         st.success(f"Conta '{nome}' cadastrada!")
         st.rerun()
 

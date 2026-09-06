@@ -30,7 +30,8 @@ with st.expander("➕ Nova Entrada", expanded=False):
     fontes = fontes_df["nome"].tolist() if not fontes_df.empty else []
     contas = contas_df["nome"].tolist() if not contas_df.empty else []
 
-    with st.form("form_entrada"):
+    _k = st.session_state.get("_k_entrada", 0)
+    with st.form(f"form_entrada_{_k}"):
         c1, c2 = st.columns(2)
         with c1:
             data_e = st.date_input("Data", value=date.today(), format="DD/MM/YYYY")
@@ -46,6 +47,7 @@ with st.expander("➕ Nova Entrada", expanded=False):
             st.error("Cadastre fontes de renda e contas bancárias antes de lançar entradas.")
         else:
             sh.add_entrada(data_e.isoformat(), valor, fonte, conta, descricao)
+            st.session_state["_k_entrada"] = _k + 1
             st.success(f"Entrada de {utils.fmt_brl(valor)} registrada!")
             st.rerun()
 

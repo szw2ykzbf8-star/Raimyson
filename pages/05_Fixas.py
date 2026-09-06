@@ -17,7 +17,8 @@ with st.expander("➕ Nova Conta Fixa", expanded=False):
     contas = contas_df["nome"].tolist() if not contas_df.empty else []
     cartoes = cartoes_df["nome"].tolist() if not cartoes_df.empty else []
 
-    with st.form("form_fixa"):
+    _k = st.session_state.get("_k_fixa", 0)
+    with st.form(f"form_fixa_{_k}"):
         c1, c2 = st.columns(2)
         with c1:
             nome = st.text_input("Nome (ex: Aluguel, Água, Netflix)")
@@ -37,6 +38,7 @@ with st.expander("➕ Nova Conta Fixa", expanded=False):
         mes_ini = utils.mes_atual()
         sh.add_fixa(nome.strip(), valor_ref, categoria, forma_pgto,
                     conta_cartao, int(dia_venc), mes_ini)
+        st.session_state["_k_fixa"] = _k + 1
         st.success(f"Conta fixa '{nome}' cadastrada!")
         st.rerun()
 

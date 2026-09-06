@@ -9,7 +9,8 @@ st.title("💳 Cartões de Crédito")
 # ─── Formulário de novo cartão ────────────────────────────────────────────────
 
 with st.expander("➕ Novo Cartão", expanded=False):
-    with st.form("form_cartao"):
+    _k = st.session_state.get("_k_cartao", 0)
+    with st.form(f"form_cartao_{_k}"):
         nome = st.text_input("Nome do cartão (ex: Nubank, Inter)")
         c1, c2 = st.columns(2)
         with c1:
@@ -19,6 +20,7 @@ with st.expander("➕ Novo Cartão", expanded=False):
         submitted = st.form_submit_button("Salvar Cartão", use_container_width=True)
     if submitted and nome:
         sh.add_cartao(nome.strip(), int(dia_fech), int(dia_venc))
+        st.session_state["_k_cartao"] = _k + 1
         st.success(f"Cartão '{nome}' cadastrado!")
         st.rerun()
 
