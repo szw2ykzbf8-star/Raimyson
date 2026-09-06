@@ -87,12 +87,17 @@ with tabs[1]:
 
     st.markdown("---")
     st.subheader("🧪 Testar Telegram")
+
+    from src.config import TELEGRAM_TOKEN, TELEGRAM_CHAT_ID as TG_CHAT
+    st.caption(f"TOKEN configurado: {'✅ sim' if TELEGRAM_TOKEN else '❌ não'} | "
+               f"CHAT_ID configurado: {'✅ ' + TG_CHAT[:4] + '…' if TG_CHAT else '❌ não'}")
+
     if st.button("Enviar mensagem de teste"):
-        ok = tg.enviar_mensagem("✅ FinTrack — Teste de conexão bem-sucedido!")
+        ok, err = tg.enviar_mensagem("✅ FinTrack — Teste de conexão bem-sucedido!")
         if ok:
             st.success("Mensagem enviada com sucesso!")
         else:
-            st.error("Falha ao enviar. Verifique TELEGRAM_TOKEN e TELEGRAM_CHAT_ID no .env")
+            st.error(f"Falha: {err}")
 
 # ─── Metas & Alertas ─────────────────────────────────────────────────────────
 

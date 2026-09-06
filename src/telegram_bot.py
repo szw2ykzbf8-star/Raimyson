@@ -7,19 +7,23 @@ def _url(method: str) -> str:
     return f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{method}"
 
 
-def enviar_mensagem(texto: str, chat_id: str = None) -> bool:
+def enviar_mensagem(texto: str, chat_id: str = None) -> tuple[bool, str]:
     cid = chat_id or TELEGRAM_CHAT_ID
-    if not TELEGRAM_TOKEN or not cid:
-        return False
+    if not TELEGRAM_TOKEN:
+        return False, "TELEGRAM_TOKEN não configurado"
+    if not cid:
+        return False, "TELEGRAM_CHAT_ID não configurado"
     try:
         resp = requests.post(
             _url("sendMessage"),
             json={"chat_id": cid, "text": texto, "parse_mode": "HTML"},
             timeout=10,
         )
-        return resp.status_code == 200
-    except Exception:
-        return False
+        if resp.status_code == 200:
+            return True, ""
+        return False, f"HTTP {resp.status_code}: {resp.text}"
+    except Exception as e:
+        return False, str(e)
 
 
 def enviar_codigo_desbloqueio(codigo: str) -> bool:
@@ -29,7 +33,8 @@ def enviar_codigo_desbloqueio(codigo: str) -> bool:
         "⏱️ Válido por 60 segundos.\n"
         "Não compartilhe este código com ninguém."
     )
-    return enviar_mensagem(texto)
+    ok, _ = enviar_mensagem(texto)
+    return ok
 
 
 def enviar_alerta_categoria(categoria: str, gasto: float, limite: float) -> bool:
@@ -41,7 +46,8 @@ def enviar_alerta_categoria(categoria: str, gasto: float, limite: float) -> bool
         f"Gasto: R$ {gasto:,.2f} ({pct}% do limite)\n"
         f"Limite: R$ {limite:,.2f}"
     )
-    return enviar_mensagem(texto)
+    ok, _ = enviar_mensagem(texto)
+    return ok
 
 
 def enviar_alerta_fatura(cartao: str, valor: float, vencimento: str) -> bool:
@@ -51,7 +57,8 @@ def enviar_alerta_fatura(cartao: str, valor: float, vencimento: str) -> bool:
         f"Valor: R$ {valor:,.2f}\n"
         f"Vencimento: {html.escape(vencimento)}"
     )
-    return enviar_mensagem(texto)
+    ok, _ = enviar_mensagem(texto)
+    return ok
 
 
 def enviar_resumo_mensal(mes: str, entradas: float, saidas: float, saldo: float) -> bool:
@@ -62,7 +69,8 @@ def enviar_resumo_mensal(mes: str, entradas: float, saidas: float, saldo: float)
         f"Saídas:   R$ {saidas:,.2f}\n"
         f"Saldo:    R$ {saldo:,.2f} {emoji}"
     )
-    return enviar_mensagem(texto)
+    ok, _ = enviar_mensagem(texto)
+    return ok
 
 
 def get_chat_id_bot() -> str | None:
