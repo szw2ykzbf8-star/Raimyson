@@ -5,7 +5,6 @@ import plotly.graph_objects as go
 from datetime import date
 from src import auth, sheets as sh, utils
 
-st.set_page_config(page_title="Criptos — FinTrack", page_icon="₿", layout="wide")
 auth.require_auth()
 
 # Garante que a aba existe no Google Sheets (cria automaticamente se necessário)

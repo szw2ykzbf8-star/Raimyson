@@ -5,7 +5,6 @@ import pandas as pd
 from datetime import date
 from src import auth, sheets as sh, utils
 
-st.set_page_config(page_title="Investimentos — FinTrack", page_icon="📈", layout="wide")
 auth.require_auth()
 
 sh.ensure_sheet("investimentos", [

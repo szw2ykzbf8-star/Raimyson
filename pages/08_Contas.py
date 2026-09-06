@@ -2,7 +2,6 @@ import streamlit as st
 from datetime import date
 from src import auth, sheets as sh, utils
 
-st.set_page_config(page_title="Contas — FinTrack", page_icon="🏦", layout="wide")
 auth.require_auth()
 
 st.title("🏦 Contas Bancárias")

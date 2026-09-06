@@ -1,7 +1,6 @@
 import streamlit as st
 from src import auth, sheets as sh, utils
 
-st.set_page_config(page_title="Contas Fixas — FinTrack", page_icon="📋", layout="wide")
 auth.require_auth()
 
 st.title("📋 Contas Fixas")

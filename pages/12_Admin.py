@@ -4,7 +4,6 @@ from src import auth, sheets as sh, utils
 from src import telegram_bot as tg
 from src.config import CATEGORIAS_PADRAO, FONTES_PADRAO, CFG_CHAVES_SENSIVEIS
 
-st.set_page_config(page_title="Administração — FinTrack", page_icon="⚙️", layout="wide")
 auth.require_auth()
 
 # Admin exige verificação de ambos os PINs

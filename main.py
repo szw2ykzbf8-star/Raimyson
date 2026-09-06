@@ -355,19 +355,52 @@ def dashboard():
         st.caption("Nenhuma conta cadastrada.")
 
 
-# ─── Roteamento principal ─────────────────────────────────────────────────────
+# ─── Página principal (roteamento auth) ──────────────────────────────────────
 
-try:
-    if auth.is_primeiro_acesso():
-        tela_setup()
-    elif not auth.is_authenticated():
-        tela_login()
-    else:
-        st.title("🏠 Dashboard")
-        dashboard()
-except Exception as e:
-    st.error(f"Erro de conexão: {e}")
-    st.info("Verifique as configurações no arquivo .env e se a planilha foi inicializada.")
-    if st.button("Tentar novamente"):
-        st.cache_resource.clear()
-        st.rerun()
+def page_main():
+    try:
+        if auth.is_primeiro_acesso():
+            tela_setup()
+        elif not auth.is_authenticated():
+            tela_login()
+        else:
+            st.title("🏠 Dashboard")
+            dashboard()
+    except Exception as e:
+        st.error(f"Erro de conexão: {e}")
+        st.info("Verifique as configurações no arquivo .env e se a planilha foi inicializada.")
+        if st.button("Tentar novamente"):
+            st.cache_resource.clear()
+            st.rerun()
+
+
+# ─── Navegação com seções ─────────────────────────────────────────────────────
+
+pg = st.navigation(
+    {
+        "": [
+            st.Page(page_main, title="Main", icon="🏠", default=True),
+        ],
+        "Movimentações": [
+            st.Page("pages/02_Entradas.py",       title="Entradas",       icon="💰"),
+            st.Page("pages/03_Gastos.py",          title="Gastos",         icon="💸"),
+            st.Page("pages/04_Cartoes.py",         title="Cartões",        icon="💳"),
+            st.Page("pages/05_Contas_a_Pagar.py",  title="Contas a Pagar", icon="📅"),
+            st.Page("pages/06_Fixas.py",           title="Contas Fixas",   icon="📋"),
+            st.Page("pages/07_Dividas.py",         title="Dívidas",        icon="🔴"),
+        ],
+        "Patrimônio": [
+            st.Page("pages/08_Contas.py",          title="Contas Bancárias", icon="🏦"),
+            st.Page("pages/09_Investimentos.py",   title="Investimentos",    icon="📈"),
+            st.Page("pages/10_Criptos.py",         title="Criptomoedas",     icon="₿"),
+        ],
+        "Análises": [
+            st.Page("pages/11_Relatorios.py",      title="Relatórios",     icon="📊"),
+        ],
+        "Sistema": [
+            st.Page("pages/12_Admin.py",           title="Administração",  icon="⚙️"),
+        ],
+    },
+    position="sidebar",
+)
+pg.run()

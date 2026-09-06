@@ -37,6 +37,7 @@ CHAT_ID     = str(os.getenv("TELEGRAM_CHAT_ID", ""))
 CREDS_PATH  = os.getenv("GOOGLE_CREDENTIALS_PATH", "credentials.json")
 CREDS_JSON  = os.getenv("GOOGLE_CREDENTIALS_JSON", "")
 SHEET_ID    = os.getenv("SPREADSHEET_ID", "")
+APP_URL     = os.getenv("APP_URL", "")
 SCOPES      = ["https://www.googleapis.com/auth/spreadsheets"]
 
 # Abreviações de categoria → nome completo (igual às categorias do app)
@@ -356,6 +357,19 @@ def cmd_resumo(_: list[str]) -> str:
     return "\n".join(linhas)
 
 
+def cmd_link(_: list[str]) -> str:
+    if APP_URL:
+        return (
+            "🔗 <b>Link de acesso ao FinTrack:</b>\n\n"
+            f"<a href='{APP_URL}'>{APP_URL}</a>"
+        )
+    return (
+        "⚠️ URL do app não configurada.\n"
+        "Adicione a variável <code>APP_URL</code> nas configurações do Railway "
+        "com o endereço público do seu app (ex: <code>https://seu-app.up.railway.app</code>)."
+    )
+
+
 def cmd_ajuda(_: list[str]) -> str:
     cats  = " · ".join(f"<code>{k}</code>" for k in CAT_ABBREV)
     formas = " · ".join(
@@ -375,7 +389,9 @@ def cmd_ajuda(_: list[str]) -> str:
         "  <code>/entrada 3000 Salário nubank</code>\n\n"
         "<b>📊 Consultas:</b>\n"
         "<code>/saldo</code>  — saldo do mês atual\n"
-        "<code>/resumo</code> — gastos por categoria"
+        "<code>/resumo</code> — gastos por categoria\n\n"
+        "<b>🔗 Acesso:</b>\n"
+        "<code>/link</code> — link de acesso ao app"
     )
 
 
@@ -384,6 +400,7 @@ COMMANDS: dict[str, callable] = {
     "/entrada": cmd_entrada,
     "/saldo":   cmd_saldo,
     "/resumo":  cmd_resumo,
+    "/link":    cmd_link,
     "/ajuda":   cmd_ajuda,
     "/help":    cmd_ajuda,
     "/start":   cmd_ajuda,

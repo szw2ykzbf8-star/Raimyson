@@ -25,7 +25,6 @@ def _cotacoes_rel(ids: tuple) -> dict:
     except Exception:
         return {}
 
-st.set_page_config(page_title="Relatórios — FinTrack", page_icon="📉", layout="wide")
 auth.require_auth()
 
 st.title("📉 Relatórios & Análises")
