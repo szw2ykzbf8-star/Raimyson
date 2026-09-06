@@ -85,77 +85,90 @@ def tela_setup():
 # ─── Tela de login ────────────────────────────────────────────────────────────
 
 def tela_login():
-    estado = auth.get_estado_bloqueio()
+    # Esconde sidebar e botão de expandir na tela de login
+    st.markdown("""
+    <style>
+    [data-testid="stSidebar"]       { display: none !important; }
+    [data-testid="collapsedControl"]{ display: none !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    estado   = auth.get_estado_bloqueio()
     bloqueado = estado in (auth.LOCK_ABERTURA, auth.LOCK_EXCLUSAO)
 
-    st.markdown("<div class='lock-screen'>", unsafe_allow_html=True)
-    st.markdown("## 🔒 FinTrack")
-    st.markdown("**Controle Financeiro Pessoal**")
+    # Espaço vertical para centralizar
+    st.markdown("<br>" * 5, unsafe_allow_html=True)
 
-    if not bloqueado:
-        with st.form("login_form"):
-            pin = st.text_input("Senha de Acesso", type="password",
-                                placeholder="Digite sua senha")
-            submitted = st.form_submit_button("Entrar", use_container_width=True)
+    # Coluna central estreita
+    _, col, _ = st.columns([1, 1.2, 1])
+    with col:
+        st.markdown(
+            "<h1 style='text-align:center; margin-bottom:4px'>🔒 FinTrack</h1>"
+            "<p style='text-align:center; color:#A0AEC0; margin-top:0'>Controle Financeiro Pessoal</p>",
+            unsafe_allow_html=True,
+        )
+        st.markdown("<br>", unsafe_allow_html=True)
 
-        if submitted:
-            ok, msg = auth.autenticar(pin)
-            if ok:
-                st.rerun()
-            elif msg == "bloqueado":
-                st.error("🔒 Senha bloqueada.")
-                st.rerun()
-            else:
-                st.error(msg)
-    else:
-        st.error("🔒 Acesso bloqueado após tentativas incorretas.")
+        if not bloqueado:
+            with st.form("login_form"):
+                pin = st.text_input("Senha de Acesso", type="password",
+                                    placeholder="Digite sua senha",
+                                    label_visibility="collapsed")
+                submitted = st.form_submit_button("Entrar", use_container_width=True)
 
-    # Cadeado de desbloqueio — só aparece quando bloqueado
-    if bloqueado:
-        st.markdown("---")
-        if st.button("🔓", help="Solicitar código de desbloqueio"):
-            if st.session_state.get("_confirmar_codigo", False):
-                pass
-            else:
-                st.session_state["_confirmar_codigo"] = True
-                st.rerun()
-
-        if st.session_state.get("_confirmar_codigo", False):
-            st.warning("Deseja receber um código de desbloqueio?")
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("Sim, enviar", use_container_width=True):
-                    codigo, err = auth.gerar_codigo()
-                    if err:
-                        st.error(err)
-                    else:
-                        enviado = tg.enviar_codigo_desbloqueio(codigo)
-                        if enviado:
-                            st.success("Código enviado!")
-                        else:
-                            st.error("Falha ao enviar. Verifique a configuração do Telegram.")
-                        st.session_state["_aguardando_codigo"] = True
-                    st.session_state["_confirmar_codigo"] = False
-                    st.rerun()
-            with col2:
-                if st.button("Cancelar", use_container_width=True):
-                    st.session_state["_confirmar_codigo"] = False
-                    st.rerun()
-
-        if st.session_state.get("_aguardando_codigo", False):
-            with st.form("codigo_form"):
-                codigo_input = st.text_input("Código de desbloqueio", max_chars=6)
-                ok_btn = st.form_submit_button("Verificar", use_container_width=True)
-            if ok_btn:
-                ok, msg = auth.verificar_codigo(codigo_input)
+            if submitted:
+                ok, msg = auth.autenticar(pin)
                 if ok:
-                    st.session_state["_aguardando_codigo"] = False
-                    st.success("Desbloqueado! Faça login.")
+                    st.rerun()
+                elif msg == "bloqueado":
+                    st.error("🔒 Senha bloqueada.")
                     st.rerun()
                 else:
                     st.error(msg)
+        else:
+            st.error("🔒 Acesso bloqueado após tentativas incorretas.")
 
-    st.markdown("</div>", unsafe_allow_html=True)
+        # Desbloqueio via código Telegram
+        if bloqueado:
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("🔓 Solicitar código de desbloqueio", use_container_width=True):
+                st.session_state["_confirmar_codigo"] = True
+                st.rerun()
+
+            if st.session_state.get("_confirmar_codigo", False):
+                st.warning("Enviar código de desbloqueio via Telegram?")
+                c1, c2 = st.columns(2)
+                with c1:
+                    if st.button("Sim, enviar", use_container_width=True):
+                        codigo, err = auth.gerar_codigo()
+                        if err:
+                            st.error(err)
+                        else:
+                            enviado = tg.enviar_codigo_desbloqueio(codigo)
+                            if enviado:
+                                st.success("Código enviado!")
+                            else:
+                                st.error("Falha ao enviar. Verifique o Telegram.")
+                            st.session_state["_aguardando_codigo"] = True
+                        st.session_state["_confirmar_codigo"] = False
+                        st.rerun()
+                with c2:
+                    if st.button("Cancelar", use_container_width=True):
+                        st.session_state["_confirmar_codigo"] = False
+                        st.rerun()
+
+            if st.session_state.get("_aguardando_codigo", False):
+                with st.form("codigo_form"):
+                    codigo_input = st.text_input("Código de desbloqueio", max_chars=6)
+                    ok_btn = st.form_submit_button("Verificar", use_container_width=True)
+                if ok_btn:
+                    ok, msg = auth.verificar_codigo(codigo_input)
+                    if ok:
+                        st.session_state["_aguardando_codigo"] = False
+                        st.success("Desbloqueado! Faça login.")
+                        st.rerun()
+                    else:
+                        st.error(msg)
 
 
 # ─── Dashboard ────────────────────────────────────────────────────────────────
@@ -270,6 +283,7 @@ def dashboard():
         st.subheader("💰 Últimas Entradas")
         if not entradas_df.empty:
             df_show = entradas_df[["data", "fonte", "valor"]].copy()
+            df_show["data"] = df_show["data"].apply(utils.fmt_data)
             df_show["valor"] = df_show["valor"].astype(float).apply(utils.fmt_brl)
             df_show.columns = ["Data", "Fonte", "Valor"]
             st.dataframe(df_show.tail(5), use_container_width=True, hide_index=True)
@@ -281,6 +295,7 @@ def dashboard():
         st.subheader("💸 Últimos Gastos")
         if not gastos_df.empty:
             df_show = gastos_df[["data_compra", "categoria", "forma_pagamento", "valor_parcela"]].copy()
+            df_show["data_compra"] = df_show["data_compra"].apply(utils.fmt_data)
             df_show["valor_parcela"] = df_show["valor_parcela"].astype(float).apply(utils.fmt_brl)
             df_show.columns = ["Data", "Categoria", "Pagamento", "Valor"]
             st.dataframe(df_show.tail(5), use_container_width=True, hide_index=True)
