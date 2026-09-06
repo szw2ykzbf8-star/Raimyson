@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import pandas as pd
+import plotly.graph_objects as go
 from datetime import date
 from src import auth, sheets as sh, utils
 
@@ -44,6 +45,39 @@ def buscar_cotacoes(ids: tuple) -> dict:
         return r.json()
     except Exception:
         return {}
+
+
+def _fetch_hist(coin_id: str, days: int) -> list:
+    try:
+        url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart"
+        r = requests.get(url, params={"vs_currency": "brl", "days": days}, timeout=10)
+        r.raise_for_status()
+        return r.json().get("prices", [])
+    except Exception:
+        return []
+
+@st.cache_data(ttl=300)
+def buscar_historico_1d(coin_id: str) -> list:
+    return _fetch_hist(coin_id, 1)
+
+@st.cache_data(ttl=1800)
+def buscar_historico_7d(coin_id: str) -> list:
+    return _fetch_hist(coin_id, 7)
+
+@st.cache_data(ttl=3600)
+def buscar_historico_30d(coin_id: str) -> list:
+    return _fetch_hist(coin_id, 30)
+
+@st.cache_data(ttl=86400)
+def buscar_historico_365d(coin_id: str) -> list:
+    return _fetch_hist(coin_id, 365)
+
+_HIST_FUNCS = {
+    1:   buscar_historico_1d,
+    7:   buscar_historico_7d,
+    30:  buscar_historico_30d,
+    365: buscar_historico_365d,
+}
 
 
 tabs = st.tabs(["Portfólio", "Nova Compra", "Venda", "Histórico"])
@@ -146,6 +180,51 @@ with tabs[0]:
                         st.metric("Variação 24h", f"{r['var_24h']:.2f}%",
                                   delta=f"{r['var_24h']:.2f}%")
                     st.metric("Comprado em", utils.fmt_data(r["data"]))
+
+                # ── Gráfico histórico de preço ──────────────────────
+                cg_id_chart = simbolos_para_id.get(r["simbolo"], "")
+                if cg_id_chart:
+                    st.markdown("---")
+                    periodo_map = {"24h": 1, "7 dias": 7, "1 mês": 30, "1 ano": 365}
+                    periodo_sel = st.radio(
+                        "Período", list(periodo_map.keys()), horizontal=True,
+                        key=f"periodo_{r['id']}"
+                    )
+                    days_sel = periodo_map[periodo_sel]
+                    hist = _HIST_FUNCS[days_sel](cg_id_chart)
+                    if hist:
+                        df_h = pd.DataFrame(hist, columns=["ts", "preco"])
+                        df_h["data"] = pd.to_datetime(df_h["ts"], unit="ms")
+                        df_h["preco"] = df_h["preco"].astype(float)
+                        p0 = df_h["preco"].iloc[0]
+                        p1 = df_h["preco"].iloc[-1]
+                        var = (p1 - p0) / p0 * 100 if p0 else 0
+                        cor = "#2ECC71" if var >= 0 else "#E74C3C"
+                        fill_cor = "rgba(46,204,113,0.15)" if var >= 0 else "rgba(231,76,60,0.15)"
+                        fig_h = go.Figure()
+                        fig_h.add_trace(go.Scatter(
+                            x=df_h["data"], y=df_h["preco"],
+                            fill="tozeroy", fillcolor=fill_cor,
+                            line=dict(color=cor, width=2),
+                            name="Preço BRL", hovertemplate="%{y:,.2f} BRL<extra></extra>"
+                        ))
+                        if r["preco_med"] > 0:
+                            fig_h.add_hline(
+                                y=r["preco_med"], line_dash="dot", line_color="#F39C12",
+                                annotation_text=f"Seu preço: {utils.fmt_brl(r['preco_med'])}",
+                                annotation_position="top right",
+                                annotation=dict(font_color="#F39C12", font_size=11)
+                            )
+                        fig_h.update_layout(
+                            title=dict(text=f"{r['simbolo']} · {var:+.2f}% ({periodo_sel})", font_size=14),
+                            xaxis_title="", yaxis_title="BRL",
+                            height=280, template="plotly_dark",
+                            margin=dict(l=0, r=0, t=40, b=0),
+                            showlegend=False,
+                        )
+                        st.plotly_chart(fig_h, use_container_width=True)
+                    else:
+                        st.caption("Histórico de preços indisponível no momento.")
 
                 st.markdown("")
                 if st.button("🗑️ Excluir posição", key=f"del_cr_{r['id']}"):
