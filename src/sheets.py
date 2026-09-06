@@ -311,12 +311,13 @@ def get_investimentos(status: str = None) -> pd.DataFrame:
 
 def add_investimento(nome: str, tipo: str, data_aplicacao: str,
                      valor_aplicado: float, taxa_tipo: str,
-                     taxa_valor: float, data_vencimento: str) -> str:
+                     taxa_valor: float, data_vencimento: str,
+                     conta_origem: str = "") -> str:
     ws  = _sheet(SHEETS["investimentos"])
     rid = new_id()
     ws.append_row([rid, nome, tipo, data_aplicacao, str(valor_aplicado),
                    taxa_tipo, str(taxa_valor), data_vencimento,
-                   "", "", "ATIVO", _now()])
+                   "", "", "ATIVO", _now(), conta_origem])
     invalidate("investimentos")
     return rid
 

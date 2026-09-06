@@ -205,8 +205,9 @@ def dashboard():
     todas_entradas_full = sh.get_entradas()
     todos_gastos_full = sh.get_gastos()
     todas_transf = sh.get_transferencias()
+    todos_invest = sh.get_investimentos()
     saldo_total = sum(
-        utils.calcular_saldo_conta(row["nome"], todas_entradas_full, todos_gastos_full, todas_transf, contas_df)
+        utils.calcular_saldo_conta(row["nome"], todas_entradas_full, todos_gastos_full, todas_transf, contas_df, todos_invest)
         for _, row in contas_df.iterrows()
     ) if not contas_df.empty else 0
 
@@ -336,7 +337,7 @@ def dashboard():
         for i, (_, row) in enumerate(contas_df.iterrows()):
             saldo_c = utils.calcular_saldo_conta(
                 row["nome"], todas_entradas_full, todos_gastos_full,
-                todas_transf, contas_df
+                todas_transf, contas_df, todos_invest
             )
             cor   = "verde" if saldo_c >= 0 else "vermelho"
             nome  = _html.escape(str(row["nome"]))

@@ -90,6 +90,13 @@ with tabs[0]:
 
 with tabs[1]:
     _k = st.session_state.get("_k_invest", 0)
+    contas_df_inv = sh.get_contas()
+    contas_inv = contas_df_inv["nome"].tolist() if not contas_df_inv.empty else []
+    conta_origem_inv = st.selectbox(
+        "Retirar de qual conta?",
+        contas_inv if contas_inv else ["— nenhuma cadastrada —"],
+        key="conta_origem_inv"
+    )
     with st.form(f"form_invest_{_k}"):
         c1, c2 = st.columns(2)
         with c1:
@@ -111,7 +118,8 @@ with tabs[1]:
             st.warning("Informe o valor aplicado.")
         else:
             sh.add_investimento(nome_i.strip(), tipo_i, data_aplic.isoformat(),
-                                valor_aplic, taxa_tipo, taxa_val, data_venc.isoformat())
+                                valor_aplic, taxa_tipo, taxa_val, data_venc.isoformat(),
+                                conta_origem_inv)
             st.session_state["_k_invest"] = _k + 1
             st.success(f"Investimento '{nome_i}' cadastrado!")
             st.rerun()
