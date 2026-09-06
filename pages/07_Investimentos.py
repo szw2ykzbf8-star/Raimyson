@@ -8,6 +8,12 @@ from src import auth, sheets as sh, utils
 st.set_page_config(page_title="Investimentos — FinTrack", page_icon="📈", layout="wide")
 auth.require_auth()
 
+sh.ensure_sheet("investimentos", [
+    "id", "nome", "tipo", "data_aplicacao", "valor_aplicado",
+    "taxa_tipo", "taxa_valor", "data_vencimento",
+    "valor_retirado", "data_retirada", "status", "criado_em", "conta_origem",
+])
+
 st.title("📈 Investimentos")
 
 tabs = st.tabs(["Portfólio", "Novo Investimento", "Retirada", "Simulador", "Comparativo"])
