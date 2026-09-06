@@ -46,7 +46,7 @@ with tabs[0]:
                     st.session_state[f"confirm_del_t_{row['id']}"] = True
                 if st.session_state.get(f"confirm_del_t_{row['id']}", False):
                     pin = st.text_input("PIN de exclusão", type="password",
-                                        max_chars=6, key=f"pin_del_t_{row['id']}")
+                                        max_chars=72, key=f"pin_del_t_{row['id']}")
                     c_ok, c_cancel = st.columns(2)
                     with c_ok:
                         if st.button("Confirmar", key=f"ok_del_t_{row['id']}"):
@@ -72,7 +72,7 @@ with tabs[0]:
             st.session_state["confirm_del_conta"] = True
 
         if st.session_state.get("confirm_del_conta", False):
-            pin = st.text_input("PIN de exclusão", type="password", max_chars=6)
+            pin = st.text_input("PIN de exclusão", type="password", max_chars=72)
             c_ok, c_cancel = st.columns(2)
             with c_ok:
                 if st.button("Confirmar exclusão", key="ok_del_conta"):

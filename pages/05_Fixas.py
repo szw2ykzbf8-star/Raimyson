@@ -83,7 +83,7 @@ else:
         if st.session_state.get(f"confirm_del_f_{row['id']}", False):
             st.warning(f"Excluir '{row['nome']}' de todos os meses futuros?")
             pin = st.text_input("PIN de exclusão", type="password",
-                                max_chars=6, key=f"pin_del_f_{row['id']}")
+                                max_chars=72, key=f"pin_del_f_{row['id']}")
             c_ok, c_cancel = st.columns(2)
             with c_ok:
                 if st.button("Confirmar", key=f"ok_del_f_{row['id']}"):
