@@ -1,3 +1,5 @@
+import time
+import os
 import streamlit as st
 import requests
 import pandas as pd
@@ -32,6 +34,10 @@ MOEDAS = {
 
 EXCHANGES = ["Nubank", "Binance", "Coinbase", "Mercado Bitcoin", "Bitso", "Outro"]
 
+# API key opcional do CoinGecko (plano Demo gratuito — https://www.coingecko.com/en/api)
+_CG_API_KEY = os.getenv("COINGECKO_API_KEY", "")
+_CG_HEADERS = {"x-cg-demo-api-key": _CG_API_KEY} if _CG_API_KEY else {}
+
 
 @st.cache_data(ttl=3600)
 def buscar_cotacoes(ids: tuple) -> dict:
@@ -39,7 +45,7 @@ def buscar_cotacoes(ids: tuple) -> dict:
     try:
         url = "https://api.coingecko.com/api/v3/simple/price"
         params = {"ids": ",".join(ids), "vs_currencies": "brl", "include_24hr_change": "true"}
-        r = requests.get(url, params=params, timeout=10)
+        r = requests.get(url, params=params, headers=_CG_HEADERS, timeout=10)
         r.raise_for_status()
         return r.json()
     except Exception:
@@ -47,13 +53,30 @@ def buscar_cotacoes(ids: tuple) -> dict:
 
 
 def _fetch_hist(coin_id: str, days: int) -> list:
-    try:
-        url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart"
-        r = requests.get(url, params={"vs_currency": "brl", "days": days}, timeout=10)
-        r.raise_for_status()
-        return r.json().get("prices", [])
-    except Exception:
-        return []
+    """Busca histórico de preços com retry automático em caso de rate-limit (429)."""
+    url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart"
+    for tentativa in range(3):
+        try:
+            r = requests.get(
+                url,
+                params={"vs_currency": "brl", "days": days},
+                headers=_CG_HEADERS,
+                timeout=15,
+            )
+            if r.status_code == 429:
+                if tentativa < 2:
+                    time.sleep(2 ** tentativa)   # 1s, 2s
+                    continue
+                return []
+            r.raise_for_status()
+            return r.json().get("prices", [])
+        except Exception:
+            if tentativa < 2:
+                time.sleep(1)
+                continue
+            return []
+    return []
+
 
 @st.cache_data(ttl=300)
 def buscar_historico_1d(coin_id: str) -> list:
@@ -191,6 +214,15 @@ with tabs[0]:
                     )
                     days_sel = periodo_map[periodo_sel]
                     hist = _HIST_FUNCS[days_sel](cg_id_chart)
+                    if not hist:
+                        c_msg, c_btn = st.columns([3, 1])
+                        with c_msg:
+                            st.caption("⚠️ Histórico indisponível — CoinGecko atingiu o limite de requisições.")
+                        with c_btn:
+                            if st.button("🔄 Tentar", key=f"retry_{r['id']}_{days_sel}"):
+                                st.cache_data.clear()
+                                st.rerun()
+
                     if hist:
                         df_h = pd.DataFrame(hist, columns=["ts", "preco"])
                         df_h["data"] = pd.to_datetime(df_h["ts"], unit="ms")
@@ -222,8 +254,6 @@ with tabs[0]:
                             showlegend=False,
                         )
                         st.plotly_chart(fig_h, use_container_width=True)
-                    else:
-                        st.caption("Histórico de preços indisponível no momento.")
 
                 st.markdown("")
                 if st.button("🗑️ Excluir posição", key=f"del_cr_{r['id']}"):
