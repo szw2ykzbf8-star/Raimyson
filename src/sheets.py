@@ -400,9 +400,8 @@ def add_cripto(moeda: str, simbolo: str, quantidade: float, preco_compra_brl: fl
 def vender_cripto(rid: str, preco_venda_brl: float, data_venda: str):
     ws      = _sheet(SHEETS["criptos"])
     row_num = _find_row(ws, rid)
-    ws.update_cell(row_num, 9,  str(preco_venda_brl))
-    ws.update_cell(row_num, 10, data_venda)
-    ws.update_cell(row_num, 11, "VENDIDO")
+    # Atualiza as 3 colunas em uma única chamada para evitar inconsistência parcial
+    ws.update(f"I{row_num}:K{row_num}", [[str(preco_venda_brl), data_venda, "VENDIDO"]])
     invalidate("criptos")
 
 

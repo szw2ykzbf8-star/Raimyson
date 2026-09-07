@@ -339,8 +339,14 @@ with tabs[3]:
     if df_hist.empty:
         st.info("Nenhuma venda registrada.")
     else:
-        total_inv_h = df_hist["preco_compra_brl"].astype(float).sum()
-        total_ven_h = df_hist["preco_venda_brl"].astype(float).sum()
+        def _to_float(v):
+            try:
+                return float(v) if v not in (None, "", "nan") else 0.0
+            except (ValueError, TypeError):
+                return 0.0
+
+        total_inv_h = df_hist["preco_compra_brl"].apply(_to_float).sum()
+        total_ven_h = df_hist["preco_venda_brl"].apply(_to_float).sum()
         lucro_h     = total_ven_h - total_inv_h
         c1, c2, c3 = st.columns(3)
         with c1:
@@ -353,8 +359,8 @@ with tabs[3]:
 
         st.markdown("---")
         for _, row in df_hist.iterrows():
-            inv = float(row["preco_compra_brl"])
-            ven = float(row["preco_venda_brl"]) if row["preco_venda_brl"] else 0
+            inv = _to_float(row["preco_compra_brl"])
+            ven = _to_float(row["preco_venda_brl"])
             lucro = ven - inv
             st.write(
                 f"**{row['moeda']}** · Compra: {utils.fmt_brl(inv)} → "
