@@ -264,6 +264,11 @@ def cmd_gasto(parts: list[str]) -> str:
     hoje      = datetime.now().strftime("%Y-%m-%d")
     mes       = datetime.now().strftime("%Y-%m")
 
+    viagem_ativa = _get_viagem_ativa_bot()
+    viagem_id    = str(viagem_ativa["id"]) if viagem_ativa else ""
+    if viagem_ativa:
+        categoria = "Viagem"
+
     valor_parcela = round(valor / parcelas, 2)
     id_grupo = _new_id()
     ws = _ws("gastos")
@@ -273,23 +278,24 @@ def cmd_gasto(parts: list[str]) -> str:
             _new_id(), id_grupo, hoje, hoje, mes,
             str(i), str(parcelas),
             str(valor_parcela), str(valor),
-            categoria, forma, conta, desc, _now(),
+            categoria, forma, conta, desc, _now(), viagem_id,
         ])
 
+    viagem_tag = f"\n✈️ Viagem: {viagem_ativa.get('nome', '')}" if viagem_ativa else ""
     if parcelas > 1:
         return (
             f"✅ <b>Gasto registrado</b>\n\n"
             f"💸 {_fmt(valor)} em {parcelas}x de {_fmt(valor_parcela)}\n"
             f"📂 {categoria}\n"
             f"💳 {forma} — {conta}\n"
-            f"📝 {desc}"
+            f"📝 {desc}{viagem_tag}"
         )
     return (
         f"✅ <b>Gasto registrado</b>\n\n"
         f"💸 {_fmt(valor)}\n"
         f"📂 {categoria}\n"
         f"💳 {forma} — {conta}\n"
-        f"📝 {desc}"
+        f"📝 {desc}{viagem_tag}"
     )
 
 
@@ -551,6 +557,11 @@ def handle_natural_language(text: str, chat_id: str) -> None:
         conta     = result.get("conta", "") or "—"
         parcelas  = max(1, int(result.get("parcelas", 1) or 1))
 
+        viagem_ativa = _get_viagem_ativa_bot()
+        viagem_id    = str(viagem_ativa["id"]) if viagem_ativa else ""
+        if viagem_ativa:
+            categoria = "Viagem"
+
         valor_parcela = round(valor / parcelas, 2)
         id_grupo      = _new_id()
         ws            = _ws("gastos")
@@ -560,16 +571,17 @@ def handle_natural_language(text: str, chat_id: str) -> None:
                 _new_id(), id_grupo, hoje, hoje, mes,
                 str(i), str(parcelas),
                 str(valor_parcela), str(valor),
-                categoria, forma, conta, descricao, _now(),
+                categoria, forma, conta, descricao, _now(), viagem_id,
             ])
 
-        prc_txt = f" em {parcelas}x de {_fmt(valor_parcela)}" if parcelas > 1 else ""
+        prc_txt    = f" em {parcelas}x de {_fmt(valor_parcela)}" if parcelas > 1 else ""
+        viagem_tag = f"\n✈️ Viagem: {viagem_ativa.get('nome', '')}" if viagem_ativa else ""
         send(
             f"✅ <b>Gasto registrado</b>\n\n"
             f"💸 {_fmt(valor)}{prc_txt}\n"
             f"📂 {categoria}\n"
             f"💳 {forma} — {conta}\n"
-            f"📝 {descricao}",
+            f"📝 {descricao}{viagem_tag}",
             chat_id=chat_id,
         )
 
@@ -586,6 +598,185 @@ def handle_natural_language(text: str, chat_id: str) -> None:
             f"📌 {fonte}\n"
             f"🏦 {conta}",
             chat_id=chat_id,
+        )
+
+
+# ─── Viagens ─────────────────────────────────────────────────────────────────
+
+
+def _get_viagem_ativa_bot() -> dict | None:
+    from datetime import date
+    hoje = date.today().isoformat()
+    try:
+        rows = _get_all("viagens")
+        for r in rows:
+            if str(r.get("status", "")).lower() == "ativo":
+                d_ini = str(r.get("data_inicio", ""))
+                d_fim = str(r.get("data_fim", ""))
+                if d_ini and d_fim and d_ini <= hoje <= d_fim:
+                    return r
+    except Exception:
+        pass
+    return None
+
+
+def _parse_viagem_criar(parts: list[str]) -> dict | str:
+    import re
+    DATE_RE = re.compile(r'^\d{1,2}/\d{1,2}(?:/\d{2,4})?$')
+
+    date_indices = [i for i, p in enumerate(parts) if DATE_RE.match(p)]
+    if len(date_indices) < 2:
+        return (
+            "Formato:\n"
+            "<code>/viagem criar Nome Destino DD/MM DD/MM orçamento</code>\n\n"
+            "Ex: <code>/viagem criar Buenos Aires 15/10 22/10 5000</code>"
+        )
+
+    i1, i2 = date_indices[0], date_indices[1]
+    nome_destino = parts[:i1]
+    resto = parts[i2 + 1:]
+
+    if not nome_destino:
+        return "❌ Informe o nome/destino da viagem."
+    if not resto:
+        return "❌ Informe o orçamento após as datas."
+    try:
+        orcamento = float(resto[0].replace(",", "."))
+    except ValueError:
+        return f"❌ Orçamento inválido: <code>{resto[0]}</code>"
+
+    nome    = nome_destino[0]
+    destino = " ".join(nome_destino[1:]) if len(nome_destino) > 1 else nome_destino[0]
+
+    def _parse_date(s: str) -> str | None:
+        bits = s.split("/")
+        try:
+            d, mo = int(bits[0]), int(bits[1])
+            y = int(bits[2]) if len(bits) == 3 else datetime.now().year
+            if y < 100:
+                y += 2000
+            return f"{y:04d}-{mo:02d}-{d:02d}"
+        except Exception:
+            return None
+
+    d_ini = _parse_date(parts[i1])
+    d_fim = _parse_date(parts[i2])
+
+    if not d_ini:
+        return f"❌ Data de início inválida: <code>{parts[i1]}</code>. Use DD/MM ou DD/MM/AAAA."
+    if not d_fim:
+        return f"❌ Data de fim inválida: <code>{parts[i2]}</code>. Use DD/MM ou DD/MM/AAAA."
+    if d_fim < d_ini:
+        return "❌ A data de fim deve ser posterior à de início."
+
+    return {
+        "nome": nome,
+        "destino": destino,
+        "data_inicio": d_ini,
+        "data_fim": d_fim,
+        "orcamento": orcamento,
+    }
+
+
+def cmd_viagem(parts: list[str]) -> str:
+    sub = parts[0].lower() if parts else "status"
+
+    if sub == "status":
+        viagem = _get_viagem_ativa_bot()
+        if not viagem:
+            return "✈️ Nenhuma viagem ativa no momento.\n\nUse <code>/viagem criar</code> para iniciar uma."
+        vid       = str(viagem.get("id", ""))
+        nome      = viagem.get("nome", "")
+        dest      = viagem.get("destino", "")
+        d_ini_v   = viagem.get("data_inicio", "")
+        d_fim_v   = viagem.get("data_fim", "")
+        orc       = float(viagem.get("orcamento", 0) or 0)
+        gastos_rows = _get_all("gastos")
+        total_gasto = sum(
+            float(r.get("valor_parcela", 0) or 0)
+            for r in gastos_rows
+            if str(r.get("viagem_id", "")) == vid
+        )
+        saldo = orc - total_gasto
+        pct   = total_gasto / orc * 100 if orc > 0 else 0
+        return (
+            f"✈️ <b>Viagem ativa: {nome}</b>\n\n"
+            f"📍 Destino: {dest}\n"
+            f"📅 {d_ini_v} → {d_fim_v}\n\n"
+            f"💰 Orçamento: {_fmt(orc)}\n"
+            f"💸 Gasto:     {_fmt(total_gasto)} ({pct:.1f}%)\n"
+            f"💚 Saldo:     {_fmt(saldo)}"
+        )
+
+    elif sub == "criar":
+        parsed = _parse_viagem_criar(parts[1:])
+        if isinstance(parsed, str):
+            return parsed
+        viagem_atual = _get_viagem_ativa_bot()
+        if viagem_atual:
+            return (
+                f"⚠️ Já existe uma viagem ativa: <b>{viagem_atual.get('nome', '')}</b>.\n"
+                "Encerre a atual antes de criar uma nova.\n"
+                "Use: <code>/viagem encerrar</code>"
+            )
+        rid = _new_id()
+        ws  = _ws("viagens")
+        ws.append_row([
+            rid,
+            parsed["nome"],
+            parsed["destino"],
+            parsed["data_inicio"],
+            parsed["data_fim"],
+            str(parsed["orcamento"]),
+            "ativo",
+            _now(),
+        ])
+        return (
+            f"✈️ <b>Viagem criada!</b>\n\n"
+            f"📍 {parsed['nome']} → {parsed['destino']}\n"
+            f"📅 {parsed['data_inicio']} → {parsed['data_fim']}\n"
+            f"💰 Orçamento: {_fmt(parsed['orcamento'])}\n\n"
+            "Todos os gastos durante o período serão automaticamente marcados como <b>Viagem</b>."
+        )
+
+    elif sub == "encerrar":
+        viagem = _get_viagem_ativa_bot()
+        if not viagem:
+            return "✈️ Nenhuma viagem ativa para encerrar."
+        vid  = str(viagem.get("id", ""))
+        nome = viagem.get("nome", "")
+        orc  = float(viagem.get("orcamento", 0) or 0)
+        ws   = _ws("viagens")
+        all_rows = ws.get_all_values()
+        headers  = all_rows[0] if all_rows else []
+        try:
+            id_col     = headers.index("id") + 1
+            status_col = headers.index("status") + 1
+        except ValueError:
+            return "❌ Erro ao localizar colunas da planilha de viagens."
+        for row_idx, row in enumerate(all_rows[1:], start=2):
+            if len(row) >= id_col and row[id_col - 1] == vid:
+                ws.update_cell(row_idx, status_col, "encerrada")
+                break
+        gastos_rows = _get_all("gastos")
+        total_gasto = sum(
+            float(r.get("valor_parcela", 0) or 0)
+            for r in gastos_rows
+            if str(r.get("viagem_id", "")) == vid
+        )
+        return (
+            f"🏁 <b>Viagem encerrada: {nome}</b>\n\n"
+            f"💸 Total gasto: {_fmt(total_gasto)}\n"
+            f"💰 Orçamento era: {_fmt(orc)}"
+        )
+
+    else:
+        return (
+            "✈️ <b>Comandos de Viagem:</b>\n\n"
+            "<code>/viagem status</code> — ver viagem ativa\n"
+            "<code>/viagem criar Nome Destino DD/MM DD/MM orçamento</code>\n"
+            "<code>/viagem encerrar</code> — encerrar viagem ativa\n\n"
+            "Ex: <code>/viagem criar Buenos Aires 15/10 22/10 5000</code>"
         )
 
 
@@ -624,6 +815,11 @@ def cmd_ajuda(_: list[str]) -> str:
         "<code>/resumo</code> — gastos por categoria\n\n"
         "<b>🔗 Acesso:</b>\n"
         "<code>/link</code> — link de acesso ao app\n\n"
+        "<b>✈️ Viagens:</b>\n"
+        "<code>/viagem status</code>  — viagem ativa e saldo\n"
+        "<code>/viagem criar Nome Dest DD/MM DD/MM orçamento</code>\n"
+        "<code>/viagem encerrar</code> — encerra viagem ativa\n"
+        "  <i>Gastos durante a viagem são marcados automaticamente como Viagem.</i>\n\n"
         "<b>💬 Linguagem natural:</b>\n"
         "Envie qualquer mensagem sem <code>/</code> e o bot interpreta automaticamente:\n"
         "  <i>\"gastei 45 no mercado\"</i>\n"
@@ -637,6 +833,7 @@ COMMANDS: dict[str, callable] = {
     "/entrada": cmd_entrada,
     "/saldo":   cmd_saldo,
     "/resumo":  cmd_resumo,
+    "/viagem":  cmd_viagem,
     "/link":    cmd_link,
     "/ajuda":   cmd_ajuda,
     "/help":    cmd_ajuda,

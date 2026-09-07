@@ -28,6 +28,7 @@ SHEETS = {
     "gastos":        "gastos",
     "transferencias":"transferencias",
     "pgtos_contas": "pagamentos_contas",
+    "viagens":      "viagens",
 }
 
 # ─── Chaves da aba config (centralizadas para evitar erros de digitação) ──────

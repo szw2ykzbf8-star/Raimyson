@@ -176,6 +176,20 @@ def tela_login():
 def dashboard():
     auth.require_auth()
 
+    # Banner de viagem ativa
+    try:
+        _viagem_ativa = sh.get_viagem_ativa()
+        if _viagem_ativa:
+            _v_nome = _viagem_ativa.get("nome", "")
+            _v_dest = _viagem_ativa.get("destino", "")
+            _v_fim  = str(_viagem_ativa.get("data_fim", ""))
+            st.info(
+                f"✈️ **Modo Viagem ativo:** {_v_nome} — {_v_dest}  ·  "
+                f"Término: {utils.fmt_data(_v_fim)}  |  Alertas de categoria suspensos."
+            )
+    except Exception:
+        pass
+
     # Seletor de mês
     col_nav1, col_nav2, col_nav3 = st.columns([1, 3, 1])
     with col_nav1:
@@ -482,6 +496,7 @@ pg = st.navigation(
             st.Page("pages/05_Contas_a_Pagar.py",  title="Contas a Pagar", icon="📅"),
             st.Page("pages/06_Fixas.py",           title="Contas Fixas",   icon="📋"),
             st.Page("pages/07_Dividas.py",         title="Dívidas",        icon="🔴"),
+            st.Page("pages/13_Viagens.py",         title="Viagens",        icon="✈️"),
         ],
         "Patrimônio": [
             st.Page("pages/08_Contas.py",          title="Contas Bancárias", icon="🏦"),

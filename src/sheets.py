@@ -457,14 +457,15 @@ def add_gasto(data_compra: str, data_fatura: str, mes_ref: str,
               parcela_num: int, total_parcelas: int, valor_parcela: float,
               valor_total: float, categoria: str, forma_pgto: str,
               conta_cartao: str, descricao: str = "",
-              id_grupo: str = None) -> str:
+              id_grupo: str = None, viagem_id: str = "") -> str:
     ws  = _sheet(SHEETS["gastos"])
     rid = new_id()
     gid = id_grupo or rid
     ws.append_row([rid, gid, data_compra, data_fatura, mes_ref,
                    str(parcela_num), str(total_parcelas),
                    str(valor_parcela), str(valor_total),
-                   categoria, forma_pgto, conta_cartao, descricao, _now()])
+                   categoria, forma_pgto, conta_cartao, descricao, _now(),
+                   viagem_id])
     invalidate("gastos")
     return rid
 
@@ -558,3 +559,56 @@ def delete_transferencia(rid: str):
     row_num = _find_row(ws, rid)
     ws.delete_rows(row_num)
     invalidate("transferencias")
+
+
+# ─── Viagens ─────────────────────────────────────────────────────────────────
+
+
+_VIAGENS_HEADERS = [
+    "id", "nome", "destino", "data_inicio", "data_fim",
+    "orcamento", "status", "criado_em",
+]
+
+_GASTOS_VIAGEM_COL = "viagem_id"
+
+
+def get_viagens() -> pd.DataFrame:
+    return get_df("viagens")
+
+
+def get_viagem_ativa() -> dict | None:
+    """Retorna a viagem ativa cujo período contém hoje, ou None."""
+    from datetime import date
+    df = get_df("viagens")
+    if df.empty:
+        return None
+    hoje = date.today().isoformat()
+    for _, row in df.iterrows():
+        if (str(row.get("status", "")) == "ativa"
+                and str(row.get("data_inicio", "")) <= hoje <= str(row.get("data_fim", ""))):
+            return row.to_dict()
+    return None
+
+
+def criar_viagem(nome: str, destino: str, data_inicio: str,
+                 data_fim: str, orcamento: float) -> str:
+    ws  = _sheet(SHEETS["viagens"])
+    rid = new_id()
+    ws.append_row([rid, nome, destino, data_inicio, data_fim,
+                   str(orcamento), "ativa", _now()])
+    invalidate("viagens")
+    return rid
+
+
+def encerrar_viagem(rid: str) -> None:
+    ws      = _sheet(SHEETS["viagens"])
+    row_num = _find_row(ws, rid)
+    ws.update_cell(row_num, 7, "encerrada")
+    invalidate("viagens")
+
+
+def get_gastos_viagem(viagem_id: str) -> pd.DataFrame:
+    df = get_df("gastos")
+    if df.empty or _GASTOS_VIAGEM_COL not in df.columns:
+        return pd.DataFrame()
+    return df[df[_GASTOS_VIAGEM_COL].astype(str) == viagem_id].copy()
