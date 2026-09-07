@@ -203,57 +203,63 @@ with tabs[0]:
                                   delta=f"{r['var_24h']:.2f}%")
                     st.metric("Comprado em", utils.fmt_data(r["data"]))
 
-                # ── Gráfico histórico de preço ──────────────────────
+                # ── Gráfico histórico de preço (carregado sob demanda) ─
                 cg_id_chart = simbolos_para_id.get(r["simbolo"], "")
                 if cg_id_chart:
                     st.markdown("---")
-                    periodo_map = {"24h": 1, "7 dias": 7, "1 mês": 30, "1 ano": 365}
-                    periodo_sel = st.radio(
-                        "Período", list(periodo_map.keys()), horizontal=True,
-                        key=f"periodo_{r['id']}"
-                    )
-                    days_sel = periodo_map[periodo_sel]
-                    hist = _HIST_FUNCS[days_sel](cg_id_chart)
-                    if not hist:
-                        c_msg, c_btn = st.columns([3, 1])
-                        with c_msg:
-                            st.caption("⚠️ Histórico indisponível — CoinGecko atingiu o limite de requisições.")
-                        with c_btn:
-                            if st.button("🔄 Tentar", key=f"retry_{r['id']}_{days_sel}"):
-                                st.cache_data.clear()
-                                st.rerun()
-
-                    if hist:
-                        df_h = pd.DataFrame(hist, columns=["ts", "preco"])
-                        df_h["data"] = pd.to_datetime(df_h["ts"], unit="ms")
-                        df_h["preco"] = df_h["preco"].astype(float)
-                        p0 = df_h["preco"].iloc[0]
-                        p1 = df_h["preco"].iloc[-1]
-                        var = (p1 - p0) / p0 * 100 if p0 else 0
-                        cor = "#2ECC71" if var >= 0 else "#E74C3C"
-                        fill_cor = "rgba(46,204,113,0.15)" if var >= 0 else "rgba(231,76,60,0.15)"
-                        fig_h = go.Figure()
-                        fig_h.add_trace(go.Scatter(
-                            x=df_h["data"], y=df_h["preco"],
-                            fill="tozeroy", fillcolor=fill_cor,
-                            line=dict(color=cor, width=2),
-                            name="Preço BRL", hovertemplate="%{y:,.2f} BRL<extra></extra>"
-                        ))
-                        if r["preco_med"] > 0:
-                            fig_h.add_hline(
-                                y=r["preco_med"], line_dash="dot", line_color="#F39C12",
-                                annotation_text=f"Seu preço: {utils.fmt_brl(r['preco_med'])}",
-                                annotation_position="top right",
-                                annotation=dict(font_color="#F39C12", font_size=11)
-                            )
-                        fig_h.update_layout(
-                            title=dict(text=f"{r['simbolo']} · {var:+.2f}% ({periodo_sel})", font_size=14),
-                            xaxis_title="", yaxis_title="BRL",
-                            height=280, template="plotly_dark",
-                            margin=dict(l=0, r=0, t=40, b=0),
-                            showlegend=False,
+                    _chart_key = f"show_chart_{r['id']}"
+                    if not st.session_state.get(_chart_key, False):
+                        if st.button("📈 Ver histórico de preço", key=f"btn_chart_{r['id']}"):
+                            st.session_state[_chart_key] = True
+                            st.rerun()
+                    else:
+                        periodo_map = {"24h": 1, "7 dias": 7, "1 mês": 30, "1 ano": 365}
+                        periodo_sel = st.radio(
+                            "Período", list(periodo_map.keys()), horizontal=True,
+                            key=f"periodo_{r['id']}"
                         )
-                        st.plotly_chart(fig_h, use_container_width=True)
+                        days_sel = periodo_map[periodo_sel]
+                        with st.spinner("Carregando..."):
+                            hist = _HIST_FUNCS[days_sel](cg_id_chart)
+                        if not hist:
+                            c_msg, c_btn = st.columns([3, 1])
+                            with c_msg:
+                                st.caption("⚠️ Limite de requisições da CoinGecko. Aguarde alguns segundos e tente novamente.")
+                            with c_btn:
+                                if st.button("🔄 Tentar", key=f"retry_{r['id']}_{days_sel}"):
+                                    st.cache_data.clear()
+                                    st.rerun()
+                        else:
+                            df_h = pd.DataFrame(hist, columns=["ts", "preco"])
+                            df_h["data"] = pd.to_datetime(df_h["ts"], unit="ms")
+                            df_h["preco"] = df_h["preco"].astype(float)
+                            p0 = df_h["preco"].iloc[0]
+                            p1 = df_h["preco"].iloc[-1]
+                            var = (p1 - p0) / p0 * 100 if p0 else 0
+                            cor = "#2ECC71" if var >= 0 else "#E74C3C"
+                            fill_cor = "rgba(46,204,113,0.15)" if var >= 0 else "rgba(231,76,60,0.15)"
+                            fig_h = go.Figure()
+                            fig_h.add_trace(go.Scatter(
+                                x=df_h["data"], y=df_h["preco"],
+                                fill="tozeroy", fillcolor=fill_cor,
+                                line=dict(color=cor, width=2),
+                                name="Preço BRL", hovertemplate="%{y:,.2f} BRL<extra></extra>"
+                            ))
+                            if r["preco_med"] > 0:
+                                fig_h.add_hline(
+                                    y=r["preco_med"], line_dash="dot", line_color="#F39C12",
+                                    annotation_text=f"Seu preço: {utils.fmt_brl(r['preco_med'])}",
+                                    annotation_position="top right",
+                                    annotation=dict(font_color="#F39C12", font_size=11)
+                                )
+                            fig_h.update_layout(
+                                title=dict(text=f"{r['simbolo']} · {var:+.2f}% ({periodo_sel})", font_size=14),
+                                xaxis_title="", yaxis_title="BRL",
+                                height=280, template="plotly_dark",
+                                margin=dict(l=0, r=0, t=40, b=0),
+                                showlegend=False,
+                            )
+                            st.plotly_chart(fig_h, use_container_width=True)
 
                 st.markdown("")
                 if st.button("🗑️ Excluir posição", key=f"del_cr_{r['id']}"):
