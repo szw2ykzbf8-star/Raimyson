@@ -97,7 +97,7 @@ SHEETS_HEADERS = {
         "id", "id_grupo", "data_compra", "data_fatura", "mes_referencia",
         "parcela_num", "total_parcelas", "valor_parcela", "valor_total",
         "categoria", "forma_pagamento", "conta_cartao", "descricao", "criado_em",
-        "viagem_id",
+        "viagem_id", "fixa_id",
     ],
     "viagens": [
         "id", "nome", "destino", "data_inicio", "data_fim",

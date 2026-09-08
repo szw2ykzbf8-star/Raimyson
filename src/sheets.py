@@ -456,7 +456,7 @@ def add_gasto(data_compra: str, data_fatura: str, mes_ref: str,
               parcela_num: int, total_parcelas: int, valor_parcela: float,
               valor_total: float, categoria: str, forma_pgto: str,
               conta_cartao: str, descricao: str = "",
-              id_grupo: str = None, viagem_id: str = "") -> str:
+              id_grupo: str = None, viagem_id: str = "", fixa_id: str = "") -> str:
     ws  = _sheet(SHEETS["gastos"])
     rid = new_id()
     gid = id_grupo or rid
@@ -464,7 +464,7 @@ def add_gasto(data_compra: str, data_fatura: str, mes_ref: str,
                    str(parcela_num), str(total_parcelas),
                    str(valor_parcela), str(valor_total),
                    categoria, forma_pgto, conta_cartao, descricao, _now(),
-                   viagem_id])
+                   viagem_id, fixa_id])
     invalidate("gastos")
     return rid
 
@@ -611,3 +611,106 @@ def get_gastos_viagem(viagem_id: str) -> pd.DataFrame:
     if df.empty or _GASTOS_VIAGEM_COL not in df.columns:
         return pd.DataFrame()
     return df[df[_GASTOS_VIAGEM_COL].astype(str) == viagem_id].copy()
+
+
+# ─── Auto-lançamento de Contas Fixas ─────────────────────────────────────────
+
+def auto_lancar_fixas(mes: str) -> dict:
+    """Cria gastos automáticos a partir das contas fixas ativas para o mês informado.
+
+    Regra para crédito:
+    - dia_vencimento < dia_fechamento do cartão → fatura do mês atual
+    - dia_vencimento >= dia_fechamento → fatura do mês seguinte
+
+    Não duplica: verifica fixa_id nos gastos existentes para o mes_ref calculado.
+    Retorna {"lancados": int, "ja_existiam": int}.
+    """
+    import calendar as _cal
+
+    df_fixas = get_fixas(apenas_ativas=True)
+    if df_fixas.empty:
+        return {"lancados": 0, "ja_existiam": 0}
+
+    # Mapa cartão_nome → dia_fechamento
+    df_cartoes = get_cartoes(apenas_ativos=True)
+    cartao_fechamento: dict = {}
+    if not df_cartoes.empty:
+        for _, c in df_cartoes.iterrows():
+            try:
+                cartao_fechamento[str(c["nome"])] = int(c["dia_fechamento"])
+            except (ValueError, TypeError):
+                pass
+
+    ano, mes_num = int(mes[:4]), int(mes[5:7])
+
+    def _next_mes(y: int, m: int):
+        return (y + 1, 1) if m == 12 else (y, m + 1)
+
+    def _safe_day(y: int, m: int, d: int) -> int:
+        return min(d, _cal.monthrange(y, m)[1])
+
+    # Gastos existentes para verificar duplicatas
+    df_gastos = get_df("gastos", force=True)
+    _has_fixa_col = not df_gastos.empty and "fixa_id" in df_gastos.columns
+
+    lancados = 0
+    ja_existiam = 0
+
+    for _, fixa in df_fixas.iterrows():
+        fixa_id  = str(fixa["id"])
+        dia_venc = int(fixa.get("dia_vencimento", 1) or 1)
+        forma    = str(fixa.get("forma_pagamento", ""))
+        conta_cc = str(fixa.get("conta_cartao", ""))
+
+        # Determina mes_ref da fatura
+        if forma == "Crédito" and conta_cc in cartao_fechamento:
+            dia_fech = cartao_fechamento[conta_cc]
+            if dia_venc < dia_fech:
+                mr_ano, mr_mes = ano, mes_num
+            else:
+                mr_ano, mr_mes = _next_mes(ano, mes_num)
+        else:
+            mr_ano, mr_mes = ano, mes_num
+
+        mes_ref = f"{mr_ano:04d}-{mr_mes:02d}"
+
+        # Verificar duplicata por fixa_id + mes_ref
+        if _has_fixa_col:
+            ja = df_gastos[
+                (df_gastos["fixa_id"].astype(str) == fixa_id) &
+                (df_gastos["mes_referencia"].astype(str) == mes_ref)
+            ]
+            if not ja.empty:
+                ja_existiam += 1
+                continue
+
+        # Calcular datas
+        d_venc_mr   = _safe_day(mr_ano, mr_mes, dia_venc)
+        data_fatura = f"{mr_ano:04d}-{mr_mes:02d}-{d_venc_mr:02d}"
+        if forma == "Crédito" and (mr_ano, mr_mes) != (ano, mes_num):
+            d_compra = _safe_day(ano, mes_num, dia_venc)
+            data_compra = f"{ano:04d}-{mes_num:02d}-{d_compra:02d}"
+        else:
+            data_compra = data_fatura
+
+        valor = float(fixa.get("valor_referencia", 0) or 0)
+        if valor <= 0:
+            continue
+
+        add_gasto(
+            data_compra=data_compra,
+            data_fatura=data_fatura,
+            mes_ref=mes_ref,
+            parcela_num=1,
+            total_parcelas=1,
+            valor_parcela=valor,
+            valor_total=valor,
+            categoria=str(fixa.get("categoria", "Outros")),
+            forma_pgto=forma,
+            conta_cartao=conta_cc,
+            descricao=str(fixa.get("nome", "")),
+            fixa_id=fixa_id,
+        )
+        lancados += 1
+
+    return {"lancados": lancados, "ja_existiam": ja_existiam}

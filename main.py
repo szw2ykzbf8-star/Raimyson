@@ -176,6 +176,14 @@ def tela_login():
 def dashboard():
     auth.require_auth()
 
+    # Garantir coluna fixa_id nos gastos (necessária para auto-lançamento de fixas)
+    sh.ensure_sheet("gastos", [
+        "id", "id_grupo", "data_compra", "data_fatura", "mes_referencia",
+        "parcela_num", "total_parcelas", "valor_parcela", "valor_total",
+        "categoria", "forma_pagamento", "conta_cartao", "descricao", "criado_em",
+        "viagem_id", "fixa_id",
+    ])
+
     # Banner de viagem ativa
     try:
         _viagem_ativa = sh.get_viagem_ativa()
@@ -187,6 +195,36 @@ def dashboard():
                 f"✈️ **Modo Viagem ativo:** {_v_nome} — {_v_dest}  ·  "
                 f"Término: {utils.fmt_data(_v_fim)}  |  Alertas de categoria suspensos."
             )
+    except Exception:
+        pass
+
+    # Banner: contas fixas não lançadas para o mês atual
+    try:
+        _mes_fixas = utils.mes_atual()
+        _df_fixas_ativas = sh.get_fixas()
+        if not _df_fixas_ativas.empty:
+            _gdf_fixas_check = sh.get_gastos(_mes_fixas)
+            _fixas_lancadas = (
+                not _gdf_fixas_check.empty
+                and "fixa_id" in _gdf_fixas_check.columns
+                and (_gdf_fixas_check["fixa_id"].astype(str) != "").any()
+            )
+            if not _fixas_lancadas:
+                _col_fx, _col_btn_fx = st.columns([4, 1])
+                with _col_fx:
+                    st.warning(
+                        f"📋 **{len(_df_fixas_ativas)} conta(s) fixa(s)** não foram lançadas em "
+                        f"{utils.formatar_mes(_mes_fixas)}. Clique para gerar automaticamente."
+                    )
+                with _col_btn_fx:
+                    if st.button("📋 Lançar Fixas", key="btn_auto_fixas", use_container_width=True):
+                        _res = sh.auto_lancar_fixas(_mes_fixas)
+                        sh.invalidate("gastos")
+                        if _res["lancados"] > 0:
+                            st.success(f"✅ {_res['lancados']} fixa(s) lançada(s)!")
+                        else:
+                            st.info("Todas as fixas já estavam lançadas.")
+                        st.rerun()
     except Exception:
         pass
 
@@ -327,26 +365,59 @@ def dashboard():
     _dias_mes = _cal.monthrange(_hoje_d.year, _hoje_d.month)[1]
     _pct_mes = _hoje_d.day / _dias_mes * 100
 
-    # 1. Velocidade de gastos vs % do mês
-    if total_entradas > 0 and total_gastos > 0:
+    # Dados base para projeções melhoradas
+    _df_fx_alrt = sh.get_fixas()
+    _total_fixas_esp = (
+        _df_fx_alrt["valor_referencia"].astype(float).sum()
+        if not _df_fx_alrt.empty and "valor_referencia" in _df_fx_alrt.columns else 0.0
+    )
+
+    # Separar gastos variáveis (sem fixa_id) de fixos (com fixa_id)
+    _has_fixa_col = not gastos_df.empty and "fixa_id" in gastos_df.columns
+    if _has_fixa_col:
+        _df_gvar = gastos_df[gastos_df["fixa_id"].astype(str) == ""]
+        _df_gfix = gastos_df[gastos_df["fixa_id"].astype(str) != ""]
+    else:
+        _df_gvar = gastos_df
+        _df_gfix = gastos_df.iloc[0:0] if not gastos_df.empty else gastos_df
+
+    _val_gvar    = _df_gvar["valor_parcela"].astype(float).sum() if not _df_gvar.empty else 0.0
+    _val_gfix    = _df_gfix["valor_parcela"].astype(float).sum() if not _df_gfix.empty else 0.0
+    # Custo de fixas: usa o maior entre o já lançado e o esperado (conservador)
+    _custo_fixas = max(_val_gfix, _total_fixas_esp)
+
+    # Projeção melhorada: variáveis projetadas linearmente + fixas como valor único
+    _proj_var_fim = (_val_gvar / _hoje_d.day * _dias_mes) if _hoje_d.day > 0 else _val_gvar
+    _proj_tot_fim = _proj_var_fim + _custo_fixas
+
+    # Cash flow: apenas gastos não-crédito (impacto imediato no caixa)
+    if not gastos_df.empty:
+        _df_gcash  = gastos_df[gastos_df["forma_pagamento"] != "Crédito"]
+        _val_gcash = _df_gcash["valor_parcela"].astype(float).sum() if not _df_gcash.empty else 0.0
+    else:
+        _val_gcash = 0.0
+    _proj_cash_fim = (_val_gcash / _hoje_d.day * _dias_mes) if _hoje_d.day > 0 else _val_gcash
+
+    # 1. Velocidade de gastos vs % do mês (apenas após dia 8 — início do mês é ruidoso)
+    if _hoje_d.day >= 8 and total_entradas > 0 and total_gastos > 0:
         _pct_gasto = total_gastos / total_entradas * 100
         if _pct_gasto > _pct_mes + 15:
-            _proj_fim = total_gastos * (_dias_mes / _hoje_d.day)
             _insights.append(("⚡", "warning",
                 f"**Ritmo acelerado:** {_pct_gasto:.0f}% da renda gasta com {_pct_mes:.0f}% do mês. "
-                f"Projeção fim do mês: **{utils.fmt_brl(_proj_fim)}**."))
+                f"Projeção: **{utils.fmt_brl(_proj_tot_fim)}** "
+                f"(variável {utils.fmt_brl(_proj_var_fim)} + fixas {utils.fmt_brl(_custo_fixas)})."))
         elif _pct_gasto < _pct_mes - 25 and _pct_mes > 50:
             _insights.append(("✅", "success",
-                f"**Ritmo saudável:** só {_pct_gasto:.0f}% da renda gasta com {_pct_mes:.0f}% do mês passado."))
+                f"**Ritmo saudável:** só {_pct_gasto:.0f}% da renda gasta com {_pct_mes:.0f}% do mês."))
 
-    # 2. Saldo projetado negativo no fim do mês
-    if total_gastos > 0 and _hoje_d.day > 1:
-        _proj_gastos_fim = total_gastos * (_dias_mes / _hoje_d.day)
-        _saldo_proj = total_entradas - _proj_gastos_fim
-        if _saldo_proj < 0:
+    # 2. Déficit de caixa projetado — apenas gastos à vista/débito/pix, após dia 8
+    if _hoje_d.day >= 8 and _val_gcash > 0:
+        _saldo_cash_proj = total_entradas - _proj_cash_fim
+        if _saldo_cash_proj < 0:
             _insights.append(("🚨", "error",
-                f"**Saldo negativo projetado:** no ritmo atual você fechará o mês com déficit de "
-                f"**{utils.fmt_brl(abs(_saldo_proj))}**."))
+                f"**Déficit de caixa projetado:** considerando gastos à vista/débito/pix, "
+                f"você pode fechar o mês com **{utils.fmt_brl(abs(_saldo_cash_proj))}** negativo "
+                f"(parcelas de crédito não estão incluídas nesta projeção)."))
 
     # 3. Conta com saldo negativo
     for _, _c_row in contas_df.iterrows():
@@ -357,16 +428,13 @@ def dashboard():
             _insights.append(("🔴", "error",
                 f"**{_c_row['nome']}** está com saldo negativo: **{utils.fmt_brl(_sc)}**."))
 
-    # 4. Contas fixas como % da renda
-    if total_entradas > 0:
-        _df_fx = sh.get_fixas()
-        if not _df_fx.empty and "valor_referencia" in _df_fx.columns:
-            _total_fixas = _df_fx["valor_referencia"].astype(float).sum()
-            _pct_fixas = _total_fixas / total_entradas * 100
-            if _pct_fixas > 40:
-                _insights.append(("⚠️", "warning",
-                    f"**Comprometimento alto:** suas fixas ({utils.fmt_brl(_total_fixas)}) "
-                    f"representam **{_pct_fixas:.0f}%** da renda do mês (recomendado: < 30%)."))
+    # 4. Contas fixas como % da renda (reutiliza _df_fx_alrt carregado acima)
+    if total_entradas > 0 and _total_fixas_esp > 0:
+        _pct_fixas = _total_fixas_esp / total_entradas * 100
+        if _pct_fixas > 40:
+            _insights.append(("⚠️", "warning",
+                f"**Comprometimento alto:** suas fixas ({utils.fmt_brl(_total_fixas_esp)}) "
+                f"representam **{_pct_fixas:.0f}%** da renda do mês (recomendado: < 30%)."))
 
     # 5. Investimentos vencendo em até 15 dias
     if not todos_invest.empty and "data_vencimento" in todos_invest.columns:
