@@ -1,7 +1,68 @@
 import calendar
-from datetime import date
+from datetime import date, timedelta
 from dateutil.relativedelta import relativedelta
 import pandas as pd
+
+
+# ─── Dias úteis (CDI/CDB) ────────────────────────────────────────────────────
+
+def _pascoa(ano: int) -> date:
+    """Algoritmo Meeus/Jones/Butcher para calcular a data da Páscoa."""
+    a = ano % 19
+    b, c = divmod(ano, 100)
+    d, e = divmod(b, 4)
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i, k = divmod(c, 4)
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    mes = (h + l - 7 * m + 114) // 31
+    dia = (h + l - 7 * m + 114) % 31 + 1
+    return date(ano, mes, dia)
+
+
+def _feriados_br(ano: int) -> frozenset:
+    """Feriados nacionais brasileiros para o ano, incluindo Carnaval e Corpus Christi."""
+    fixos = {
+        date(ano, 1, 1), date(ano, 4, 21), date(ano, 5, 1),
+        date(ano, 9, 7), date(ano, 10, 12), date(ano, 11, 2),
+        date(ano, 11, 15), date(ano, 12, 25),
+    }
+    pascoa = _pascoa(ano)
+    moveis = {
+        pascoa - timedelta(days=48),  # Segunda de Carnaval
+        pascoa - timedelta(days=47),  # Terça de Carnaval
+        pascoa - timedelta(days=2),   # Sexta-Feira Santa
+        pascoa + timedelta(days=60),  # Corpus Christi
+    }
+    return frozenset(fixos | moveis)
+
+
+def _proximo_dia_util(d: date) -> date:
+    """Retorna d se for dia útil; caso contrário, avança até o próximo dia útil."""
+    feriados = _feriados_br(d.year)
+    while d.weekday() >= 5 or d in feriados:
+        d += timedelta(days=1)
+        if d.year != (d - timedelta(days=1)).year:
+            feriados = _feriados_br(d.year)
+    return d
+
+
+def _contar_dias_uteis(ini: date, fim: date) -> int:
+    """Conta dias úteis em [ini, fim) — ini inclusive, fim exclusive."""
+    if fim <= ini:
+        return 0
+    count = 0
+    d = ini
+    feriados = _feriados_br(d.year)
+    while d < fim:
+        if d.weekday() < 5 and d not in feriados:
+            count += 1
+        d += timedelta(days=1)
+        if d < fim and d.year != (d - timedelta(days=1)).year:
+            feriados = _feriados_br(d.year)
+    return count
 
 
 # ─── Datas ───────────────────────────────────────────────────────────────────
@@ -192,30 +253,60 @@ def calcular_saldo_conta(conta_nome: str, entradas_df: pd.DataFrame,
 
 def calcular_rendimento(valor_aplicado: float, taxa_tipo: str,
                          taxa_valor: float, data_aplicacao_str: str,
-                         data_referencia_str: str = None) -> dict:
+                         data_referencia_str: str = None,
+                         cdi_anual: float = 10.75) -> dict:
     """
     taxa_tipo: 'MENSAL' | 'ANUAL' | 'CDI'
-    Para CDI, taxa_valor é o percentual do CDI (ex: 100 = 100% CDI).
-    CDI médio considerado: 0.9% ao mês (ajuste conforme necessário).
-    """
-    CDI_MENSAL = 0.009
 
+    CDI: cálculo preciso por dias úteis com D+1 e feriados nacionais.
+      - data_aplicacao é a data da operação; o rendimento começa no próximo
+        dia útil (D+1), como nas instituições financeiras brasileiras.
+      - taxa_valor = percentual do CDI (ex: 103 = 103% do CDI)
+      - cdi_anual = taxa CDI anual em % (padrão 10.75)
+      - Fórmula diária: CDI_diario = (1 + cdi_anual/100)^(1/252) - 1
+                        taxa_efetiva = CDI_diario * taxa_valor/100
+                        VF = VA * (1 + taxa_efetiva)^n_dias_uteis
+
+    MENSAL/ANUAL: cálculo por meses completos (sem alteração).
+    """
     da = date.fromisoformat(data_aplicacao_str)
     dr = date.fromisoformat(data_referencia_str) if data_referencia_str else date.today()
-    meses = max(0, (dr.year - da.year) * 12 + (dr.month - da.month))
 
+    if taxa_tipo == "CDI":
+        # D+1: rendimento começa no próximo dia útil após a aplicação
+        data_inicio = _proximo_dia_util(da + timedelta(days=1))
+        n_du = _contar_dias_uteis(data_inicio, dr)
+
+        # Taxa CDI diária e aplicação do percentual contratado
+        cdi_diario = (1 + cdi_anual / 100) ** (1 / 252) - 1
+        taxa_diaria = cdi_diario * (taxa_valor / 100)
+
+        valor_final = valor_aplicado * ((1 + taxa_diaria) ** n_du)
+        rendimento  = valor_final - valor_aplicado
+        meses       = round(n_du / 21, 1)
+
+        return {
+            "meses": meses,
+            "dias_uteis": n_du,
+            "taxa_mensal": round((1 + taxa_diaria) ** 21 - 1, 6),
+            "valor_final": round(valor_final, 2),
+            "rendimento": round(rendimento, 2),
+            "rentabilidade_pct": round((rendimento / valor_aplicado) * 100, 4) if valor_aplicado else 0,
+        }
+
+    # MENSAL / ANUAL — mantém cálculo por meses
+    meses = max(0, (dr.year - da.year) * 12 + (dr.month - da.month))
     if taxa_tipo == "MENSAL":
         taxa_m = taxa_valor / 100
-    elif taxa_tipo == "ANUAL":
+    else:  # ANUAL
         taxa_m = (1 + taxa_valor / 100) ** (1 / 12) - 1
-    else:  # CDI
-        taxa_m = CDI_MENSAL * (taxa_valor / 100)
 
     valor_final = valor_aplicado * ((1 + taxa_m) ** meses)
-    rendimento = valor_final - valor_aplicado
+    rendimento  = valor_final - valor_aplicado
 
     return {
         "meses": meses,
+        "dias_uteis": None,
         "taxa_mensal": taxa_m,
         "valor_final": round(valor_final, 2),
         "rendimento": round(rendimento, 2),

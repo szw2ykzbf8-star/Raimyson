@@ -110,6 +110,17 @@ with tabs[2]:
         st.success(f"Meta definida: {utils.fmt_brl(nova_meta)}")
 
     st.markdown("---")
+    st.subheader("📈 Taxa CDI (para cálculo de investimentos)")
+    st.caption("Usada para calcular o rendimento estimado de CDBs e outros produtos indexados ao CDI. "
+               "Atualize quando a Selic/CDI mudar.")
+    cdi_atual = float(sh.get_config("cdi_anual", "10.75") or "10.75")
+    novo_cdi  = st.number_input("Taxa CDI anual (%)", value=cdi_atual,
+                                 min_value=0.01, max_value=50.0, step=0.25, format="%.2f")
+    if st.button("Salvar taxa CDI"):
+        sh.set_config("cdi_anual", str(novo_cdi))
+        st.success(f"Taxa CDI definida: {novo_cdi:.2f}% a.a.")
+
+    st.markdown("---")
     st.subheader("⚠️ Alertas por Categoria")
     st.caption("O sistema avisa quando atingir 80% do limite e quando ultrapassar.")
 

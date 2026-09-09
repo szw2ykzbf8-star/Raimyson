@@ -26,6 +26,9 @@ with tabs[0]:
     df = sh.get_investimentos("ATIVO")
     df_ret = sh.get_investimentos("RETIRADO")
 
+    # Taxa CDI anual configurável (Admin → "cdi_anual")
+    _cdi_anual = float(sh.get_config("cdi_anual", "10.75") or "10.75")
+
     if df.empty:
         st.info("Nenhum investimento ativo.")
     else:
@@ -36,7 +39,8 @@ with tabs[0]:
         for _, row in df.iterrows():
             res = utils.calcular_rendimento(
                 float(row["valor_aplicado"]), row["taxa_tipo"],
-                float(row["taxa_valor"]), row["data_aplicacao"], hoje
+                float(row["taxa_valor"]), row["data_aplicacao"], hoje,
+                cdi_anual=_cdi_anual,
             )
             total_atual += res["valor_final"]
 
@@ -63,7 +67,8 @@ with tabs[0]:
         for _, row in df.iterrows():
             res = utils.calcular_rendimento(
                 float(row["valor_aplicado"]), row["taxa_tipo"],
-                float(row["taxa_valor"]), row["data_aplicacao"], hoje
+                float(row["taxa_valor"]), row["data_aplicacao"], hoje,
+                cdi_anual=_cdi_anual,
             )
             conta_orig_atual = row.get("conta_origem", "") or ""
             has_confirm = st.session_state.get(f"confirm_del_inv_{row['id']}", False)
@@ -76,7 +81,7 @@ with tabs[0]:
                 with c2:
                     taxa_str = f"{row['taxa_valor']}% {row['taxa_tipo']}"
                     if row["taxa_tipo"] == "CDI":
-                        taxa_str = f"{row['taxa_valor']}% do CDI"
+                        taxa_str = f"{row['taxa_valor']}% do CDI (CDI={_cdi_anual}% a.a.)"
                     st.metric("Taxa", taxa_str)
                     st.metric("Vencimento", utils.fmt_data(row["data_vencimento"]) if row["data_vencimento"] else "—")
                 with c3:
@@ -84,7 +89,10 @@ with tabs[0]:
                     st.metric("Rendimento", utils.fmt_brl(res["rendimento"]))
                 with c4:
                     st.metric("Rentabilidade", utils.fmt_pct(res["rentabilidade_pct"]))
-                    st.metric("Meses aplicado", str(res["meses"]))
+                    if res.get("dias_uteis") is not None:
+                        st.metric("Dias úteis", str(res["dias_uteis"]))
+                    else:
+                        st.metric("Meses aplicado", str(res["meses"]))
 
                 # Editar conta de origem
                 st.markdown("---")
@@ -186,9 +194,11 @@ with tabs[2]:
         row_i = df_ativos[df_ativos["nome"] == invest_sel].iloc[0]
 
         # Valor estimado atual
+        _cdi_anual_ret = float(sh.get_config("cdi_anual", "10.75") or "10.75")
         res_est = utils.calcular_rendimento(
             float(row_i["valor_aplicado"]), row_i["taxa_tipo"],
-            float(row_i["taxa_valor"]), row_i["data_aplicacao"]
+            float(row_i["taxa_valor"]), row_i["data_aplicacao"],
+            cdi_anual=_cdi_anual_ret,
         )
         st.info(f"Valor estimado atual: **{utils.fmt_brl(res_est['valor_final'])}** "
                 f"(rendimento: {utils.fmt_brl(res_est['rendimento'])})")
