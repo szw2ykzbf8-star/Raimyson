@@ -202,7 +202,9 @@ def dashboard():
     try:
         _mes_fixas = utils.mes_atual()
         _df_fixas_ativas = sh.get_fixas()
-        _banner_dispensado = st.session_state.get(f"_fixas_ok_{_mes_fixas}", False)
+        # Verifica dispensa persistente (salva no Sheets para sobreviver ao fechamento do app)
+        _cfg_key_fixas = f"fixas_ok_{_mes_fixas}"
+        _banner_dispensado = sh.get_config(_cfg_key_fixas, "") == "1"
         if not _df_fixas_ativas.empty and not _banner_dispensado:
             _gdf_fixas_check = sh.get_gastos(_mes_fixas)
             _fixas_lancadas = (
@@ -229,7 +231,7 @@ def dashboard():
                         st.rerun()
                 with _col_ok:
                     if st.button("✅ Já lancei", key="btn_fixas_ok", use_container_width=True):
-                        st.session_state[f"_fixas_ok_{_mes_fixas}"] = True
+                        sh.set_config(_cfg_key_fixas, "1")
                         st.rerun()
     except Exception:
         pass
