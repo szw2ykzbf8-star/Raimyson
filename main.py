@@ -202,7 +202,8 @@ def dashboard():
     try:
         _mes_fixas = utils.mes_atual()
         _df_fixas_ativas = sh.get_fixas()
-        if not _df_fixas_ativas.empty:
+        _banner_dispensado = st.session_state.get(f"_fixas_ok_{_mes_fixas}", False)
+        if not _df_fixas_ativas.empty and not _banner_dispensado:
             _gdf_fixas_check = sh.get_gastos(_mes_fixas)
             _fixas_lancadas = (
                 not _gdf_fixas_check.empty
@@ -210,11 +211,12 @@ def dashboard():
                 and (_gdf_fixas_check["fixa_id"].astype(str) != "").any()
             )
             if not _fixas_lancadas:
-                _col_fx, _col_btn_fx = st.columns([4, 1])
+                _col_fx, _col_btn_fx, _col_ok = st.columns([3, 1, 1])
                 with _col_fx:
                     st.warning(
                         f"📋 **{len(_df_fixas_ativas)} conta(s) fixa(s)** não foram lançadas em "
-                        f"{utils.formatar_mes(_mes_fixas)}. Clique para gerar automaticamente."
+                        f"{utils.formatar_mes(_mes_fixas)}. Clique para gerar automaticamente "
+                        f"ou confirme se já foram lançadas manualmente."
                     )
                 with _col_btn_fx:
                     if st.button("📋 Lançar Fixas", key="btn_auto_fixas", use_container_width=True):
@@ -224,6 +226,10 @@ def dashboard():
                             st.success(f"✅ {_res['lancados']} fixa(s) lançada(s)!")
                         else:
                             st.info("Todas as fixas já estavam lançadas.")
+                        st.rerun()
+                with _col_ok:
+                    if st.button("✅ Já lancei", key="btn_fixas_ok", use_container_width=True):
+                        st.session_state[f"_fixas_ok_{_mes_fixas}"] = True
                         st.rerun()
     except Exception:
         pass
