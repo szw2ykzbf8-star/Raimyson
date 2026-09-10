@@ -259,7 +259,8 @@ def cmd_gasto(parts: list[str]) -> str:
     categoria = parsed["categoria"]
     desc      = parsed["descricao"]
     forma     = parsed["forma"]
-    conta     = parsed["conta"] or "—"
+    conta_raw = parsed["conta"]
+    conta     = conta_raw or _get_config("bot_conta_padrao", "") or "—"
     parcelas  = parsed["parcelas"]
     hoje      = datetime.now().strftime("%Y-%m-%d")
     mes       = datetime.now().strftime("%Y-%m")
@@ -278,7 +279,7 @@ def cmd_gasto(parts: list[str]) -> str:
             _new_id(), id_grupo, hoje, hoje, mes,
             str(i), str(parcelas),
             str(valor_parcela), str(valor),
-            categoria, forma, conta, desc, _now(), viagem_id,
+            categoria, forma, conta, desc, _now(), viagem_id, "",
         ])
 
     viagem_tag = f"\n✈️ Viagem: {viagem_ativa.get('nome', '')}" if viagem_ativa else ""
@@ -306,7 +307,7 @@ def cmd_entrada(parts: list[str]) -> str:
 
     valor = parsed["valor"]
     fonte = parsed["fonte"]
-    conta = parsed["conta"] or "—"
+    conta = parsed["conta"] or _get_config("bot_conta_padrao", "") or "—"
     hoje  = datetime.now().strftime("%Y-%m-%d")
 
     ws  = _ws("entradas")
@@ -554,7 +555,7 @@ def handle_natural_language(text: str, chat_id: str) -> None:
         categoria = result.get("categoria", "Outros") or "Outros"
         descricao = result.get("descricao", "sem descrição") or "sem descrição"
         forma     = result.get("forma", "Pix") or "Pix"
-        conta     = result.get("conta", "") or "—"
+        conta     = result.get("conta", "") or _get_config("bot_conta_padrao", "") or "—"
         parcelas  = max(1, int(result.get("parcelas", 1) or 1))
 
         viagem_ativa = _get_viagem_ativa_bot()
@@ -571,7 +572,7 @@ def handle_natural_language(text: str, chat_id: str) -> None:
                 _new_id(), id_grupo, hoje, hoje, mes,
                 str(i), str(parcelas),
                 str(valor_parcela), str(valor),
-                categoria, forma, conta, descricao, _now(), viagem_id,
+                categoria, forma, conta, descricao, _now(), viagem_id, "",
             ])
 
         prc_txt    = f" em {parcelas}x de {_fmt(valor_parcela)}" if parcelas > 1 else ""
@@ -587,7 +588,7 @@ def handle_natural_language(text: str, chat_id: str) -> None:
 
     elif tipo == "entrada":
         fonte = result.get("fonte", "") or result.get("descricao", "Outros") or "Outros"
-        conta = result.get("conta", "") or "—"
+        conta = result.get("conta", "") or _get_config("bot_conta_padrao", "") or "—"
         ws    = _ws("entradas")
         rid   = _new_id()
         ws.append_row([rid, hoje, str(valor), fonte, conta, "", _now()])
@@ -602,6 +603,17 @@ def handle_natural_language(text: str, chat_id: str) -> None:
 
 
 # ─── Viagens ─────────────────────────────────────────────────────────────────
+
+
+def _get_config(key: str, default: str = "") -> str:
+    try:
+        rows = _get_all("config")
+        for r in rows:
+            if str(r.get("chave", "")) == key:
+                return str(r.get("valor", default))
+    except Exception:
+        pass
+    return default
 
 
 def _get_viagem_ativa_bot() -> dict | None:

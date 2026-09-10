@@ -85,6 +85,21 @@ with tabs[1]:
     )
 
     st.markdown("---")
+    st.subheader("🏦 Conta padrão do Bot")
+    st.caption("Quando um gasto ou entrada for registrado pelo Telegram sem especificar a conta, esta será usada automaticamente.")
+    contas_tg = sh.get_contas()
+    if not contas_tg.empty:
+        opts_tg = ["— nenhuma —"] + contas_tg["nome"].tolist()
+        conta_atual_bot = sh.get_config("bot_conta_padrao", "")
+        idx_bot = opts_tg.index(conta_atual_bot) if conta_atual_bot in opts_tg else 0
+        nova_conta_bot = st.selectbox("Conta padrão para o bot", opts_tg, index=idx_bot)
+        if st.button("Salvar conta padrão"):
+            sh.set_config("bot_conta_padrao", "" if nova_conta_bot == "— nenhuma —" else nova_conta_bot)
+            st.success(f"Conta padrão salva: {nova_conta_bot}")
+    else:
+        st.warning("Nenhuma conta cadastrada. Cadastre contas em Contas Bancárias primeiro.")
+
+    st.markdown("---")
     st.subheader("🧪 Testar Telegram")
 
     from src.config import TELEGRAM_TOKEN, TELEGRAM_CHAT_ID as TG_CHAT
