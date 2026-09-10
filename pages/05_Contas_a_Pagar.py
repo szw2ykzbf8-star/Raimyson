@@ -211,7 +211,7 @@ with tabs[0]:
             valor_ref = float(row["valor_referencia"])
             total_fixas += valor_ref
             if pgto:
-                quitado = str(pgto.get("quitado", "True")).strip().lower() not in ("false", "0", "")
+                quitado = str(pgto.get("quitado", "")).strip().lower() not in ("false", "0")
                 pagas_fixas += valor_ref if quitado else float(pgto["valor"])
 
         k1, k2, k3 = st.columns(3)
@@ -230,7 +230,7 @@ with tabs[0]:
             pgto = _pgto_existente("conta_fixa", row["id"])
             valor_ref = float(row["valor_referencia"])
             if pgto:
-                _q = str(pgto.get("quitado", "True")).strip().lower() not in ("false", "0", "")
+                _q = str(pgto.get("quitado", "")).strip().lower() not in ("false", "0")
                 status = "✅ PAGA" if _q else "⚠️ PARCIAL"
             else:
                 status = "⏳ PENDENTE"
@@ -248,7 +248,8 @@ with tabs[0]:
                         st.metric("Forma de pagamento", row["forma_pagamento"])
                     if pgto:
                         valor_pago = float(pgto["valor"])
-                        quitado_pgto = str(pgto.get("quitado", "True")).strip().lower() not in ("false", "0", "")
+                        _qv = str(pgto.get("quitado", "")).strip().lower()
+                        quitado_pgto = _qv not in ("false", "0")  # vazio = legado = quitado
                         diferenca = valor_ref - valor_pago
                         msg_pgto = (f"Pago em {utils.fmt_data(pgto['data_pagamento'])} · "
                                     f"{utils.fmt_brl(valor_pago)} · Conta: {pgto['conta_debito']}")
@@ -257,7 +258,10 @@ with tabs[0]:
                                 msg_pgto += f" · 🏷️ Desconto: {utils.fmt_brl(diferenca)}"
                             else:
                                 msg_pgto += f" · ⏳ Pendente: {utils.fmt_brl(diferenca)}"
-                        st.success(msg_pgto) if quitado_pgto else st.warning(msg_pgto)
+                        if quitado_pgto:
+                            st.success(msg_pgto)
+                        else:
+                            st.warning(msg_pgto)
                 with col_acao:
                     if pgto:
                         _botao_estornar(pgto, f"fixa_{row['id']}")
@@ -293,7 +297,7 @@ with tabs[0]:
             pgto = _pgto_existente("fatura_cartao", cartao["id"])
             total_faturas += valor_fatura
             if pgto:
-                quitado_fat = str(pgto.get("quitado", "True")).strip().lower() not in ("false", "0", "")
+                quitado_fat = str(pgto.get("quitado", "")).strip().lower() not in ("false", "0")
                 pagas_faturas += valor_fatura if quitado_fat else float(pgto["valor"])
 
         k1, k2, k3 = st.columns(3)
@@ -320,7 +324,7 @@ with tabs[0]:
 
             pgto  = _pgto_existente("fatura_cartao", cartao["id"])
             if pgto:
-                _qf = str(pgto.get("quitado", "True")).strip().lower() not in ("false", "0", "")
+                _qf = str(pgto.get("quitado", "")).strip().lower() not in ("false", "0")
                 status = "✅ PAGA" if _qf else "⚠️ PARCIAL"
             else:
                 status = "⏳ PENDENTE" if valor_fatura > 0 else "— Sem lançamentos"
@@ -355,7 +359,8 @@ with tabs[0]:
 
                     if pgto:
                         valor_pago_fat = float(pgto["valor"])
-                        quitado_pgto_fat = str(pgto.get("quitado", "True")).strip().lower() not in ("false", "0", "")
+                        _qvf = str(pgto.get("quitado", "")).strip().lower()
+                        quitado_pgto_fat = _qvf not in ("false", "0")  # vazio = legado = quitado
                         diferenca_fat = valor_fatura - valor_pago_fat
                         msg_fat = (f"Pago em {utils.fmt_data(pgto['data_pagamento'])} · "
                                    f"{utils.fmt_brl(valor_pago_fat)} · Conta: {pgto['conta_debito']}")
@@ -364,7 +369,10 @@ with tabs[0]:
                                 msg_fat += f" · 🏷️ Desconto: {utils.fmt_brl(diferenca_fat)}"
                             else:
                                 msg_fat += f" · ⏳ Pendente: {utils.fmt_brl(diferenca_fat)}"
-                        st.success(msg_fat) if quitado_pgto_fat else st.warning(msg_fat)
+                        if quitado_pgto_fat:
+                            st.success(msg_fat)
+                        else:
+                            st.warning(msg_fat)
 
                 with col_acao:
                     if pgto:
