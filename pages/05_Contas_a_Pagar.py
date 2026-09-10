@@ -149,7 +149,7 @@ with tabs[0]:
             valor_ref = float(row["valor_referencia"])
             total_fixas += valor_ref
             if pgto:
-                pagas_fixas += float(pgto["valor"])
+                pagas_fixas += valor_ref  # quitada = valor total, desconto não é pendência
 
         k1, k2, k3 = st.columns(3)
         with k1:
@@ -180,10 +180,13 @@ with tabs[0]:
                     with c3:
                         st.metric("Forma de pagamento", row["forma_pagamento"])
                     if pgto:
-                        st.success(
-                            f"Pago em {utils.fmt_data(pgto['data_pagamento'])} · "
-                            f"{utils.fmt_brl(float(pgto['valor']))} · Conta: {pgto['conta_debito']}"
-                        )
+                        valor_pago = float(pgto["valor"])
+                        desconto = valor_ref - valor_pago
+                        msg_pgto = (f"Pago em {utils.fmt_data(pgto['data_pagamento'])} · "
+                                    f"{utils.fmt_brl(valor_pago)} · Conta: {pgto['conta_debito']}")
+                        if desconto > 0.005:
+                            msg_pgto += f" · 🏷️ Desconto: {utils.fmt_brl(desconto)}"
+                        st.success(msg_pgto)
                 with col_acao:
                     if pgto:
                         _botao_estornar(pgto, f"fixa_{row['id']}")
@@ -219,7 +222,7 @@ with tabs[0]:
             pgto = _pgto_existente("fatura_cartao", cartao["id"])
             total_faturas += valor_fatura
             if pgto:
-                pagas_faturas += float(pgto["valor"])
+                pagas_faturas += valor_fatura  # quitada = valor total, desconto não é pendência
 
         k1, k2, k3 = st.columns(3)
         with k1:
@@ -275,10 +278,13 @@ with tabs[0]:
                         st.dataframe(df_det, use_container_width=True, hide_index=True)
 
                     if pgto:
-                        st.success(
-                            f"Pago em {utils.fmt_data(pgto['data_pagamento'])} · "
-                            f"{utils.fmt_brl(float(pgto['valor']))} · Conta: {pgto['conta_debito']}"
-                        )
+                        valor_pago_fat = float(pgto["valor"])
+                        desconto_fat = valor_fatura - valor_pago_fat
+                        msg_fat = (f"Pago em {utils.fmt_data(pgto['data_pagamento'])} · "
+                                   f"{utils.fmt_brl(valor_pago_fat)} · Conta: {pgto['conta_debito']}")
+                        if desconto_fat > 0.005:
+                            msg_fat += f" · 🏷️ Desconto: {utils.fmt_brl(desconto_fat)}"
+                        st.success(msg_fat)
 
                 with col_acao:
                     if pgto:
