@@ -7,39 +7,67 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-from modules.auth import requer_login, criar_admin_inicial, pagina_trocar_senha
+from modules.auth import criar_admin_inicial, login_page, pagina_trocar_senha
 
 try:
     criar_admin_inicial()
 except Exception:
     pass
 
-usuario = requer_login()
+# ── Auth gate ────────────────────────────────────────────────────────────────
+if "usuario" not in st.session_state:
+    login_page()
+    st.stop()
 
-# Primeiro acesso ou senha resetada pelo admin: força troca de senha
+usuario = st.session_state["usuario"]
+
 if usuario.get("trocar_senha") is True or str(usuario.get("trocar_senha", "")).upper() == "TRUE":
     pagina_trocar_senha(usuario)
 
+# ── Sidebar header ───────────────────────────────────────────────────────────
 st.sidebar.title("🏨 H Hotéis Compras")
 st.sidebar.markdown(f"**{usuario['nome']}**  \n*{usuario['perfil'].capitalize()}*")
+
+perfil = usuario["perfil"]
+
+# ── Pages ────────────────────────────────────────────────────────────────────
+dashboard   = st.Page("pages/00_Dashboard.py",    title="Dashboard",        icon="🏠", default=True)
+pedidos     = st.Page("pages/03_Pedidos.py",      title="Solicitações",     icon="📋")
+cotacoes    = st.Page("pages/04_Cotacoes.py",     title="Cotações",         icon="💰")
+analise     = st.Page("pages/05_Analise.py",      title="Análise de Preços",icon="📊")
+ordem       = st.Page("pages/06_Pedido_Compra.py",title="Ordem de Compra",  icon="🛒")
+produtos    = st.Page("pages/01_Produtos.py",     title="Produtos",         icon="📦")
+fornecedores= st.Page("pages/02_Fornecedores.py", title="Fornecedores",     icon="🏭")
+relatorios  = st.Page("pages/07_Relatorios.py",   title="Relatórios",       icon="📈")
+configuracoes=st.Page("pages/08_Configuracoes.py",title="Configurações",    icon="⚙️")
+
+# ── Navigation by profile ────────────────────────────────────────────────────
+if perfil == "admin":
+    nav = {
+        "": [dashboard],
+        "Fluxo de Compras": [pedidos, cotacoes, analise, ordem],
+        "Cadastros": [produtos, fornecedores],
+        "Análises": [relatorios],
+        "Sistema": [configuracoes],
+    }
+elif perfil == "comprador":
+    nav = {
+        "": [dashboard],
+        "Fluxo de Compras": [pedidos, cotacoes, analise, ordem],
+        "Cadastros": [produtos, fornecedores],
+        "Análises": [relatorios],
+    }
+else:  # digitador
+    nav = {
+        "": [dashboard],
+        "Compras": [pedidos],
+    }
+
+pg = st.navigation(nav)
+
 st.sidebar.markdown("---")
-
-st.title("Dashboard")
-st.markdown(f"Bem-vindo, **{usuario['nome']}**!")
-
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    st.metric("Cotações abertas", "—")
-with col2:
-    st.metric("Pedidos pendentes", "—")
-with col3:
-    st.metric("Fornecedores ativos", "—")
-with col4:
-    st.metric("Produtos ativos", "—")
-
-st.markdown("---")
-st.info("Use o menu lateral para navegar entre os módulos.")
-
-if st.sidebar.button("Sair"):
+if st.sidebar.button("Sair", use_container_width=True):
     del st.session_state["usuario"]
     st.rerun()
+
+pg.run()

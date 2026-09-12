@@ -4,7 +4,6 @@ import datetime
 from modules.auth import requer_login
 from modules.google_sheets import ler_df, escrever_df, append_linha
 
-st.set_page_config(page_title="Pedidos", page_icon="📋", layout="wide")
 usuario = requer_login()
 
 st.title("📋 Solicitações de Compra")

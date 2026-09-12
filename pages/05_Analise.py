@@ -4,7 +4,6 @@ import datetime
 from modules.auth import requer_perfil
 from modules.google_sheets import ler_df, escrever_df, append_linha
 
-st.set_page_config(page_title="Análise de Preços", page_icon="📊", layout="wide")
 usuario = requer_perfil(["admin", "comprador"])
 
 st.title("📊 Análise de Preços")

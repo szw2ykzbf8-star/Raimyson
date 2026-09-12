@@ -6,7 +6,6 @@ import io
 from modules.auth import requer_perfil
 from modules.google_sheets import ler_df, escrever_df, append_linha
 
-st.set_page_config(page_title="Configurações", page_icon="⚙️", layout="wide")
 usuario = requer_perfil(["admin"])
 
 st.title("⚙️ Configurações")

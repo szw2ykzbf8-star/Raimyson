@@ -6,7 +6,6 @@ import datetime
 from modules.auth import requer_perfil
 from modules.google_sheets import ler_df
 
-st.set_page_config(page_title="Relatórios", page_icon="📈", layout="wide")
 usuario = requer_perfil(["admin", "comprador"])
 
 st.title("📈 Relatórios e Análises")
