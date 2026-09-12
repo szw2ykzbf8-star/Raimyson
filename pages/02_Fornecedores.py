@@ -47,12 +47,15 @@ with tab_lista:
                         st.rerun()
 
 with tab_novo:
-    with st.form("novo_fornecedor"):
+    if "forn_form_v" not in st.session_state:
+        st.session_state["forn_form_v"] = 0
+
+    with st.form(f"novo_fornecedor_{st.session_state['forn_form_v']}"):
         razao_social = st.text_input("Razão Social *")
         cnpj = st.text_input("CNPJ *")
         nome_contato = st.text_input("Nome do Contato *")
         telefone = st.text_input("Telefone/WhatsApp *")
-        salvar = st.form_submit_button("Cadastrar Fornecedor")
+        salvar = st.form_submit_button("Cadastrar Fornecedor", use_container_width=True)
 
     if salvar:
         if not razao_social or not cnpj or not nome_contato or not telefone:
@@ -64,5 +67,6 @@ with tab_novo:
                 True, datetime.date.today().isoformat()
             ])
             st.success(f"Fornecedor '{razao_social}' cadastrado!")
+            st.session_state["forn_form_v"] += 1
             st.cache_resource.clear()
             st.rerun()
