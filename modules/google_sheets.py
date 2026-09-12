@@ -24,6 +24,7 @@ def get_spreadsheet():
     return sh
 
 
+@st.cache_resource
 def get_sheet(nome_chave: str):
     sh = get_spreadsheet()
     nome_aba = SHEETS[nome_chave]
