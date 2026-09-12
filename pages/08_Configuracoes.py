@@ -387,9 +387,10 @@ with tab_orcamento:
         ano_sel = st.number_input("Ano", value=ano_atual, min_value=2020, max_value=2099)
 
     unidades_nomes = df_unidades["nome"].tolist() if not df_unidades.empty else []
+    _cols_orc = ["id", "unidade", "mes", "ano", "valor"]
     orc_periodo = (
         df_orcamentos[(df_orcamentos["mes"] == mes_sel) & (df_orcamentos["ano"] == ano_sel)]
-        if not df_orcamentos.empty else pd.DataFrame()
+        if not df_orcamentos.empty else pd.DataFrame(columns=_cols_orc)
     )
 
     st.markdown(f"**Orçamentos para {mes_sel:02d}/{ano_sel}**")
