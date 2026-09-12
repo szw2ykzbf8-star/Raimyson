@@ -83,9 +83,11 @@ def login_page():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.subheader("Acesse sua conta")
-        login = st.text_input("Usuário")
-        senha = st.text_input("Senha", type="password")
-        if st.button("Entrar", use_container_width=True):
+        with st.form("login_form"):
+            login = st.text_input("Usuário")
+            senha = st.text_input("Senha", type="password")
+            submitted = st.form_submit_button("Entrar", use_container_width=True)
+        if submitted:
             try:
                 usuario = autenticar(login, senha)
                 if usuario:
