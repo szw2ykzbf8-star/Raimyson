@@ -20,7 +20,7 @@ def _display_unidade(row):
 
 
 TODOS_LABEL = "✅ Todas as unidades"
-UNIDADES_PROTEGIDAS = {"kg", "litro", "unidade", "metro"}
+UNIDADES_PROTEGIDAS_IDS = {1, 2, 3, 4}  # IDs das unidades base — editáveis, mas não excluíveis
 
 tab_unidades, tab_unidades_medida, tab_usuarios, tab_orcamento, tab_backup = st.tabs([
     "Unidades Hoteleiras", "Un. de Medida", "Usuários", "Orçamentos", "Backup / Exportar"
@@ -147,7 +147,7 @@ with tab_unidades:
 # ── TAB: UNIDADES DE MEDIDA ──────────────────────────────────────────────────
 with tab_unidades_medida:
     st.subheader("Unidades de Medida Base")
-    st.caption("Unidades padrão (kg, litro, unidade, metro) não podem ser excluídas, apenas inativadas.")
+    st.caption("Unidades base (IDs 1–4) podem ser editadas, mas não excluídas.")
     df_um = ler_df("unidades_medida")
 
     if "um_edit_v" not in st.session_state:
@@ -155,7 +155,7 @@ with tab_unidades_medida:
 
     for i, row in df_um.iterrows():
         ativo_val = _bool(row.get("ativo", True))
-        eh_padrao = str(row.get("nome", "")).lower() in UNIDADES_PROTEGIDAS
+        eh_padrao = int(row.get("id", 0)) in UNIDADES_PROTEGIDAS_IDS
         icone = "🔒" if eh_padrao else "📐"
         status_icon = "✅" if ativo_val else "❌"
         desc = str(row.get("descricao", "") or "—")
@@ -168,18 +168,20 @@ with tab_unidades_medida:
                 with st.form(f"edit_um_{i}_{ev}"):
                     c_sig, c_desc = st.columns([2, 4])
                     with c_sig:
-                        novo_sig = st.text_input("Sigla", value=str(row.get("nome", "")), disabled=eh_padrao)
+                        novo_sig = st.text_input("Sigla", value=str(row.get("nome", "")))
                     with c_desc:
                         nova_desc_edit = st.text_input("Nome completo", value=str(row.get("descricao", "") or ""))
                     if st.form_submit_button("💾 Salvar", use_container_width=True):
-                        if not eh_padrao:
+                        if not novo_sig.strip():
+                            st.error("Sigla é obrigatória.")
+                        else:
                             df_um.at[i, "nome"] = novo_sig.strip()
-                        df_um.at[i, "descricao"] = nova_desc_edit.strip()
-                        escrever_df("unidades_medida", df_um)
-                        st.session_state["um_edit_v"][str(i)] = ev + 1
-                        st.success("Atualizado!")
-                        st.cache_resource.clear()
-                        st.rerun()
+                            df_um.at[i, "descricao"] = nova_desc_edit.strip()
+                            escrever_df("unidades_medida", df_um)
+                            st.session_state["um_edit_v"][str(i)] = ev + 1
+                            st.success("Atualizado!")
+                            st.cache_resource.clear()
+                            st.rerun()
 
             with col_d:
                 st.markdown("&nbsp;")
