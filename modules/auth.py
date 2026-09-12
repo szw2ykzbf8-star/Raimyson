@@ -24,6 +24,8 @@ def alterar_senha(login: str, nova_senha: str):
     if len(idx) == 0:
         return
     i = idx[0]
+    df["senha_hash"] = df["senha_hash"].astype(object)
+    df["trocar_senha"] = df["trocar_senha"].astype(object)
     df.at[i, "senha_hash"] = hash_senha(nova_senha)
     df.at[i, "trocar_senha"] = False
     escrever_df("usuarios", df)
