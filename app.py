@@ -14,15 +14,21 @@ try:
 except Exception:
     pass
 
+usuario = st.session_state.get("usuario")
+
 # ── Auth gate ────────────────────────────────────────────────────────────────
-if "usuario" not in st.session_state:
-    login_page()
+if usuario is None:
+    pg = st.navigation([st.Page(login_page, title="Login", url_path="login")], position="hidden")
+    pg.run()
     st.stop()
 
-usuario = st.session_state["usuario"]
-
 if usuario.get("trocar_senha") is True or str(usuario.get("trocar_senha", "")).upper() == "TRUE":
-    pagina_trocar_senha(usuario)
+    pg = st.navigation(
+        [st.Page(lambda: pagina_trocar_senha(usuario), title="Trocar Senha", url_path="trocar-senha")],
+        position="hidden",
+    )
+    pg.run()
+    st.stop()
 
 # ── Sidebar header ───────────────────────────────────────────────────────────
 st.sidebar.title("🏨 H Hotéis Compras")
