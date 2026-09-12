@@ -62,7 +62,7 @@ def _cabecalhos():
         "Produtos": ["id", "descricao", "apresentacao", "unidade_base", "qtd_base_por_apresentacao", "observacao", "ativo", "data_cadastro"],
         "Fornecedores": ["id", "razao_social", "cnpj", "nome_contato", "telefone", "ativo", "data_cadastro"],
         "Unidades": ["id", "nome", "cnpj", "ativo"],
-        "Usuarios": ["id", "nome", "login", "senha_hash", "perfil", "unidades_acesso", "ativo"],
+        "Usuarios": ["id", "nome", "login", "senha_hash", "perfil", "unidades_acesso", "ativo", "trocar_senha"],
         "Pedidos": ["id", "unidade", "status", "criado_por", "data_criacao", "data_bloqueio"],
         "ItensPedido": ["id", "pedido_id", "produto_id", "quantidade"],
         "Cotacoes": ["id", "data_criacao", "prazo_limite", "status", "criado_por"],

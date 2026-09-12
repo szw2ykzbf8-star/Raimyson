@@ -100,34 +100,122 @@ with tab_unidades_medida:
                 st.rerun()
 
 with tab_usuarios:
-    st.subheader("Usuários do Sistema")
-    from modules.auth import hash_senha
+    from modules.auth import hash_senha, validar_senha
+
     df_usuarios = ler_df("usuarios")
+    df_unidades_u = ler_df("unidades")
+    unidades_nomes = df_unidades_u["nome"].tolist() if not df_unidades_u.empty else []
 
-    if not df_usuarios.empty:
-        exibir = df_usuarios[["id", "nome", "login", "perfil", "unidades_acesso", "ativo"]].copy()
-        st.dataframe(exibir, use_container_width=True, hide_index=True)
+    def _bool_u(v):
+        return v is True or str(v).upper() == "TRUE"
 
-    df_unidades = ler_df("unidades")
-    unidades_nomes = df_unidades["nome"].tolist() if not df_unidades.empty else []
+    # ── Usuários existentes ──────────────────────────────────────────────
+    st.subheader("Usuários cadastrados")
+    if df_usuarios.empty:
+        st.info("Nenhum usuário cadastrado.")
+    else:
+        for i, row in df_usuarios.iterrows():
+            ativo_val = _bool_u(row["ativo"])
+            trocar_val = _bool_u(row.get("trocar_senha", False))
+            icone = "✅" if ativo_val else "❌"
+            tags = []
+            if trocar_val:
+                tags.append("🔄 troca senha no próximo login")
+            if not ativo_val:
+                tags.append("inativo")
+            label = f"{icone} **{row['nome']}** — {row['login']} | {row['perfil']}"
+            if tags:
+                label += f"  _{', '.join(tags)}_"
+
+            with st.expander(label):
+                col_e, col_d = st.columns([3, 1])
+                with col_e:
+                    with st.form(f"edit_usr_{i}"):
+                        novo_nome = st.text_input("Nome completo", value=row["nome"], key=f"en_{i}")
+                        novo_perfil = st.selectbox(
+                            "Perfil", ["digitador", "comprador", "admin"],
+                            index=["digitador", "comprador", "admin"].index(row["perfil"])
+                            if row["perfil"] in ["digitador", "comprador", "admin"] else 0,
+                            key=f"ep_{i}"
+                        )
+                        acesso_atual = str(row.get("unidades_acesso", "")).split(",") if str(row.get("unidades_acesso", "")) != "todos" else ["todos"]
+                        novo_acesso = st.multiselect(
+                            "Unidades com acesso", ["todos"] + unidades_nomes,
+                            default=[a for a in acesso_atual if a in (["todos"] + unidades_nomes)],
+                            key=f"ea_{i}"
+                        )
+                        if st.form_submit_button("💾 Salvar alterações", use_container_width=True):
+                            df_usuarios.at[i, "nome"] = novo_nome.strip()
+                            df_usuarios.at[i, "perfil"] = novo_perfil
+                            df_usuarios.at[i, "unidades_acesso"] = "todos" if "todos" in novo_acesso else ",".join(novo_acesso)
+                            escrever_df("usuarios", df_usuarios)
+                            st.success("Usuário atualizado!")
+                            st.cache_resource.clear()
+                            st.rerun()
+
+                with col_d:
+                    st.markdown("&nbsp;")
+
+                    # Ativar / Inativar
+                    btn_ativo = "❌ Inativar" if ativo_val else "✅ Ativar"
+                    if st.button(btn_ativo, key=f"toggle_{i}", use_container_width=True):
+                        df_usuarios.at[i, "ativo"] = not ativo_val
+                        escrever_df("usuarios", df_usuarios)
+                        st.cache_resource.clear()
+                        st.rerun()
+
+                    st.markdown("---")
+                    st.markdown("**Redefinir senha**")
+                    with st.form(f"reset_senha_{i}"):
+                        nova_s = st.text_input("Nova senha temporária", type="password", key=f"ns_{i}")
+                        conf_s = st.text_input("Confirmar", type="password", key=f"cs_{i}")
+                        if st.form_submit_button("🔑 Redefinir", use_container_width=True):
+                            erro = validar_senha(nova_s)
+                            if erro:
+                                st.error(erro)
+                            elif nova_s != conf_s:
+                                st.error("Senhas não coincidem.")
+                            else:
+                                df_usuarios.at[i, "senha_hash"] = hash_senha(nova_s)
+                                df_usuarios.at[i, "trocar_senha"] = True
+                                escrever_df("usuarios", df_usuarios)
+                                st.success("Senha redefinida. O usuário deverá trocá-la no próximo login.")
+                                st.cache_resource.clear()
+                                st.rerun()
+
+    # ── Criar novo usuário ───────────────────────────────────────────────
+    st.markdown("---")
+    st.subheader("Criar novo usuário")
+    st.caption("A senha informada é temporária — o usuário será obrigado a trocá-la no primeiro login.")
 
     if "usr_form_v" not in st.session_state:
         st.session_state["usr_form_v"] = 0
 
     with st.form(f"novo_usuario_{st.session_state['usr_form_v']}"):
-        nome_u = st.text_input("Nome completo *")
-        login_u = st.text_input("Login *")
-        senha_u = st.text_input("Senha *", type="password")
-        perfil_u = st.selectbox("Perfil", ["digitador", "comprador", "admin"])
+        col_n1, col_n2 = st.columns(2)
+        with col_n1:
+            nome_u = st.text_input("Nome completo *")
+            login_u = st.text_input("Login *")
+        with col_n2:
+            senha_u = st.text_input("Senha temporária * (6–72 caracteres)", type="password")
+            perfil_u = st.selectbox("Perfil", ["digitador", "comprador", "admin"])
         acesso_u = st.multiselect("Unidades com acesso", ["todos"] + unidades_nomes)
-        if st.form_submit_button("Criar Usuário", use_container_width=True):
-            if not nome_u or not login_u or not senha_u:
-                st.error("Nome, login e senha são obrigatórios.")
+        if st.form_submit_button("➕ Criar Usuário", use_container_width=True):
+            erro_s = validar_senha(senha_u) if senha_u else "Senha é obrigatória."
+            if not nome_u.strip() or not login_u.strip():
+                st.error("Nome e login são obrigatórios.")
+            elif erro_s:
+                st.error(erro_s)
+            elif not df_usuarios.empty and login_u.strip() in df_usuarios["login"].tolist():
+                st.error(f"O login '{login_u}' já existe.")
             else:
                 novo_id = int(df_usuarios["id"].max()) + 1 if not df_usuarios.empty else 1
-                acesso_str = "todos" if "todos" in acesso_u else ",".join(acesso_u)
-                append_linha("usuarios", [novo_id, nome_u, login_u, hash_senha(senha_u), perfil_u, acesso_str, True])
-                st.success(f"Usuário '{login_u}' criado!")
+                acesso_str = "todos" if "todos" in acesso_u else (",".join(acesso_u) if acesso_u else "")
+                append_linha("usuarios", [
+                    novo_id, nome_u.strip(), login_u.strip(),
+                    hash_senha(senha_u), perfil_u, acesso_str, True, True
+                ])
+                st.success(f"Usuário '{login_u}' criado! Ele deverá trocar a senha no primeiro login.")
                 st.session_state["usr_form_v"] += 1
                 st.cache_resource.clear()
                 st.rerun()

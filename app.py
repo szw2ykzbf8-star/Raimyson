@@ -7,7 +7,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-from modules.auth import requer_login, criar_admin_inicial
+from modules.auth import requer_login, criar_admin_inicial, pagina_trocar_senha
 
 try:
     criar_admin_inicial()
@@ -15,6 +15,10 @@ except Exception:
     pass
 
 usuario = requer_login()
+
+# Primeiro acesso ou senha resetada pelo admin: força troca de senha
+if usuario.get("trocar_senha") is True or str(usuario.get("trocar_senha", "")).upper() == "TRUE":
+    pagina_trocar_senha(usuario)
 
 st.sidebar.title("🏨 H Hotéis Compras")
 st.sidebar.markdown(f"**{usuario['nome']}**  \n*{usuario['perfil'].capitalize()}*")
