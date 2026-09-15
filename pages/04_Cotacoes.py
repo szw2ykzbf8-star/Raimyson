@@ -1,11 +1,11 @@
 import streamlit as st
 import pandas as pd
 import datetime
-from modules.auth import requer_perfil
+from modules.auth import requer_permissao
 from modules.google_sheets import ler_df, escrever_df, append_linha
 from config import TIPOS_EMBALAGEM
 
-usuario = requer_perfil(["admin", "comprador"])
+usuario = requer_permissao("cotacoes")
 
 st.title("💰 Cotações")
 

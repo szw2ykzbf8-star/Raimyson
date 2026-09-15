@@ -3,10 +3,10 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import datetime
-from modules.auth import requer_perfil
+from modules.auth import requer_permissao
 from modules.google_sheets import ler_df
 
-usuario = requer_perfil(["admin", "comprador"])
+usuario = requer_permissao("relatorios")
 
 st.title("📈 Relatórios e Análises")
 

@@ -101,6 +101,25 @@ def login_page():
                 st.error(f"Erro de conexão com Google Sheets: {e}")
 
 
+_PERFIL_PADRAO_PERM = {
+    "admin":     {"pedidos","cotacoes","analise","ordem","produtos","fornecedores","relatorios","configuracoes"},
+    "comprador": {"pedidos","cotacoes","analise","ordem","produtos","fornecedores","relatorios"},
+    "digitador": {"pedidos"},
+}
+
+
+def _get_permissoes(usuario: dict) -> set:
+    perfil = usuario.get("perfil", "digitador")
+    s = str(usuario.get("permissoes", "") or "").strip()
+    perm = set(s.split(",")) if s else set(_PERFIL_PADRAO_PERM.get(perfil, {"pedidos"}))
+    perm = {p.strip() for p in perm if p.strip()}
+    if perfil == "admin":
+        perm.add("configuracoes")
+    else:
+        perm.discard("configuracoes")
+    return perm
+
+
 def requer_login():
     if "usuario" not in st.session_state:
         login_page()
@@ -111,6 +130,15 @@ def requer_login():
 def requer_perfil(perfis_permitidos: list):
     usuario = requer_login()
     if usuario["perfil"] not in perfis_permitidos:
+        st.error("Você não tem permissão para acessar esta página.")
+        st.stop()
+    return usuario
+
+
+def requer_permissao(chave: str):
+    """Verifica se o usuário tem a permissão individual para esta página."""
+    usuario = requer_login()
+    if chave not in _get_permissoes(usuario):
         st.error("Você não tem permissão para acessar esta página.")
         st.stop()
     return usuario

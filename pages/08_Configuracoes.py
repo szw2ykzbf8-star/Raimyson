@@ -2,10 +2,10 @@ import streamlit as st
 import pandas as pd
 import datetime
 import io
-from modules.auth import requer_perfil, hash_senha, validar_senha
+from modules.auth import requer_permissao, hash_senha, validar_senha
 from modules.google_sheets import ler_df, escrever_df, append_linha
 
-usuario = requer_perfil(["admin"])
+usuario = requer_permissao("configuracoes")
 
 st.title("⚙️ Configurações")
 

@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
 import datetime
-from modules.auth import requer_login
+from modules.auth import requer_permissao
 from modules.google_sheets import ler_df, escrever_df, append_linha
 
-usuario = requer_login()
+usuario = requer_permissao("pedidos")
 
 st.title("📋 Solicitações de Compra")
 
