@@ -124,5 +124,5 @@ def criar_admin_inicial():
         return
     append_linha("usuarios", [
         1, "Administrador", "admin", hash_senha("admin123"),
-        "admin", "todos", True, False
+        "admin", "todos", True, False, "",
     ])

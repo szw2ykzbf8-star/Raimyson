@@ -36,39 +36,60 @@ st.sidebar.markdown(f"**{usuario['nome']}**  \n*{usuario['perfil'].capitalize()}
 
 perfil = usuario["perfil"]
 
-# ── Pages ────────────────────────────────────────────────────────────────────
-dashboard    = st.Page("pages/00_Dashboard.py",    title="Dashboard",        icon="🏠", default=True)
-minha_senha  = st.Page("pages/09_Minha_Senha.py",  title="Alterar Senha",    icon="🔐")
-pedidos      = st.Page("pages/03_Pedidos.py",      title="Solicitações",     icon="📋")
-cotacoes     = st.Page("pages/04_Cotacoes.py",     title="Cotações",         icon="💰")
-analise      = st.Page("pages/05_Analise.py",      title="Análise de Preços",icon="📊")
-ordem        = st.Page("pages/06_Pedido_Compra.py",title="Ordem de Compra",  icon="🛒")
-produtos     = st.Page("pages/01_Produtos.py",     title="Produtos",         icon="📦")
-fornecedores = st.Page("pages/02_Fornecedores.py", title="Fornecedores",     icon="🏭")
-relatorios   = st.Page("pages/07_Relatorios.py",   title="Relatórios",       icon="📈")
-configuracoes= st.Page("pages/08_Configuracoes.py",title="Configurações",    icon="⚙️")
+# ── Permissions ───────────────────────────────────────────────────────────────
+_PAGINAS_CONFIG = {
+    "pedidos":      ("pages/03_Pedidos.py",      "Solicitações",      "📋"),
+    "cotacoes":     ("pages/04_Cotacoes.py",     "Cotações",          "💰"),
+    "analise":      ("pages/05_Analise.py",      "Análise de Preços", "📊"),
+    "ordem":        ("pages/06_Pedido_Compra.py","Ordem de Compra",   "🛒"),
+    "produtos":     ("pages/01_Produtos.py",     "Produtos",          "📦"),
+    "fornecedores": ("pages/02_Fornecedores.py", "Fornecedores",      "🏭"),
+    "relatorios":   ("pages/07_Relatorios.py",   "Relatórios",        "📈"),
+    "configuracoes":("pages/08_Configuracoes.py","Configurações",     "⚙️"),
+}
+_PERFIL_PADRAO = {
+    "admin":     ["pedidos","cotacoes","analise","ordem","produtos","fornecedores","relatorios","configuracoes"],
+    "comprador": ["pedidos","cotacoes","analise","ordem","produtos","fornecedores","relatorios"],
+    "digitador": ["pedidos"],
+}
 
-# ── Navigation by profile ────────────────────────────────────────────────────
+permissoes_str = str(usuario.get("permissoes", "") or "").strip()
+if permissoes_str:
+    permissoes = set(p.strip() for p in permissoes_str.split(",") if p.strip())
+else:
+    permissoes = set(_PERFIL_PADRAO.get(perfil, ["pedidos"]))
+
+# configuracoes é sempre do admin e nunca de outros perfis
 if perfil == "admin":
-    nav = {
-        "": [dashboard, minha_senha],
-        "Fluxo de Compras": [pedidos, cotacoes, analise, ordem],
-        "Cadastros": [produtos, fornecedores],
-        "Análises": [relatorios],
-        "Sistema": [configuracoes],
-    }
-elif perfil == "comprador":
-    nav = {
-        "": [dashboard, minha_senha],
-        "Fluxo de Compras": [pedidos, cotacoes, analise, ordem],
-        "Cadastros": [produtos, fornecedores],
-        "Análises": [relatorios],
-    }
-else:  # digitador
-    nav = {
-        "": [dashboard, minha_senha],
-        "Compras": [pedidos],
-    }
+    permissoes.add("configuracoes")
+else:
+    permissoes.discard("configuracoes")
+
+
+def _pg(chave):
+    path, title, icon = _PAGINAS_CONFIG[chave]
+    return st.Page(path, title=title, icon=icon)
+
+
+# ── Pages ────────────────────────────────────────────────────────────────────
+dashboard   = st.Page("pages/00_Dashboard.py",   title="Dashboard",     icon="🏠", default=True)
+minha_senha = st.Page("pages/09_Minha_Senha.py", title="Alterar Senha", icon="🔐")
+
+nav = {"": [dashboard, minha_senha]}
+
+fluxo = [k for k in ["pedidos","cotacoes","analise","ordem"] if k in permissoes]
+if fluxo:
+    nav["Fluxo de Compras"] = [_pg(k) for k in fluxo]
+
+cadastros = [k for k in ["produtos","fornecedores"] if k in permissoes]
+if cadastros:
+    nav["Cadastros"] = [_pg(k) for k in cadastros]
+
+if "relatorios" in permissoes:
+    nav["Análises"] = [_pg("relatorios")]
+
+if "configuracoes" in permissoes:
+    nav["Sistema"] = [_pg("configuracoes")]
 
 pg = st.navigation(nav)
 

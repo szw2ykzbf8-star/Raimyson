@@ -22,6 +22,30 @@ def _display_unidade(row):
 TODOS_LABEL = "✅ Todas as unidades"
 UNIDADES_PROTEGIDAS_IDS = {1, 2, 3, 4}  # IDs das unidades base — editáveis, mas não excluíveis
 
+PAGINAS_PERMISSOES = {
+    "pedidos":      "📋 Solicitações",
+    "cotacoes":     "💰 Cotações",
+    "analise":      "📊 Análise de Preços",
+    "ordem":        "🛒 Ordem de Compra",
+    "produtos":     "📦 Produtos",
+    "fornecedores": "🏭 Fornecedores",
+    "relatorios":   "📈 Relatórios",
+}
+PERFIL_PADRAO_PERM = {
+    "admin":     list(PAGINAS_PERMISSOES.keys()),
+    "comprador": ["pedidos","cotacoes","analise","ordem","produtos","fornecedores","relatorios"],
+    "digitador": ["pedidos"],
+}
+
+def _perm_stored_to_keys(stored, perfil):
+    s = str(stored or "").strip()
+    if s:
+        return [k for k in s.split(",") if k.strip() in PAGINAS_PERMISSOES]
+    return list(PERFIL_PADRAO_PERM.get(perfil, ["pedidos"]))
+
+def _perm_keys_to_stored(keys):
+    return ",".join(k for k in keys if k in PAGINAS_PERMISSOES)
+
 tab_unidades, tab_unidades_medida, tab_usuarios, tab_orcamento, tab_backup = st.tabs([
     "Unidades Hoteleiras", "Un. de Medida", "Usuários", "Orçamentos", "Backup / Exportar"
 ])
@@ -289,10 +313,27 @@ with tab_usuarios:
                             key=f"ea_{i}",
                             help="Selecione 'Todas as unidades' ou uma ou mais unidades específicas.",
                         )
+                        perm_atual = _perm_stored_to_keys(row.get("permissoes", ""), row["perfil"])
+                        is_admin_perfil = row["perfil"] == "admin"
+                        st.markdown("**Páginas do menu** " + ("*(admin tem acesso total)*" if is_admin_perfil else ""))
+                        novas_perm = []
+                        cols_perm = st.columns(2)
+                        for idx_p, (chave, label) in enumerate(PAGINAS_PERMISSOES.items()):
+                            with cols_perm[idx_p % 2]:
+                                checked = st.checkbox(
+                                    label,
+                                    value=chave in perm_atual,
+                                    key=f"perm_{i}_{chave}",
+                                    disabled=is_admin_perfil,
+                                )
+                                if checked or is_admin_perfil:
+                                    novas_perm.append(chave)
                         if st.form_submit_button("💾 Salvar alterações", use_container_width=True):
+                            df_usuarios["permissoes"] = df_usuarios["permissoes"].astype(object)
                             df_usuarios.at[i, "nome"] = novo_nome.strip()
                             df_usuarios.at[i, "perfil"] = novo_perfil
                             df_usuarios.at[i, "unidades_acesso"] = display_to_stored(novo_acesso)
+                            df_usuarios.at[i, "permissoes"] = "" if novo_perfil == "admin" else _perm_keys_to_stored(novas_perm)
                             escrever_df("usuarios", df_usuarios)
                             st.success("Usuário atualizado!")
                             st.cache_resource.clear()
@@ -349,6 +390,14 @@ with tab_usuarios:
             default=[TODOS_LABEL],
             help="Selecione 'Todas as unidades' ou unidades específicas.",
         )
+        st.markdown("**Páginas do menu**")
+        perm_padrao_novo = PERFIL_PADRAO_PERM.get("digitador", ["pedidos"])
+        novas_perm_u = []
+        cols_pn = st.columns(2)
+        for idx_p, (chave, label) in enumerate(PAGINAS_PERMISSOES.items()):
+            with cols_pn[idx_p % 2]:
+                if st.checkbox(label, value=chave in perm_padrao_novo, key=f"nperm_{chave}"):
+                    novas_perm_u.append(chave)
         if st.form_submit_button("➕ Criar Usuário", use_container_width=True):
             erro_s = validar_senha(senha_u) if senha_u else "Senha é obrigatória."
             if not nome_u.strip() or not login_u.strip():
@@ -360,9 +409,10 @@ with tab_usuarios:
             else:
                 novo_id = int(df_usuarios["id"].max()) + 1 if not df_usuarios.empty else 1
                 acesso_str = display_to_stored(acesso_u)
+                perm_str = "" if perfil_u == "admin" else _perm_keys_to_stored(novas_perm_u)
                 append_linha("usuarios", [
                     novo_id, nome_u.strip(), login_u.strip(),
-                    hash_senha(senha_u), perfil_u, acesso_str, True, True,
+                    hash_senha(senha_u), perfil_u, acesso_str, True, True, perm_str,
                 ])
                 st.success(f"Usuário '{login_u}' criado! Ele deverá trocar a senha no primeiro login.")
                 st.session_state["usr_form_v"] += 1
