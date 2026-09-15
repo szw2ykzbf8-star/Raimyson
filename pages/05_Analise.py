@@ -56,7 +56,7 @@ else:
             if prod_info.empty:
                 continue
             prod_nome = prod_info.iloc[0]["descricao"]
-            prod_unidade = prod_info.iloc[0]["unidade_medida"]
+            prod_unidade = prod_info.iloc[0]["unidade_base"]
 
             resps_prod = respostas[respostas["produto_id"] == prod_id].copy()
 

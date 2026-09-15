@@ -34,7 +34,7 @@ with tab_novo:
         for _, prod in produtos_ativos.iterrows():
             col1, col2 = st.columns([4, 1])
             with col1:
-                st.write(f"**{prod['descricao']}** — {prod['unidade_medida']}")
+                st.write(f"**{prod['descricao']}** — {prod['unidade_base']}")
                 if prod.get("observacao"):
                     st.caption(prod["observacao"])
             with col2:
@@ -75,9 +75,9 @@ with tab_abertos:
                     itens = df_itens[df_itens["pedido_id"] == ped["id"]]
                     if not itens.empty and not df_produtos.empty:
                         itens_display = itens.merge(
-                            df_produtos[["id", "descricao", "unidade_medida"]],
+                            df_produtos[["id", "descricao", "unidade_base"]],
                             left_on="produto_id", right_on="id", how="left"
-                        )[["descricao", "unidade_medida", "quantidade"]]
+                        )[["descricao", "unidade_base", "quantidade"]]
                         st.dataframe(itens_display, use_container_width=True, hide_index=True)
 
                     if perfil in ["admin", "comprador"]:

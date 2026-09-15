@@ -47,7 +47,7 @@ else:
 
                 linhas.append({
                     "Produto": prod["descricao"],
-                    "Unidade Medida": prod["unidade_medida"],
+                    "Unidade Medida": prod["unidade_base"],
                     "Qtd Total": item["quantidade"],
                     "Preço Unit.": f"R$ {float(item['preco_unitario']):.2f}",
                     "Subtotal": f"R$ {float(item['preco_unitario']) * float(item['quantidade']):.2f}",
