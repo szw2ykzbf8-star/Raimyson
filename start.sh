@@ -13,6 +13,9 @@ _bot_loop() {
 
 _bot_loop &
 
+echo "[start.sh] Iniciando agendador..."
+python scripts/agendador.py &
+
 echo "[start.sh] Iniciando Streamlit na porta $PORT..."
 exec python -m streamlit run main.py \
     --server.port="$PORT" \

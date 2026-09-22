@@ -73,6 +73,26 @@ def enviar_resumo_mensal(mes: str, entradas: float, saidas: float, saldo: float)
     return ok
 
 
+def enviar_documento(conteudo: bytes, nome_arquivo: str, legenda: str = "") -> tuple[bool, str]:
+    cid = TELEGRAM_CHAT_ID
+    if not TELEGRAM_TOKEN:
+        return False, "TELEGRAM_TOKEN não configurado"
+    if not cid:
+        return False, "TELEGRAM_CHAT_ID não configurado"
+    try:
+        resp = requests.post(
+            _url("sendDocument"),
+            data={"chat_id": cid, "caption": legenda, "parse_mode": "HTML"},
+            files={"document": (nome_arquivo, conteudo, "application/json")},
+            timeout=30,
+        )
+        if resp.status_code == 200:
+            return True, ""
+        return False, f"HTTP {resp.status_code}: {resp.text}"
+    except Exception as e:
+        return False, str(e)
+
+
 def get_chat_id_bot() -> str | None:
     """Retorna o chat_id da última mensagem recebida pelo bot (para setup inicial)."""
     if not TELEGRAM_TOKEN:
