@@ -10,7 +10,7 @@ Comandos suportados:
   /ajuda
 
 Formas de pagamento: pix · db (débito) · cr (crédito) · din (dinheiro)
-Categorias:         ali · trans · mor · sau · laz · edu · vest · com · div · inv · out
+Categorias:         dinâmicas — use /ajuda para ver as disponíveis
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ import logging
 import os
 import threading
 import time
+import unicodedata
 import uuid
 from datetime import datetime, timedelta
 
@@ -47,8 +48,8 @@ APP_URL         = os.getenv("APP_URL", "")
 ANTHROPIC_KEY   = os.getenv("ANTHROPIC_API_KEY", "")
 SCOPES      = ["https://www.googleapis.com/auth/spreadsheets"]
 
-# Abreviações de categoria → nome completo (igual às categorias do app)
-CAT_ABBREV = {
+# Abreviações fixas (base) — retrocompatibilidade com comandos já usados
+_CAT_BASE = {
     "ali":   "Alimentação",
     "trans": "Transporte",
     "mor":   "Moradia",
@@ -61,6 +62,47 @@ CAT_ABBREV = {
     "inv":   "Investimentos",
     "out":   "Outros",
 }
+
+CAT_ABBREV: dict[str, str] = dict(_CAT_BASE)
+_cat_refresh_ts: float = 0.0
+_CAT_TTL = 300  # segundos
+
+
+def _norm(s: str) -> str:
+    return "".join(
+        c for c in unicodedata.normalize("NFD", s.lower())
+        if unicodedata.category(c) != "Mn"
+    )
+
+
+def _build_abbrev(nomes: list[str]) -> dict[str, str]:
+    result  = dict(_CAT_BASE)
+    covered = set(result.values())
+    for cat in sorted(nomes):
+        if cat in covered:
+            continue
+        base = _norm(cat)
+        for n in range(3, len(base) + 1):
+            key = base[:n]
+            if key not in result:
+                result[key] = cat
+                covered.add(cat)
+                break
+    return result
+
+
+def _refresh_cats(force: bool = False) -> None:
+    global CAT_ABBREV, _cat_refresh_ts
+    if not force and time.time() - _cat_refresh_ts < _CAT_TTL:
+        return
+    try:
+        rows  = _get_all("categorias")
+        nomes = [r["nome"] for r in rows if str(r.get("ativo", "")).lower() == "true" and r.get("nome")]
+        CAT_ABBREV = _build_abbrev(nomes)
+        _cat_refresh_ts = time.time()
+        log.info("Categorias atualizadas: %d categorias", len(nomes))
+    except Exception as exc:
+        log.warning("Não foi possível atualizar categorias: %s", exc)
 
 # Abreviações de forma de pagamento → nome completo
 FORMAS = {
@@ -455,31 +497,31 @@ def _get_ac():
     return _ac_client
 
 
-_NLP_SYSTEM = """\
-Você é um assistente de finanças pessoais. O usuário vai enviar uma mensagem descrevendo \
-uma transação em português informal. Extraia as informações e responda APENAS com um JSON \
-válido, sem markdown, sem explicações, somente o objeto JSON.
-
-Campos obrigatórios:
-{
-  "tipo": "gasto" | "entrada" | "desconhecido",
-  "valor": número float (ex: 45.50),
-  "categoria": uma de: Alimentação, Transporte, Moradia, Saúde, Lazer, Educação, Vestuário, \
-Comunicação, Dívidas, Investimentos, Outros,
-  "descricao": string curta do item (ex: "uber", "mercado", "salário"),
-  "forma": "Pix" | "Débito" | "Crédito" | "Dinheiro"  (infira pelo contexto; padrão = Pix),
-  "conta": string com banco/cartão se mencionado, senão "",
-  "parcelas": inteiro (1 se não mencionado),
-  "fonte": string (só para tipo=entrada, ex: "Salário", "Freelance"; senão "")
-}
-
-Regras:
-- Se for menção de pagamento com cartão/crédito, forma = "Crédito"
-- Se for menção de débito/conta, forma = "Débito"
-- Se citar "pix" explicitamente, forma = "Pix"
-- Dinheiro apenas se explicitamente citado
-- Para tipo=desconhecido, preencha os outros campos com valores padrão (valor=0)
-"""
+def _get_nlp_system() -> str:
+    _refresh_cats()
+    cats_list = ", ".join(sorted(set(CAT_ABBREV.values())))
+    return (
+        "Você é um assistente de finanças pessoais. O usuário vai enviar uma mensagem descrevendo "
+        "uma transação em português informal. Extraia as informações e responda APENAS com um JSON "
+        "válido, sem markdown, sem explicações, somente o objeto JSON.\n\n"
+        "Campos obrigatórios:\n"
+        "{\n"
+        '  "tipo": "gasto" | "entrada" | "desconhecido",\n'
+        '  "valor": número float (ex: 45.50),\n'
+        f'  "categoria": uma de: {cats_list},\n'
+        '  "descricao": string curta do item (ex: "uber", "mercado", "salário"),\n'
+        '  "forma": "Pix" | "Débito" | "Crédito" | "Dinheiro"  (infira pelo contexto; padrão = Pix),\n'
+        '  "conta": string com banco/cartão se mencionado, senão "",\n'
+        '  "parcelas": inteiro (1 se não mencionado),\n'
+        '  "fonte": string (só para tipo=entrada, ex: "Salário", "Freelance"; senão "")\n'
+        "}\n\n"
+        "Regras:\n"
+        "- Se for menção de pagamento com cartão/crédito, forma = \"Crédito\"\n"
+        "- Se for menção de débito/conta, forma = \"Débito\"\n"
+        "- Se citar \"pix\" explicitamente, forma = \"Pix\"\n"
+        "- Dinheiro apenas se explicitamente citado\n"
+        "- Para tipo=desconhecido, preencha os outros campos com valores padrão (valor=0)"
+    )
 
 
 def _parse_nlp(text: str) -> dict | None:
@@ -490,7 +532,7 @@ def _parse_nlp(text: str) -> dict | None:
         resp = ac.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=300,
-            system=_NLP_SYSTEM,
+            system=_get_nlp_system(),
             messages=[{"role": "user", "content": text}],
         )
         raw = resp.content[0].text.strip()
@@ -806,10 +848,12 @@ def cmd_link(_: list[str]) -> str:
 
 
 def cmd_ajuda(_: list[str]) -> str:
-    cats  = " · ".join(f"<code>{k}</code>" for k in CAT_ABBREV)
-    formas = " · ".join(
-        f"<code>{k}</code>={v}" for k, v in FORMAS.items()
+    _refresh_cats(force=True)
+    cats_lines = "\n".join(
+        f"  <code>{k}</code> = {v}"
+        for k, v in sorted(CAT_ABBREV.items(), key=lambda x: x[1])
     )
+    formas = " · ".join(f"<code>{k}</code>={v}" for k, v in FORMAS.items())
     return (
         "🤖 <b>FinTrack Bot — Comandos</b>\n\n"
         "<b>💸 Registrar gasto:</b>\n"
@@ -817,7 +861,7 @@ def cmd_ajuda(_: list[str]) -> str:
         "  <code>/gasto 45.50 ali mercado pix</code>\n"
         "  <code>/gasto 80 trans uber db nubank</code>\n"
         "  <code>/gasto 600 vest tênis cr nubank 3x</code>\n\n"
-        f"<b>Categorias:</b> {cats}\n\n"
+        f"<b>Categorias disponíveis:</b>\n{cats_lines}\n\n"
         f"<b>Formas de pagamento:</b> {formas}\n\n"
         "<b>💰 Registrar entrada:</b>\n"
         "<code>/entrada valor fonte [conta]</code>\n"
@@ -913,6 +957,8 @@ def run() -> None:
         log.error("Token inválido: %s", me)
         return
     log.info("Bot autenticado: @%s", me["result"].get("username"))
+
+    _refresh_cats(force=True)
 
     t = threading.Thread(target=_daily_summary_loop, daemon=True, name="daily-summary")
     t.start()

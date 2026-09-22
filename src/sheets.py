@@ -131,7 +131,7 @@ def get_categorias(apenas_ativas: bool = True) -> pd.DataFrame:
         return df
     if apenas_ativas:
         df = df[df["ativo"] == "True"]
-    return df
+    return df.sort_values("nome").reset_index(drop=True)
 
 
 def add_categoria(nome: str, icone: str = "📦") -> str:
