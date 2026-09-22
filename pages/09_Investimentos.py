@@ -36,23 +36,34 @@ with tabs[0]:
         total_aplicado = df["valor_aplicado"].astype(float).sum()
         hoje = date.today().isoformat()
         total_atual = 0.0
+        total_rend_bruto = 0.0
+        total_ir = 0.0
         for _, row in df.iterrows():
             res = utils.calcular_rendimento(
                 float(row["valor_aplicado"]), row["taxa_tipo"],
                 float(row["taxa_valor"]), row["data_aplicacao"], hoje,
                 cdi_anual=_cdi_anual,
             )
+            ir = utils.calcular_ir(row["tipo"], res["rendimento"], row["data_aplicacao"], hoje)
             total_atual += res["valor_final"]
+            total_rend_bruto += res["rendimento"]
+            total_ir += ir["valor_ir"]
+
+        total_liquido = total_rend_bruto - total_ir
 
         c1, c2, c3 = st.columns(3)
         with c1:
             st.metric("Total Aplicado", utils.fmt_brl(total_aplicado))
         with c2:
-            st.metric("Valor Atual Estimado", utils.fmt_brl(total_atual))
+            st.metric("Rendimento Bruto", utils.fmt_brl(total_rend_bruto),
+                      delta=f"{(total_rend_bruto/total_aplicado*100):.2f}%" if total_aplicado else "0%")
         with c3:
-            rendimento_total = total_atual - total_aplicado
-            st.metric("Rendimento Total", utils.fmt_brl(rendimento_total),
-                      delta=f"{(rendimento_total/total_aplicado*100):.2f}%" if total_aplicado else "0%")
+            st.metric("Rendimento Líquido (−IR)", utils.fmt_brl(total_liquido),
+                      help="Após desconto estimado de IR. LCI/LCA/Poupança são isentos.")
+
+        if total_ir > 0:
+            st.caption(f"💡 IR estimado sobre rendimentos: **{utils.fmt_brl(total_ir)}** "
+                       f"(recolhido na fonte no resgate)")
 
         st.markdown("---")
 
@@ -70,6 +81,7 @@ with tabs[0]:
                 float(row["taxa_valor"]), row["data_aplicacao"], hoje,
                 cdi_anual=_cdi_anual,
             )
+            ir = utils.calcular_ir(row["tipo"], res["rendimento"], row["data_aplicacao"], hoje)
             conta_orig_atual = row.get("conta_origem", "") or ""
             has_confirm = st.session_state.get(f"confirm_del_inv_{row['id']}", False)
             label_conta = f" · Conta: {conta_orig_atual}" if conta_orig_atual and conta_orig_atual not in ("— nenhuma cadastrada —",) else " · ⚠️ Sem conta vinculada"
@@ -85,14 +97,29 @@ with tabs[0]:
                     st.metric("Taxa", taxa_str)
                     st.metric("Vencimento", utils.fmt_data(row["data_vencimento"]) if row["data_vencimento"] else "—")
                 with c3:
-                    st.metric("Valor atual", utils.fmt_brl(res["valor_final"]))
-                    st.metric("Rendimento", utils.fmt_brl(res["rendimento"]))
+                    st.metric("Valor atual (bruto)", utils.fmt_brl(res["valor_final"]))
+                    st.metric("Rendimento Bruto", utils.fmt_brl(res["rendimento"]))
                 with c4:
                     st.metric("Rentabilidade", utils.fmt_pct(res["rentabilidade_pct"]))
                     if res.get("dias_uteis") is not None:
                         st.metric("Dias úteis", str(res["dias_uteis"]))
                     else:
                         st.metric("Meses aplicado", str(res["meses"]))
+
+                # Bloco de IR
+                st.markdown("---")
+                ci1, ci2, ci3 = st.columns(3)
+                with ci1:
+                    if ir["isento"]:
+                        st.metric("IR", "✅ Isento", help=f"{row['tipo']} é isento de IR")
+                    else:
+                        st.metric("Alíquota IR", f"{ir['aliquota']:.1f}%",
+                                  help="Tabela regressiva — quanto mais tempo, menor a alíquota")
+                with ci2:
+                    st.metric("IR estimado", f"−{utils.fmt_brl(ir['valor_ir'])}" if not ir["isento"] else "R$ 0,00")
+                with ci3:
+                    st.metric("💰 Rendimento Líquido", utils.fmt_brl(ir["rendimento_liquido"]),
+                              help="O que vai para sua conta no resgate")
 
                 # Editar conta de origem
                 st.markdown("---")

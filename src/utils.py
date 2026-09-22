@@ -314,6 +314,53 @@ def calcular_rendimento(valor_aplicado: float, taxa_tipo: str,
     }
 
 
+_TIPOS_ISENTOS_IR = {"LCI", "LCA", "Poupança"}
+
+
+def calcular_ir(tipo: str, rendimento_bruto: float, data_aplicacao_str: str,
+                data_referencia_str: str = None) -> dict:
+    """
+    Calcula IR sobre rendimento de renda fixa pela tabela regressiva.
+    Usa dias corridos (calendário), não úteis.
+
+    Alíquotas:
+      ≤ 180 dias  → 22,5%
+      ≤ 360 dias  → 20,0%
+      ≤ 720 dias  → 17,5%
+      > 720 dias  → 15,0%
+
+    LCI, LCA e Poupança são isentos.
+    """
+    if tipo in _TIPOS_ISENTOS_IR or rendimento_bruto <= 0:
+        return {
+            "isento": True,
+            "aliquota": 0.0,
+            "valor_ir": 0.0,
+            "rendimento_liquido": round(rendimento_bruto, 2),
+        }
+
+    da = date.fromisoformat(data_aplicacao_str)
+    dr = date.fromisoformat(data_referencia_str) if data_referencia_str else date.today()
+    dias = (dr - da).days
+
+    if dias <= 180:
+        aliquota = 22.5
+    elif dias <= 360:
+        aliquota = 20.0
+    elif dias <= 720:
+        aliquota = 17.5
+    else:
+        aliquota = 15.0
+
+    valor_ir = round(rendimento_bruto * aliquota / 100, 2)
+    return {
+        "isento": False,
+        "aliquota": aliquota,
+        "valor_ir": valor_ir,
+        "rendimento_liquido": round(rendimento_bruto - valor_ir, 2),
+    }
+
+
 def simular_investimento(valor_inicial: float, aporte_mensal: float,
                           taxa_mensal: float, meses: int) -> list[dict]:
     saldo = valor_inicial
