@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import datetime
+import io
 from modules.auth import requer_permissao
 from modules.google_sheets import ler_df, escrever_df, append_linha
 
@@ -36,7 +37,7 @@ if not opcoes_unidade_base:
     opcoes_unidade_base = ["kg", "litro", "unidade"]
     mapa_sigla = {v: v for v in opcoes_unidade_base}
 
-tab_lista, tab_novo = st.tabs(["Lista de Produtos", "Novo Produto"])
+tab_lista, tab_novo, tab_import = st.tabs(["Lista de Produtos", "Novo Produto", "Importar Excel"])
 
 with tab_lista:
     if df.empty:
@@ -171,3 +172,144 @@ with tab_novo:
             st.session_state["prod_form_v"] += 1
             st.cache_resource.clear()
             st.rerun()
+
+with tab_import:
+    st.markdown("#### Importar produtos via Excel")
+
+    # ── Modelo para download ──────────────────────────────────────────────
+    _siglas_disponiveis = list(mapa_sigla.values()) or ["kg", "lt", "un", "mt"]
+    _modelo = pd.DataFrame([
+        {
+            "descricao":                 "Arroz",
+            "apresentacao":              "Pacote 5kg",
+            "unidade_base":              "kg",
+            "qtd_base_por_apresentacao": 5,
+            "observacao":                "",
+        },
+        {
+            "descricao":                 "Detergente",
+            "apresentacao":              "Frasco 500ml",
+            "unidade_base":              "lt",
+            "qtd_base_por_apresentacao": 0.5,
+            "observacao":                "Neutro",
+        },
+    ])
+    _buf_modelo = io.BytesIO()
+    with pd.ExcelWriter(_buf_modelo, engine="openpyxl") as _w:
+        _modelo.to_excel(_w, index=False, sheet_name="Produtos")
+    st.download_button(
+        "⬇️ Baixar modelo Excel",
+        data=_buf_modelo.getvalue(),
+        file_name="modelo_produtos.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    st.caption(
+        f"Unidades válidas para `unidade_base`: **{', '.join(_siglas_disponiveis)}**  "
+        "— use exatamente a sigla cadastrada."
+    )
+
+    # ── Upload ────────────────────────────────────────────────────────────
+    arquivo = st.file_uploader("Selecione o arquivo Excel (.xlsx)", type=["xlsx"])
+
+    if arquivo:
+        try:
+            df_imp = pd.read_excel(arquivo, dtype=str)
+        except Exception as e:
+            st.error(f"Erro ao ler o arquivo: {e}")
+            st.stop()
+
+        df_imp.columns = [c.strip().lower().replace(" ", "_") for c in df_imp.columns]
+
+        COLUNAS_OBRIG = ["descricao", "apresentacao", "unidade_base", "qtd_base_por_apresentacao"]
+        faltando = [c for c in COLUNAS_OBRIG if c not in df_imp.columns]
+        if faltando:
+            st.error(f"Colunas obrigatórias não encontradas: **{', '.join(faltando)}**")
+            st.info("Baixe o modelo acima e confira os nomes das colunas.")
+            st.stop()
+
+        if "observacao" not in df_imp.columns:
+            df_imp["observacao"] = ""
+
+        # Normaliza
+        df_imp = df_imp.dropna(subset=["descricao"]).copy()
+        df_imp["descricao"]   = df_imp["descricao"].str.strip()
+        df_imp["apresentacao"] = df_imp["apresentacao"].fillna("").str.strip()
+        df_imp["unidade_base"] = df_imp["unidade_base"].fillna("").str.strip()
+        df_imp["observacao"]  = df_imp["observacao"].fillna("").str.strip()
+        df_imp["qtd_base_por_apresentacao"] = pd.to_numeric(
+            df_imp["qtd_base_por_apresentacao"], errors="coerce"
+        )
+
+        # Validação por linha
+        desc_existentes = set(df["descricao"].str.strip().str.lower()) if not df.empty else set()
+        erros, avisos, ok = [], [], []
+
+        for idx, row in df_imp.iterrows():
+            linha = idx + 2  # número da linha no Excel (header = 1)
+            if not row["descricao"]:
+                erros.append(f"Linha {linha}: descrição vazia.")
+                continue
+            if not row["apresentacao"]:
+                erros.append(f"Linha {linha} ({row['descricao']}): apresentação vazia.")
+                continue
+            if row["unidade_base"] not in _siglas_disponiveis:
+                erros.append(
+                    f"Linha {linha} ({row['descricao']}): unidade_base "
+                    f"'{row['unidade_base']}' inválida. Use: {', '.join(_siglas_disponiveis)}."
+                )
+                continue
+            if pd.isna(row["qtd_base_por_apresentacao"]) or row["qtd_base_por_apresentacao"] <= 0:
+                erros.append(
+                    f"Linha {linha} ({row['descricao']}): qtd_base_por_apresentacao inválida."
+                )
+                continue
+            if row["descricao"].lower() in desc_existentes:
+                avisos.append(f"Linha {linha} ({row['descricao']}): já existe — será ignorada.")
+            else:
+                ok.append(idx)
+
+        st.markdown(f"**Resumo:** {len(ok)} para importar | {len(avisos)} duplicatas (ignoradas) | {len(erros)} erros")
+
+        if erros:
+            with st.expander(f"❌ {len(erros)} erro(s) — corrija no arquivo antes de importar"):
+                for e in erros:
+                    st.write(e)
+
+        if avisos:
+            with st.expander(f"⚠️ {len(avisos)} duplicata(s) que serão ignoradas"):
+                for a in avisos:
+                    st.write(a)
+
+        if ok:
+            st.dataframe(
+                df_imp.loc[ok, ["descricao", "apresentacao", "unidade_base",
+                                "qtd_base_por_apresentacao", "observacao"]],
+                use_container_width=True,
+                hide_index=True,
+            )
+            if st.button(f"✅ Importar {len(ok)} produto(s)", use_container_width=True):
+                proximo_id = int(df["id"].max()) + 1 if not df.empty else 1
+                hoje = datetime.date.today().isoformat()
+                novas_linhas = []
+                for idx in ok:
+                    r = df_imp.loc[idx]
+                    novas_linhas.append([
+                        proximo_id,
+                        r["descricao"],
+                        r["apresentacao"],
+                        r["unidade_base"],
+                        float(r["qtd_base_por_apresentacao"]),
+                        r["observacao"],
+                        True,
+                        hoje,
+                    ])
+                    proximo_id += 1
+
+                from modules.google_sheets import get_sheet as _get_sheet
+                ws = _get_sheet("produtos")
+                ws.append_rows(novas_linhas)
+                st.success(f"{len(novas_linhas)} produto(s) importado(s) com sucesso!")
+                st.cache_resource.clear()
+                st.rerun()
+        elif not erros:
+            st.info("Nenhum produto novo para importar (todos já existem).")
