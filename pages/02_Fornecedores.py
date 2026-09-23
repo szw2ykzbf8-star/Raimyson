@@ -287,5 +287,6 @@ with tab_novo:
             st.success(f"Fornecedor '{razao_social}' cadastrado!")
             st.session_state["forn_form_v"] += 1
             st.session_state.pop("novo_cnpj_dados", None)
+            st.session_state.pop("novo_cnpj_busca", None)
             st.cache_resource.clear()
             st.rerun()
