@@ -173,7 +173,6 @@ with tab_novo:
             novo_id = int(df["id"].max()) + 1 if not df.empty else 1
             append_linha("produtos", [
                 novo_id,
-                codigo.strip(),
                 descricao.strip(),
                 apresentacao.strip(),
                 unidade_base,
@@ -181,6 +180,7 @@ with tab_novo:
                 observacao.strip(),
                 True,
                 datetime.date.today().isoformat(),
+                codigo.strip(),
             ])
             st.success(f"Produto '{descricao}' cadastrado com sucesso!")
             st.session_state["prod_form_v"] += 1
@@ -314,7 +314,6 @@ with tab_import:
                     r = df_imp.loc[idx]
                     novas_linhas.append([
                         proximo_id,
-                        r["codigo"],
                         r["descricao"],
                         r["apresentacao"],
                         r["unidade_base"],
@@ -322,6 +321,7 @@ with tab_import:
                         r["observacao"],
                         True,
                         hoje,
+                        r["codigo"],
                     ])
                     proximo_id += 1
 
