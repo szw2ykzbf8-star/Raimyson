@@ -78,11 +78,13 @@ def _cabecalhos():
         "ItensPedido": ["id", "pedido_id", "produto_id", "quantidade"],
         "Cotacoes": ["id", "data_criacao", "prazo_limite", "status", "criado_por"],
         "RespostasFornecedores": ["id", "cotacao_id", "fornecedor_id", "produto_id", "preco", "tipo_embalagem", "qtd_por_embalagem", "observacao", "data_resposta"],
-        "Compras": ["id", "cotacao_id", "fornecedor_id", "data_compra", "valor_total", "pedido_gerado"],
+        "Compras": ["id", "cotacao_id", "fornecedor_id", "data_compra", "valor_total", "pedido_gerado", "nfe_chave", "nfe_numero", "status_recebimento"],
         "ItensCompra": ["id", "compra_id", "produto_id", "quantidade", "preco_unitario", "preco_normalizado", "fator"],
         "Orcamentos": ["id", "unidade", "mes", "ano", "valor"],
         "HistoricoPrecos": ["id", "produto_id", "fornecedor_id", "cotacao_id", "preco", "tipo_embalagem", "qtd_por_embalagem", "preco_normalizado", "ganhou", "data"],
         "UnidadesMedida": ["id", "nome", "descricao", "ativo"],
+        "ItensRecebimento": ["id", "compra_id", "produto_id", "qtd_pedida", "qtd_recebida"],
+        "NfeMapeamento": ["id", "fornecedor_id", "nfe_cprod", "produto_id"],
     }
 
 

@@ -102,8 +102,8 @@ def login_page():
 
 
 _PERFIL_PADRAO_PERM = {
-    "admin":     {"pedidos","cotacoes","analise","ordem","produtos","fornecedores","relatorios","configuracoes"},
-    "comprador": {"pedidos","cotacoes","analise","ordem","produtos","fornecedores","relatorios"},
+    "admin":     {"pedidos","cotacoes","analise","ordem","recebimento","produtos","fornecedores","relatorios","configuracoes"},
+    "comprador": {"pedidos","cotacoes","analise","ordem","recebimento","produtos","fornecedores","relatorios"},
     "digitador": {"pedidos"},
 }
 

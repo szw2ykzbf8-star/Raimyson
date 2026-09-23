@@ -26,6 +26,7 @@ PAGINAS_PERMISSOES = {
     "pedidos":      "📋 Solicitações",
     "cotacoes":     "💰 Cotações",
     "analise":      "📊 Análise de Preços",
+    "recebimento":  "📥 Recebimento NF-e",
     "ordem":        "🛒 Ordem de Compra",
     "produtos":     "📦 Produtos",
     "fornecedores": "🏭 Fornecedores",
@@ -33,7 +34,7 @@ PAGINAS_PERMISSOES = {
 }
 PERFIL_PADRAO_PERM = {
     "admin":     list(PAGINAS_PERMISSOES.keys()),
-    "comprador": ["pedidos","cotacoes","analise","ordem","produtos","fornecedores","relatorios"],
+    "comprador": ["pedidos","cotacoes","analise","ordem","recebimento","produtos","fornecedores","relatorios"],
     "digitador": ["pedidos"],
 }
 
