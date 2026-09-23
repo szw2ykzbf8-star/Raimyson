@@ -259,7 +259,64 @@ with tabs[5]:
     st.warning("⚠️ A importação NÃO sobrescreve dados existentes. Apenas adiciona registros novos (sem duplicatas por ID).")
     uploaded = st.file_uploader("Selecione o arquivo JSON", type=["json"])
     if uploaded and st.button("Importar"):
-        st.info("Importação não implementada nesta versão — abra uma issue no repositório.")
+        try:
+            dados = json.loads(uploaded.read().decode("utf-8"))
+        except Exception as e:
+            st.error(f"Arquivo inválido: {e}")
+            st.stop()
+
+        _SHEET_MAP = {
+            "categorias":   "categorias",
+            "fontes":       "fontes_renda",
+            "contas":       "contas_bancarias",
+            "cartoes":      "cartoes",
+            "fixas":        "contas_fixas",
+            "dividas":      "dividas",
+            "pgtos_divida": "pagamentos_divida",
+            "investimentos":"investimentos",
+            "entradas":     "entradas",
+            "gastos":       "gastos",
+            "transferencias":"transferencias",
+            "pgtos_contas": "pagamentos_contas",
+            "viagens":      "viagens",
+        }
+
+        total_importado = 0
+        total_pulado    = 0
+        erros           = []
+
+        prog = st.progress(0, text="Importando...")
+        keys = [k for k in _SHEET_MAP if k in dados]
+
+        for idx, key in enumerate(keys):
+            sheet_name = _SHEET_MAP[key]
+            registros  = dados[key]
+            if not registros:
+                prog.progress((idx + 1) / len(keys), text=f"{sheet_name}: vazio")
+                continue
+            try:
+                from src.sheets import _sheet as _sh_direct
+                ws       = _sh_direct(sheet_name)
+                headers  = ws.row_values(1)
+                existing = {str(r.get("id", "")) for r in ws.get_all_records() if r.get("id")}
+
+                novos = [r for r in registros if str(r.get("id", "")) not in existing]
+                for r in novos:
+                    row_vals = [str(r.get(h, "")) for h in headers]
+                    ws.append_row(row_vals)
+                    total_importado += 1
+                total_pulado += len(registros) - len(novos)
+                prog.progress((idx + 1) / len(keys), text=f"✓ {sheet_name}: {len(novos)} novos")
+            except Exception as e:
+                erros.append(f"{sheet_name}: {e}")
+
+        prog.empty()
+        st.success(f"✅ Importação concluída: **{total_importado}** registros inseridos, **{total_pulado}** já existiam.")
+        if erros:
+            st.warning("Avisos:\n" + "\n".join(erros))
+        for k in list(st.session_state.keys()):
+            if k.startswith("_sheet_cache_"):
+                del st.session_state[k]
 
 # ─── Config geral ─────────────────────────────────────────────────────────────
 

@@ -1,5 +1,6 @@
 import html as _html
 import streamlit as st
+import plotly.graph_objects as go
 from src import auth, sheets as sh, utils
 from src.config import INATIVIDADE_PADRAO_MIN
 from src import telegram_bot as tg
@@ -487,6 +488,87 @@ def dashboard():
         st.subheader("💡 Insights")
         for _icon, _level, _msg in _insights:
             getattr(st, _level)(f"{_icon} {_msg}")
+
+    # ── Gráficos ──────────────────────────────────────────────────────────────
+    if not gastos_df.empty or not entradas_df.empty:
+        st.markdown("---")
+        gc1, gc2 = st.columns(2)
+
+        # Barras horizontais — gastos por categoria
+        with gc1:
+            st.subheader("💸 Gastos por Categoria")
+            if not gastos_df.empty:
+                by_cat = (
+                    gastos_df.groupby("categoria")["valor_parcela"]
+                    .apply(lambda x: x.astype(float).sum())
+                    .sort_values()
+                )
+                fig_bar = go.Figure(go.Bar(
+                    x=by_cat.values,
+                    y=by_cat.index,
+                    orientation="h",
+                    marker_color="#3498DB",
+                    text=[utils.fmt_brl(v) for v in by_cat.values],
+                    textposition="outside",
+                    hovertemplate="%{y}: %{text}<extra></extra>",
+                ))
+                fig_bar.update_layout(
+                    margin=dict(l=0, r=60, t=10, b=0),
+                    height=max(200, len(by_cat) * 40),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    font_color="#A0AEC0",
+                    xaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
+                    yaxis=dict(showgrid=False),
+                )
+                st.plotly_chart(fig_bar, use_container_width=True)
+            else:
+                st.caption("Nenhum gasto neste mês.")
+
+        # Área — evolução diária do saldo no mês
+        with gc2:
+            st.subheader("📈 Evolução do Saldo no Mês")
+            import calendar as _cal_g
+            from datetime import date as _date_g
+
+            _hoje_g   = _date_g.today()
+            _dias_mes_g = _cal_g.monthrange(_hoje_g.year, _hoje_g.month)[1]
+            _dias_g   = list(range(1, min(_hoje_g.day, _dias_mes_g) + 1))
+
+            if _dias_g and (not entradas_df.empty or not gastos_df.empty):
+                _saldo_dia = []
+                _acum = 0.0
+                for d in _dias_g:
+                    _data_str = f"{_hoje_g.year}-{_hoje_g.month:02d}-{d:02d}"
+                    _e = entradas_df[entradas_df["data"] == _data_str]["valor"].astype(float).sum() if not entradas_df.empty else 0
+                    _g = gastos_df[gastos_df["data_compra"] == _data_str]["valor_parcela"].astype(float).sum() if not gastos_df.empty else 0
+                    _acum += _e - _g
+                    _saldo_dia.append(_acum)
+
+                _cor = "#2ECC71" if _saldo_dia[-1] >= 0 else "#E74C3C"
+                fig_area = go.Figure(go.Scatter(
+                    x=_dias_g,
+                    y=_saldo_dia,
+                    fill="tozeroy",
+                    mode="lines",
+                    line=dict(color=_cor, width=2),
+                    fillcolor=_cor.replace(")", ",0.15)").replace("rgb", "rgba") if "rgb" in _cor else f"rgba(46,204,113,0.15)" if _cor == "#2ECC71" else "rgba(231,76,60,0.15)",
+                    hovertemplate="Dia %{x}: %{y:,.2f}<extra></extra>",
+                ))
+                fig_area.add_hline(y=0, line_dash="dash", line_color="#718096", line_width=1)
+                fig_area.update_layout(
+                    margin=dict(l=0, r=10, t=10, b=0),
+                    height=max(200, len(by_cat) * 40) if not gastos_df.empty else 250,
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    font_color="#A0AEC0",
+                    xaxis=dict(title="Dia", showgrid=False, tickmode="linear", dtick=5),
+                    yaxis=dict(showgrid=True, gridcolor="#2D3748", tickprefix="R$ "),
+                    showlegend=False,
+                )
+                st.plotly_chart(fig_area, use_container_width=True)
+            else:
+                st.caption("Dados insuficientes para o gráfico.")
 
     st.markdown("---")
     col_l, col_r = st.columns(2)

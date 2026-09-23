@@ -219,7 +219,19 @@ def _parse_gasto(parts: list[str]) -> dict | str:
     cat_key   = parts[1].lower()
     categoria = CAT_ABBREV.get(cat_key)
     if not categoria:
-        cats = " · ".join(f"<code>{k}</code>={v}" for k, v in CAT_ABBREV.items())
+        cat_norm = _norm(cat_key)
+        for nome in CAT_ABBREV.values():
+            if _norm(nome) == cat_norm:
+                categoria = nome
+                break
+    if not categoria and len(cat_key) >= 3:
+        cat_norm = _norm(cat_key)
+        for nome in CAT_ABBREV.values():
+            if _norm(nome).startswith(cat_norm):
+                categoria = nome
+                break
+    if not categoria:
+        cats = "\n".join(f"  <code>{k}</code> = {v}" for k, v in sorted(CAT_ABBREV.items(), key=lambda x: x[1]))
         return f"❌ Categoria '<code>{cat_key}</code>' desconhecida.\n\nOpções:\n{cats}"
 
     remaining = parts[2:]
