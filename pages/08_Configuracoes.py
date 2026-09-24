@@ -23,18 +23,19 @@ TODOS_LABEL = "✅ Todas as unidades"
 UNIDADES_PROTEGIDAS_IDS = {1, 2, 3, 4}  # IDs das unidades base — editáveis, mas não excluíveis
 
 PAGINAS_PERMISSOES = {
-    "pedidos":      "📋 Solicitações",
-    "cotacoes":     "💰 Cotações",
-    "analise":      "📊 Análise de Preços",
-    "recebimento":  "📥 Recebimento NF-e",
-    "ordem":        "🛒 Ordem de Compra",
-    "produtos":     "📦 Produtos",
-    "fornecedores": "🏭 Fornecedores",
-    "relatorios":   "📈 Relatórios",
+    "pedidos":       "📋 Solicitações",
+    "cotacoes":      "💰 Cotações",
+    "analise":       "📊 Análise de Preços",
+    "recebimento":   "📥 Recebimento NF-e",
+    "compra_avulsa": "🧾 Compra Avulsa",
+    "ordem":         "🛒 Ordem de Compra",
+    "produtos":      "📦 Produtos",
+    "fornecedores":  "🏭 Fornecedores",
+    "relatorios":    "📈 Relatórios",
 }
 PERFIL_PADRAO_PERM = {
     "admin":     list(PAGINAS_PERMISSOES.keys()),
-    "comprador": ["pedidos","cotacoes","analise","ordem","recebimento","produtos","fornecedores","relatorios"],
+    "comprador": ["pedidos","cotacoes","analise","ordem","recebimento","compra_avulsa","produtos","fornecedores","relatorios"],
     "digitador": ["pedidos"],
 }
 

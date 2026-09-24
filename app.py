@@ -43,14 +43,15 @@ _PAGINAS_CONFIG = {
     "analise":      ("pages/05_Analise.py",      "Análise de Preços", "📊"),
     "ordem":        ("pages/06_Pedido_Compra.py","Ordem de Compra",   "🛒"),
     "recebimento":  ("pages/10_Recebimento.py", "Recebimento NF-e",  "📥"),
+    "compra_avulsa":("pages/11_Compra_Avulsa.py","Compra Avulsa",   "🧾"),
     "produtos":     ("pages/01_Produtos.py",     "Produtos",          "📦"),
     "fornecedores": ("pages/02_Fornecedores.py", "Fornecedores",      "🏭"),
     "relatorios":   ("pages/07_Relatorios.py",   "Relatórios",        "📈"),
     "configuracoes":("pages/08_Configuracoes.py","Configurações",     "⚙️"),
 }
 _PERFIL_PADRAO = {
-    "admin":     ["pedidos","cotacoes","analise","ordem","recebimento","produtos","fornecedores","relatorios","configuracoes"],
-    "comprador": ["pedidos","cotacoes","analise","ordem","recebimento","produtos","fornecedores","relatorios"],
+    "admin":     ["pedidos","cotacoes","analise","ordem","recebimento","compra_avulsa","produtos","fornecedores","relatorios","configuracoes"],
+    "comprador": ["pedidos","cotacoes","analise","ordem","recebimento","compra_avulsa","produtos","fornecedores","relatorios"],
     "digitador": ["pedidos"],
 }
 
@@ -78,7 +79,7 @@ minha_senha = st.Page("pages/09_Minha_Senha.py", title="Alterar Senha", icon="�
 
 nav = {"": [dashboard, minha_senha]}
 
-fluxo = [k for k in ["pedidos","cotacoes","analise","ordem","recebimento"] if k in permissoes]
+fluxo = [k for k in ["pedidos","cotacoes","analise","ordem","recebimento","compra_avulsa"] if k in permissoes]
 if fluxo:
     nav["Fluxo de Compras"] = [_pg(k) for k in fluxo]
 
