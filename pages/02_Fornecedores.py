@@ -162,6 +162,21 @@ with tab_lista:
                 with col8:
                     estado = st.text_input("UF",      value=str(row.get("estado", "") or ""), key=f"e_estado_{i}", max_chars=2)
 
+                ped_min_val = row.get("pedido_minimo", "")
+                try:
+                    ped_min_val = float(ped_min_val) if ped_min_val not in ("", None) else 0.0
+                except (ValueError, TypeError):
+                    ped_min_val = 0.0
+                ped_min_e = st.number_input(
+                    "Pedido mínimo (R$)",
+                    value=ped_min_val,
+                    min_value=0.0,
+                    step=10.0,
+                    format="%.2f",
+                    key=f"e_pedido_minimo_{i}",
+                    help="Valor mínimo de compra exigido pelo fornecedor",
+                )
+
                 col_at, col_sv = st.columns([1, 1])
                 with col_at:
                     ativo_e = st.checkbox("Ativo", value=is_ativo(row["ativo"]), key=f"e_ativo_{i}")
@@ -171,7 +186,7 @@ with tab_lista:
                             st.error("Razão Social é obrigatória.")
                         else:
                             df["nome_fantasia"] = df.get("nome_fantasia", pd.Series(dtype=object)).astype(object)
-                            for col in ["cep","logradouro","numero","complemento","bairro","cidade","estado"]:
+                            for col in ["cep","logradouro","numero","complemento","bairro","cidade","estado","pedido_minimo"]:
                                 if col not in df.columns:
                                     df[col] = ""
                                 df[col] = df[col].astype(object)
@@ -187,6 +202,7 @@ with tab_lista:
                             df.at[i, "cidade"]        = st.session_state[f"e_cidade_{i}"]
                             df.at[i, "cep"]           = st.session_state[f"e_cep_{i}"]
                             df.at[i, "estado"]        = st.session_state[f"e_estado_{i}"]
+                            df.at[i, "pedido_minimo"] = st.session_state[f"e_pedido_minimo_{i}"]
                             df.at[i, "ativo"]         = ativo_e
                             escrever_df("fornecedores", df)
                             st.success("Fornecedor atualizado!")
@@ -260,6 +276,15 @@ with tab_novo:
         with col8:
             estado = st.text_input("UF",      value=dados.get("estado", ""), max_chars=2)
 
+        pedido_minimo = st.number_input(
+            "Pedido mínimo (R$)",
+            value=0.0,
+            min_value=0.0,
+            step=10.0,
+            format="%.2f",
+            help="Valor mínimo de compra exigido pelo fornecedor (0 = sem mínimo)",
+        )
+
         salvar = st.form_submit_button("✅ Cadastrar Fornecedor", use_container_width=True)
 
     if salvar:
@@ -283,6 +308,7 @@ with tab_novo:
                 bairro.strip(),
                 cidade.strip(),
                 estado.strip(),
+                pedido_minimo,
             ])
             st.success(f"Fornecedor '{razao_social}' cadastrado!")
             st.session_state["forn_form_v"] += 1
