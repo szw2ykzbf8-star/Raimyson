@@ -13,9 +13,9 @@ def _tipos_embalagem():
             ativos = df[df["ativo"].astype(str).str.lower().isin(["true", "1", "sim"])]
             if not ativos.empty:
                 return [
-                    str(r.get("descricao", "") or r.get("nome", "")).strip()
+                    str(r.get("nome", "")).strip()
                     for _, r in ativos.iterrows()
-                    if str(r.get("descricao", "") or r.get("nome", "")).strip()
+                    if str(r.get("nome", "")).strip()
                 ]
     except Exception:
         pass
@@ -166,7 +166,7 @@ def mostrar_pagina_publica(token: str):
             qtd_total  = float(row["qtd_total"])
 
             st.markdown(f"**{nome_prod}**")
-            st.caption(f"Apresentação padrão: {apres}  |  Qtd solicitada: **{qtd_total:.0f} {ub}**")
+            st.caption(f"Apresentação padrão: {apres}  |  Qtd solicitada: **{qtd_total:.0f}**")
 
             col1, col2, col3 = st.columns([2, 2, 2])
             with col1:

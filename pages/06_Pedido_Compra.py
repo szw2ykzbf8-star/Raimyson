@@ -88,8 +88,10 @@ def _rows_html(itens_det):
             f"<tr>"
             f"<td>{it.get('codigo','—')}</td>"
             f"<td>{it.get('descricao','—')}</td>"
-            f"<td style='font-size:10px'>{obs_cell}</td>"
+            f"<td>{it.get('gram_sol','')}</td>"
             f"<td>{it.get('marca','')}</td>"
+            f"<td style='font-size:10px'>{obs_cell}</td>"
+            f"<td>{it.get('gram_inf','')}</td>"
             f"<td>R$ {p:.2f}</td>"
             f"<td>{q:g}</td>"
             f"<td>R$ {p*q:.2f}</td>"
@@ -112,8 +114,9 @@ def _secao(compra, forn, unid_info, itens_det):
 
     thead = (
         "<thead><tr>"
-        "<th>Código</th><th>Produto</th><th>Observações</th><th>Marca</th>"
-        "<th>Preço Un./KG</th><th>Qtde./KG</th><th>Total</th>"
+        "<th>Código</th><th>Produto</th><th>Gram. Solicitada</th>"
+        "<th>Marca</th><th>Obs</th><th>Gram. Informada</th>"
+        "<th>Preço Un.</th><th>Qtde.</th><th>Total</th>"
         "</tr></thead>"
     )
 
@@ -196,6 +199,7 @@ else:
 
                     obs_forn = ""
                     marca_forn = ""
+                    gram_inf = ""
                     if not df_respostas.empty:
                         resp = df_respostas[
                             (df_respostas["cotacao_id"].apply(_safe_int)   == cot_id) &
@@ -203,14 +207,19 @@ else:
                             (df_respostas["produto_id"].apply(_safe_int)   == pid)
                         ]
                         if not resp.empty:
-                            obs_forn    = str(resp.iloc[0].get("observacao", "") or "")
-                            marca_forn  = str(resp.iloc[0].get("marca", "") or "")
+                            obs_forn   = str(resp.iloc[0].get("observacao", "") or "")
+                            marca_forn = str(resp.iloc[0].get("marca", "") or "")
+                            _tipo      = str(resp.iloc[0].get("tipo_embalagem", "") or "")
+                            _qtd_emb   = _safe_float(resp.iloc[0].get("qtd_por_embalagem", 1), 1.0)
+                            gram_inf   = f"{_tipo} x{_qtd_emb:g}".strip() if _tipo and _qtd_emb > 1 else _tipo
 
                     itens_det.append({
                         "codigo":         str(prod.get("codigo", "") or "—"),
                         "descricao":      str(prod.get("descricao", f"Produto {pid}")),
+                        "gram_sol":       str(prod.get("apresentacao", "") or ""),
                         "obs_fornecedor": obs_forn,
                         "marca":          marca_forn,
+                        "gram_inf":       gram_inf,
                         "preco_unitario": _safe_float(item.get("preco_unitario", 0)),
                         "quantidade":     _safe_float(item.get("quantidade", 0)),
                     })

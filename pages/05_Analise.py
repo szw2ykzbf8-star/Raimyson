@@ -308,6 +308,8 @@ for pid in prod_ids:
                 f"<div style='{bg}'><b>R$ {pn:.2f}</b>{badge}</div>",
                 unsafe_allow_html=True,
             )
+            if rd["marca"]:
+                st.caption(f"🏷️ {rd['marca'][:25]}")
             if rd["obs"]:
                 st.caption(rd["obs"][:30])
 
@@ -406,11 +408,17 @@ def _html_pedido_forn(fid):
                 continue
             rd   = resp_dict.get((pid, fid), {})
             prod = prod_map.get(pid, {})
+            _qtd_emb = rd.get("qtd_emb", 1.0)
+            _gram_inf = str(rd.get("tipo", ""))
+            if _qtd_emb and float(_qtd_emb) > 1:
+                _gram_inf = f"{_gram_inf} x{float(_qtd_emb):g}"
             itens_det.append({
                 "codigo":    str(prod.get("codigo", "") or "—"),
                 "descricao": str(prod.get("descricao", f"Produto {pid}")),
+                "gram_sol":  str(prod.get("apresentacao", "") or ""),
                 "obs":       str(rd.get("obs", "")),
                 "marca":     str(rd.get("marca", "")),
+                "gram_inf":  _gram_inf.strip(),
                 "preco":     rd.get("preco_norm", 0.0),
                 "qtd":       qty,
             })
@@ -419,8 +427,9 @@ def _html_pedido_forn(fid):
         unid_info = unid_map.get(str(unid), {"nome": unid, "nome_fantasia": unid})
         total = sum(_safe_float(i["preco"]) * _safe_float(i["qtd"]) for i in itens_det)
         thead = (
-            "<thead><tr><th>Código</th><th>Produto</th><th>Observações</th>"
-            "<th>Marca</th><th>Preço Un./KG</th><th>Qtde./KG</th><th>Total</th></tr></thead>"
+            "<thead><tr><th>Código</th><th>Produto</th><th>Gram. Solicitada</th>"
+            "<th>Marca</th><th>Obs</th><th>Gram. Informada</th>"
+            "<th>Preço Un.</th><th>Qtde.</th><th>Total</th></tr></thead>"
         )
         rows = ""
         for it in itens_det:
@@ -428,8 +437,10 @@ def _html_pedido_forn(fid):
             p, q = _safe_float(it["preco"]), _safe_float(it["qtd"])
             rows += (
                 f"<tr><td>{it['codigo']}</td><td>{it['descricao']}</td>"
-                f"<td style='font-size:10px'>{obs_cell}</td>"
+                f"<td>{it['gram_sol']}</td>"
                 f"<td>{it['marca']}</td>"
+                f"<td style='font-size:10px'>{obs_cell}</td>"
+                f"<td>{it['gram_inf']}</td>"
                 f"<td>R$ {p:.2f}</td><td>{q:g}</td>"
                 f"<td>R$ {p*q:.2f}</td></tr>"
             )
