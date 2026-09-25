@@ -35,9 +35,9 @@ with tab1:
     st.subheader("Compras por Período")
     col1, col2, col3 = st.columns(3)
     with col1:
-        data_ini = st.date_input("De", value=datetime.date.today().replace(day=1))
+        data_ini = st.date_input("De", value=datetime.date.today().replace(day=1), format="DD/MM/YYYY")
     with col2:
-        data_fim = st.date_input("Até", value=datetime.date.today())
+        data_fim = st.date_input("Até", value=datetime.date.today(), format="DD/MM/YYYY")
     with col3:
         unidade_filtro = st.selectbox("Unidade", ["Todas"] + df_pedidos["unidade"].unique().tolist() if not df_pedidos.empty else ["Todas"])
 

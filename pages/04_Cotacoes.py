@@ -48,8 +48,9 @@ with tab_nova:
         prazo = st.date_input(
             "Data limite para resposta dos fornecedores",
             value=datetime.date.today() + datetime.timedelta(days=1),
+            format="DD/MM/YYYY",
         )
-        hora = st.time_input("Hora limite", value=datetime.time(12, 0))
+        hora = st.time_input("Hora limite", value=datetime.time(12, 0), step=3600)
         prazo_completo = datetime.datetime.combine(prazo, hora).isoformat()
 
         fornecedores_ativos = (
@@ -185,10 +186,12 @@ with tab_abertas:
                     st.markdown("**Alterar prazo:**")
                     c1, c2 = st.columns(2)
                     novo_prazo = c1.date_input(
-                        "Nova data", value=prazo_dt.date(), key=f"nd_{cot_id}"
+                        "Nova data", value=prazo_dt.date(), key=f"nd_{cot_id}",
+                        format="DD/MM/YYYY",
                     )
                     nova_hora = c2.time_input(
-                        "Nova hora", value=prazo_dt.time(), key=f"nh_{cot_id}"
+                        "Nova hora", value=prazo_dt.time(), key=f"nh_{cot_id}",
+                        step=3600,
                     )
                     salvar_prazo = st.form_submit_button("Salvar prazo")
 
