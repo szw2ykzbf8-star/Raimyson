@@ -45,6 +45,10 @@ with tab_nova:
             st.write(f"• **#{ped['id']}** — {ped['unidade']} ({len(itens)} itens)")
 
         st.markdown("---")
+        nome_cot = st.text_input(
+            "Nome da cotação (ex: Semana 40, Hotel Centro Out/25)",
+            placeholder="Nome para identificar esta cotação",
+        )
         prazo = st.date_input(
             "Data limite para resposta dos fornecedores",
             value=datetime.date.today() + datetime.timedelta(days=1),
@@ -78,7 +82,7 @@ with tab_nova:
                 # Criar cotação
                 append_linha("cotacoes", [
                     novo_id, datetime.datetime.now().isoformat(),
-                    prazo_completo, "aberta", usuario["nome"],
+                    prazo_completo, "aberta", usuario["nome"], nome_cot,
                 ])
 
                 # Gerar token por fornecedor
@@ -108,14 +112,15 @@ with tab_nova:
                             df_pedidos.at[idx, "cotacao_id"] = str(novo_id)
                     escrever_df("pedidos", df_pedidos)
 
-                st.session_state["cotacao_criada"] = {"id": novo_id, "links": links}
+                st.session_state["cotacao_criada"] = {"id": novo_id, "links": links, "nome": nome_cot}
                 st.cache_data.clear()
                 st.rerun()
 
     # Mostrar links após criação
     if "cotacao_criada" in st.session_state:
         info = st.session_state.pop("cotacao_criada")
-        st.success(f"✅ Cotação #{info['id']} criada! Envie os links abaixo para cada fornecedor:")
+        label_cot = info["nome"] if info.get("nome") else f"#{info['id']}"
+        st.success(f"✅ Cotação **{label_cot}** criada! Envie os links abaixo para cada fornecedor:")
         for nome, link in info["links"].items():
             st.markdown(f"**{nome}**")
             st.code(link, language=None)
@@ -133,6 +138,8 @@ with tab_abertas:
     else:
         for _, cot in cotacoes_abertas.iterrows():
             cot_id = _safe_int(cot["id"])
+            nome_cot_val = str(cot.get("nome", "") or "").strip()
+            label_cot_aberta = nome_cot_val if nome_cot_val else f"#{cot_id}"
             try:
                 prazo_dt = datetime.datetime.fromisoformat(str(cot["prazo_limite"]))
             except Exception:
@@ -142,7 +149,7 @@ with tab_abertas:
             status_label = "⏰ Expirada" if expirada else "🟢 Aberta"
 
             with st.expander(
-                f"Cotação #{cot_id} — {status_label} — Prazo: {prazo_dt.strftime('%d/%m/%Y %H:%M')}"
+                f"{label_cot_aberta} — {status_label} — Prazo: {prazo_dt.strftime('%d/%m/%Y %H:%M')}"
             ):
                 # Tokens desta cotação
                 toks_cot = (
@@ -174,10 +181,28 @@ with tab_abertas:
                             if not df_fornecedores.empty else pd.DataFrame()
                         )
                         nome_f = str(forn_row.iloc[0]["razao_social"]) if not forn_row.empty else f"Fornecedor {fid}"
-                        icone = "✅" if fid in forn_responderam else "⏳"
+                        respondeu = fid in forn_responderam
+                        icone = "✅" if respondeu else "⏳"
                         link = f"{BASE_URL}/?token={tok}"
-                        st.markdown(f"{icone} **{nome_f}**")
-                        st.code(link, language=None)
+                        col_icon, col_link, col_btn = st.columns([3, 5, 2])
+                        col_icon.markdown(f"{icone} **{nome_f}**")
+                        col_link.code(link, language=None)
+                        if respondeu:
+                            if col_btn.button(
+                                "🔓 Liberar", key=f"liberar_{cot_id}_{fid}",
+                                help="Apaga a resposta atual e libera novo preenchimento",
+                                use_container_width=True,
+                            ):
+                                df_respostas_upd = df_respostas[
+                                    ~(
+                                        (df_respostas["cotacao_id"].apply(_safe_int) == cot_id) &
+                                        (df_respostas["fornecedor_id"].apply(_safe_int) == fid)
+                                    )
+                                ].reset_index(drop=True)
+                                escrever_df("respostas", df_respostas_upd)
+                                st.success(f"Resposta de {nome_f} apagada. O fornecedor pode preencher novamente.")
+                                st.cache_data.clear()
+                                st.rerun()
 
                 st.markdown("---")
 
@@ -229,6 +254,8 @@ with tab_encerradas:
     else:
         for _, cot in cotacoes_enc.sort_values("id", ascending=False).iterrows():
             cot_id = _safe_int(cot["id"])
+            nome_cot_enc = str(cot.get("nome", "") or "").strip()
+            label_cot_enc = nome_cot_enc if nome_cot_enc else f"#{cot_id}"
             try:
                 prazo_dt = datetime.datetime.fromisoformat(str(cot["prazo_limite"]))
                 prazo_str = prazo_dt.strftime("%d/%m/%Y %H:%M")
@@ -247,7 +274,7 @@ with tab_encerradas:
             )
             n_total = len(toks_cot)
 
-            with st.expander(f"Cotação #{cot_id} — Prazo: {prazo_str} — {n_resp}/{n_total} respostas"):
+            with st.expander(f"{label_cot_enc} — Prazo: {prazo_str} — {n_resp}/{n_total} respostas"):
                 st.write(f"Criada por: **{cot.get('criado_por', '—')}**")
                 st.write(f"Respostas: **{n_resp}** de **{n_total}** fornecedores")
                 if st.button("Reabrir cotação", key=f"reabrir_{cot_id}"):

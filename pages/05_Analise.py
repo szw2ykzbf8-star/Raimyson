@@ -65,7 +65,11 @@ def _label_cot(x):
     row = cotacoes_com_resp[cotacoes_com_resp["id"].apply(_safe_int) == _safe_int(x)]
     if row.empty:
         return f"Cotação #{_safe_int(x)}"
-    return f"Cotação #{_safe_int(x)} — {str(row.iloc[0]['status']).capitalize()}"
+    nome = str(row.iloc[0].get("nome", "") or "").strip()
+    status = str(row.iloc[0]["status"]).capitalize()
+    if nome:
+        return f"{nome} — {status}"
+    return f"Cotação #{_safe_int(x)} — {status}"
 
 cotacao_sel = _safe_int(st.selectbox(
     "Cotação", options=cotacoes_com_resp["id"].tolist(), format_func=_label_cot,
@@ -234,12 +238,12 @@ for pid in prod_ids:
             st.caption(apres)
 
     with row[1]:
-        st.markdown(f"**{qtd_total:.1f}** {ub}")
+        st.markdown(f"**{qtd_total:.1f}**")
         qtds_pos = {u: q for u, q in qtds_unid.items() if q > 0}
         if len(qtds_pos) > 1:
             with st.expander("▸ por hotel"):
                 for u, q in qtds_pos.items():
-                    st.caption(f"{u}: {q:.1f} {ub}")
+                    st.caption(f"{u}: {q:.1f}")
 
     with row[2]:
         if hist:
@@ -306,12 +310,24 @@ totais = _calc_totais()
 if not forn_ids:
     st.stop()
 
+# Horizontal scroll when many suppliers
+st.markdown(
+    "<style>"
+    ".fornecedor-footer [data-testid='stHorizontalBlock'] "
+    "{ overflow-x: auto !important; flex-wrap: nowrap !important; }"
+    ".fornecedor-footer [data-testid='stColumn'] "
+    "{ min-width: 160px !important; }"
+    "</style>"
+    "<div class='fornecedor-footer'>",
+    unsafe_allow_html=True,
+)
+
 foot_cols = st.columns(len(forn_ids))
 
 for i, fid in enumerate(forn_ids):
     forn     = forn_map.get(fid, {})
     nome     = str(forn.get("razao_social", f"#{fid}"))
-    nome_c   = (nome[:28] + "…") if len(nome) > 28 else nome
+    nome_c   = (nome[:22] + "…") if len(nome) > 22 else nome
     ped_min  = _safe_float(forn.get("pedido_minimo", 0))
     tot_geral = sum(totais[fid].values())
 
@@ -321,7 +337,7 @@ for i, fid in enumerate(forn_ids):
         if tot_geral == 0:
             st.caption("Nenhum item selecionado")
         else:
-            st.markdown(f"**Total: R$ {tot_geral:.2f}**")
+            st.markdown(f"**R$ {tot_geral:.2f}**")
 
         # Por-unit minimum check
         avisos = []
@@ -332,12 +348,14 @@ for i, fid in enumerate(forn_ids):
                     avisos.append((unid, ped_min - t))
 
         if avisos:
-            linhas = "  \n".join(f"⚠️ {u}: faltam R$ {f:.2f}" for u, f in avisos)
-            st.warning(linhas)
-            ignorar = st.checkbox("Ignorar pedido mínimo", key=f"{sk}_ign_{fid}")
+            n_avisos = len(avisos)
+            with st.expander(f"⚠️ {n_avisos} aviso(s) de mínimo"):
+                for u, f in avisos:
+                    st.caption(f"⚠️ {u}: faltam R$ {f:.2f}")
+            ignorar = st.checkbox("Ignorar", key=f"{sk}_ign_{fid}")
         else:
-            if tot_geral > 0:
-                st.success("✅ Mínimo atingido" if ped_min > 0 else "✅ OK")
+            if tot_geral > 0 and ped_min > 0:
+                st.caption("✅ Mín. atingido")
             ignorar = True
 
         pode_comprar = tot_geral > 0 and (not avisos or ignorar)
@@ -348,7 +366,7 @@ for i, fid in enumerate(forn_ids):
             st.rerun()
 
         # Ajuste de quantidades — sempre disponível
-        with st.expander("📦 Ajustar quantidades"):
+        with st.expander("📦 Ajustar qtd."):
             prods_fid = [pid for pid in prod_ids if _get_sel(pid) == fid]
             if not prods_fid:
                 st.caption("Nenhum produto selecionado para este fornecedor.")
@@ -388,6 +406,7 @@ for i, fid in enumerate(forn_ids):
                         unsafe_allow_html=True,
                     )
 
+st.markdown("</div>", unsafe_allow_html=True)
 
 # ── Process purchase ──────────────────────────────────────────────────────────
 comprar_fid = st.session_state.pop(f"{sk}_comprar_fid", None)

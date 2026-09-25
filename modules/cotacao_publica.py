@@ -60,8 +60,10 @@ def mostrar_pagina_publica(token: str):
 
     st.markdown(f"### Olá, **{nome_forn}**!")
     col_p, col_c = st.columns(2)
+    nome_cot = str(cot.get("nome", "") or "").strip()
+    label_cot = nome_cot if nome_cot else f"nº {cotacao_id}"
     col_p.info(f"⏰ Prazo: **{prazo_dt.strftime('%d/%m/%Y às %H:%M')}**")
-    col_c.info(f"Cotação nº **{cotacao_id}**")
+    col_c.info(f"Cotação: **{label_cot}**")
 
     if encerrada:
         st.error("⛔ Esta cotação está encerrada e não aceita mais respostas.")
