@@ -13,6 +13,13 @@ def gerar_token() -> str:
 def mostrar_pagina_publica(token: str):
     """Formulário público de cotação — chamado antes do gate de autenticação."""
 
+    st.markdown("""
+        <style>
+        [data-testid="stSidebar"] { display: none !important; }
+        [data-testid="collapsedControl"] { display: none !important; }
+        </style>
+    """, unsafe_allow_html=True)
+
     st.title("💰 Cotação de Preços — H Hotéis")
 
     # ── Validar token ─────────────────────────────────────────────────────────
