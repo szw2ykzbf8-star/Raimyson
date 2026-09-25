@@ -243,16 +243,26 @@ else:
             preview_h = min(total_itens * 52 + n_hoteis * 380, 950)
             components.html(html_completo, height=preview_h, scrolling=True)
 
-            # Marcar como enviado
+            # Marcar como enviado / Deletar
             st.markdown("**Marcar como enviado:**")
             n_cols = min(n_hoteis, 4)
             cols_env = st.columns(n_cols)
             for i, info in enumerate(compras_info):
                 with cols_env[i % n_cols]:
                     st.caption(f"{info['label']} — R$ {info['valor']:.2f}")
-                    if st.button("✅ Enviado", key=f"env_{info['cid']}", use_container_width=True):
-                        idx = df_compras[df_compras["id"].apply(_safe_int) == info["cid"]].index[0]
-                        df_compras.at[idx, "pedido_gerado"] = "True"
-                        escrever_df("compras", df_compras)
-                        st.cache_data.clear()
-                        st.rerun()
+                    btn_env, btn_del = st.columns(2)
+                    with btn_env:
+                        if st.button("✅ Enviado", key=f"env_{info['cid']}", use_container_width=True):
+                            idx = df_compras[df_compras["id"].apply(_safe_int) == info["cid"]].index[0]
+                            df_compras.at[idx, "pedido_gerado"] = "True"
+                            escrever_df("compras", df_compras)
+                            st.cache_data.clear()
+                            st.rerun()
+                    with btn_del:
+                        if st.button("🗑️ Deletar", key=f"del_{info['cid']}", use_container_width=True):
+                            df_compras_upd = df_compras[df_compras["id"].apply(_safe_int) != info["cid"]].reset_index(drop=True)
+                            df_itens_upd = df_itens_compra[df_itens_compra["compra_id"].apply(_safe_int) != info["cid"]].reset_index(drop=True)
+                            escrever_df("compras", df_compras_upd)
+                            escrever_df("itens_compra", df_itens_upd)
+                            st.cache_data.clear()
+                            st.rerun()
