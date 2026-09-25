@@ -3,7 +3,23 @@ import streamlit as st
 import pandas as pd
 import datetime
 from modules.google_sheets import ler_df, append_linha
-from config import TIPOS_EMBALAGEM
+from config import TIPOS_EMBALAGEM as _TIPOS_FALLBACK
+
+
+def _tipos_embalagem():
+    try:
+        df = ler_df("unidades_medida")
+        if not df.empty:
+            ativos = df[df["ativo"].astype(str).str.lower().isin(["true", "1", "sim"])]
+            if not ativos.empty:
+                return [
+                    str(r.get("descricao", "") or r.get("nome", "")).strip()
+                    for _, r in ativos.iterrows()
+                    if str(r.get("descricao", "") or r.get("nome", "")).strip()
+                ]
+    except Exception:
+        pass
+    return list(_TIPOS_FALLBACK)
 
 
 def gerar_token() -> str:
@@ -160,7 +176,7 @@ def mostrar_pagina_publica(token: str):
                     key=f"pub_preco_{pid}",
                 )
             with col2:
-                tipo_emb = st.selectbox("Tipo de embalagem", TIPOS_EMBALAGEM, key=f"pub_emb_{pid}")
+                tipo_emb = st.selectbox("Tipo de embalagem", _tipos_embalagem(), key=f"pub_emb_{pid}")
             with col3:
                 qtd_emb = st.number_input(
                     f"Qtd de {ub} por embalagem",
