@@ -105,7 +105,7 @@ with tab_nova:
                         idx = df_pedidos[df_pedidos["id"] == ped["id"]].index[0]
                         df_pedidos.at[idx, "status"] = "em_cotacao"
                         if "cotacao_id" in df_pedidos.columns:
-                            df_pedidos.at[idx, "cotacao_id"] = novo_id
+                            df_pedidos.at[idx, "cotacao_id"] = str(novo_id)
                     escrever_df("pedidos", df_pedidos)
 
                 st.session_state["cotacao_criada"] = {"id": novo_id, "links": links}
