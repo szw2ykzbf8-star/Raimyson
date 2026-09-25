@@ -323,20 +323,31 @@ for pid in prod_ids:
 # ── Save adjusted quantities to DB ───────────────────────────────────────────
 def _salvar_quantidades():
     df_itens_upd = ler_df("itens_pedido").copy()
-    if df_itens_upd.empty:
-        return False, "Nenhum item encontrado."
+    next_id = _next_id(df_itens_upd) if not df_itens_upd.empty else 1
+    cols = list(df_itens_upd.columns) if not df_itens_upd.empty else ["id", "pedido_id", "produto_id", "quantidade"]
     for pid in prod_ids:
         for unid in unidades_cot:
             nova_qtd = _get_qtd(pid, unid)
             peds_unid = peds_cot[peds_cot["unidade"] == unid] if not peds_cot.empty else pd.DataFrame()
             for _, ped in peds_unid.iterrows():
                 ped_id = _safe_int(ped["id"])
-                mask = (
-                    (df_itens_upd["pedido_id"].apply(_safe_int) == ped_id) &
-                    (df_itens_upd["produto_id"].apply(_safe_int) == pid)
-                )
-                if mask.any():
+                if not df_itens_upd.empty:
+                    mask = (
+                        (df_itens_upd["pedido_id"].apply(_safe_int) == ped_id) &
+                        (df_itens_upd["produto_id"].apply(_safe_int) == pid)
+                    )
+                else:
+                    mask = pd.Series([], dtype=bool)
+                if not df_itens_upd.empty and mask.any():
                     df_itens_upd.loc[mask, "quantidade"] = str(nova_qtd)
+                elif nova_qtd > 0:
+                    new_row = {col: "" for col in cols}
+                    new_row["id"] = str(next_id)
+                    new_row["pedido_id"] = str(ped_id)
+                    new_row["produto_id"] = str(pid)
+                    new_row["quantidade"] = str(nova_qtd)
+                    df_itens_upd = pd.concat([df_itens_upd, pd.DataFrame([new_row])], ignore_index=True)
+                    next_id += 1
     try:
         escrever_df("itens_pedido", df_itens_upd)
         return True, None
