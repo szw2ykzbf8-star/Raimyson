@@ -204,15 +204,17 @@ with tab_abertas:
                     st.cache_data.clear()
                     st.rerun()
 
-                # Encerrar
-                if expirada:
-                    if st.button(f"Encerrar e ir para análise", key=f"enc_{cot_id}"):
-                        idx = df_cotacoes[df_cotacoes["id"].apply(_safe_int) == cot_id].index[0]
-                        df_cotacoes.at[idx, "status"] = "encerrada"
-                        escrever_df("cotacoes", df_cotacoes)
-                        st.success("Cotação encerrada. Acesse a aba Análise.")
-                        st.cache_data.clear()
-                        st.rerun()
+                # Encerrar — disponível sempre; aviso extra se ainda não venceu
+                label_enc = "⛔ Encerrar cotação" if not expirada else "Encerrar e ir para análise"
+                if not expirada:
+                    st.caption("⚠️ O prazo ainda não venceu. Você pode encerrar antecipadamente se já tiver respostas suficientes.")
+                if st.button(label_enc, key=f"enc_{cot_id}"):
+                    idx = df_cotacoes[df_cotacoes["id"].apply(_safe_int) == cot_id].index[0]
+                    df_cotacoes.at[idx, "status"] = "encerrada"
+                    escrever_df("cotacoes", df_cotacoes)
+                    st.success("Cotação encerrada. Acesse a aba Análise.")
+                    st.cache_data.clear()
+                    st.rerun()
 
 
 # ── Encerradas ────────────────────────────────────────────────────────────────

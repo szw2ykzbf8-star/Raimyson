@@ -27,15 +27,27 @@ df_fornecedores = ler_df("fornecedores")
 df_pedidos = ler_df("pedidos")
 df_itens = ler_df("itens_pedido")
 
-cotacoes_encerradas = df_cotacoes[df_cotacoes["status"] == "encerrada"] if not df_cotacoes.empty else pd.DataFrame()
+# Mostra cotações com respostas — abertas ou encerradas (exceto finalizadas)
+cotacoes_com_resp = pd.DataFrame()
+if not df_cotacoes.empty and not df_respostas.empty:
+    ids_com_resp = set(df_respostas["cotacao_id"].unique())
+    cotacoes_com_resp = df_cotacoes[
+        df_cotacoes["status"].isin(["aberta", "encerrada"]) &
+        df_cotacoes["id"].isin(ids_com_resp)
+    ]
 
-if cotacoes_encerradas.empty:
-    st.info("Nenhuma cotação encerrada aguardando análise.")
+if cotacoes_com_resp.empty:
+    st.info("Nenhuma cotação com respostas disponível para análise.")
 else:
+    def _label_cot(x):
+        row = cotacoes_com_resp[cotacoes_com_resp["id"] == x]
+        status = str(row.iloc[0]["status"]).capitalize() if not row.empty else ""
+        return f"Cotação #{x} — {status}"
+
     cotacao_sel = st.selectbox(
         "Selecione a cotação para analisar",
-        options=cotacoes_encerradas["id"].tolist(),
-        format_func=lambda x: f"Cotação #{x}"
+        options=cotacoes_com_resp["id"].tolist(),
+        format_func=_label_cot,
     )
 
     respostas = df_respostas[df_respostas["cotacao_id"] == cotacao_sel] if not df_respostas.empty else pd.DataFrame()
