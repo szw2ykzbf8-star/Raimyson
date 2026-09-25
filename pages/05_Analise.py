@@ -326,12 +326,11 @@ if not forn_ids:
 # Horizontal scroll when many suppliers
 st.markdown(
     "<style>"
-    ".fornecedor-footer [data-testid='stHorizontalBlock'] "
+    "[data-testid='stHorizontalBlock'].forn-footer "
     "{ overflow-x: auto !important; flex-wrap: nowrap !important; }"
-    ".fornecedor-footer [data-testid='stColumn'] "
+    "[data-testid='stHorizontalBlock'].forn-footer > [data-testid='stColumn'] "
     "{ min-width: 160px !important; }"
-    "</style>"
-    "<div class='fornecedor-footer'>",
+    "</style>",
     unsafe_allow_html=True,
 )
 
@@ -376,7 +375,6 @@ for i, fid in enumerate(forn_ids):
                      disabled=not pode_comprar,
                      use_container_width=True, type="primary"):
             st.session_state[f"{sk}_comprar_fid"] = fid
-            st.rerun()
 
         # Ajuste de quantidades — sempre disponível
         with st.expander("📦 Ajustar qtd."):
@@ -418,8 +416,6 @@ for i, fid in enumerate(forn_ids):
                         f"<span style='color:{color}'><b>R$ {t:.2f}</b></span>",
                         unsafe_allow_html=True,
                     )
-
-st.markdown("</div>", unsafe_allow_html=True)
 
 # ── Process purchase ──────────────────────────────────────────────────────────
 comprar_fid = st.session_state.pop(f"{sk}_comprar_fid", None)
