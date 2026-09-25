@@ -315,8 +315,43 @@ for pid in prod_ids:
     st.markdown("<hr style='margin:4px 0'>", unsafe_allow_html=True)
 
 
+# ── Save adjusted quantities to DB ───────────────────────────────────────────
+def _salvar_quantidades():
+    df_itens_upd = ler_df("itens_pedido").copy()
+    if df_itens_upd.empty:
+        return False, "Nenhum item encontrado."
+    for pid in prod_ids:
+        for unid in unidades_cot:
+            nova_qtd = _get_qtd(pid, unid)
+            peds_unid = peds_cot[peds_cot["unidade"] == unid] if not peds_cot.empty else pd.DataFrame()
+            for _, ped in peds_unid.iterrows():
+                ped_id = _safe_int(ped["id"])
+                mask = (
+                    (df_itens_upd["pedido_id"].apply(_safe_int) == ped_id) &
+                    (df_itens_upd["produto_id"].apply(_safe_int) == pid)
+                )
+                if mask.any():
+                    df_itens_upd.loc[mask, "quantidade"] = str(nova_qtd)
+    try:
+        escrever_df("itens_pedido", df_itens_upd)
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
+
 # ── FOOTER: resumo por fornecedor ─────────────────────────────────────────────
-st.markdown("## Resumo por Fornecedor")
+col_res, col_salvar, _ = st.columns([3, 2, 5])
+col_res.markdown("## Resumo por Fornecedor")
+with col_salvar:
+    if st.button("💾 Salvar quantidades", use_container_width=True,
+                 help="Salva as quantidades ajustadas no banco para não perder ao navegar"):
+        ok, err = _salvar_quantidades()
+        if ok:
+            st.success("✅ Quantidades salvas!")
+            st.cache_data.clear()
+            st.rerun()
+        else:
+            st.error(f"Erro ao salvar: {err}")
 
 totais = _calc_totais()
 
@@ -416,6 +451,16 @@ for i, fid in enumerate(forn_ids):
                         f"<span style='color:{color}'><b>R$ {t:.2f}</b></span>",
                         unsafe_allow_html=True,
                     )
+
+                if st.button("💾 Salvar quantidades", key=f"{sk}_save_{fid}",
+                             use_container_width=True):
+                    ok2, err2 = _salvar_quantidades()
+                    if ok2:
+                        st.success("✅ Quantidades salvas!")
+                        st.cache_data.clear()
+                        st.rerun()
+                    else:
+                        st.error(f"Erro: {err2}")
 
 # ── Process purchase ──────────────────────────────────────────────────────────
 comprar_fid = st.session_state.pop(f"{sk}_comprar_fid", None)
