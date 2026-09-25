@@ -573,26 +573,37 @@ for i, fid in enumerate(forn_ids):
         if st.session_state.get(f"{sk}_compra_done_{fid}"):
             nome_forn_r = str(forn_map.get(fid, {}).get("razao_social", f"#{fid}"))
             st.success(f"✅ Compra gerada para **{nome_forn_r}**!")
-            wa_col, pdf_col = st.columns(2)
-            with wa_col:
-                st.link_button(
-                    "📱 WhatsApp",
-                    _wa_link_forn(fid),
-                    use_container_width=True,
-                )
-            with pdf_col:
-                nome_safe = nome_forn_r.replace(" ", "_")[:30]
-                st.download_button(
-                    "⬇️ Gerar PDF",
-                    data=_html_pedido_forn(fid).encode("utf-8"),
-                    file_name=f"pedido_{nome_safe}_{datetime.date.today()}.html",
-                    mime="text/html",
-                    use_container_width=True,
-                    key=f"{sk}_pdf_{fid}",
-                )
-            if st.button("✓ OK", key=f"{sk}_ok_{fid}", use_container_width=True):
-                st.session_state.pop(f"{sk}_compra_done_{fid}", None)
-                st.rerun()
+            nome_safe = nome_forn_r.replace(" ", "_")[:30]
+            st.download_button(
+                "⬇️ Gerar PDF",
+                data=_html_pedido_forn(fid).encode("utf-8"),
+                file_name=f"pedido_{nome_safe}_{datetime.date.today()}.html",
+                mime="text/html",
+                use_container_width=True,
+                key=f"{sk}_pdf_{fid}",
+            )
+            _unlock_key = f"{sk}_unlock_{fid}"
+            if not st.session_state.get(_unlock_key):
+                if st.button("🔓 Liberar para nova compra", key=f"{sk}_ok_{fid}", use_container_width=True):
+                    st.session_state[_unlock_key] = True
+                    st.rerun()
+            else:
+                st.warning("Digite sua senha para confirmar a liberação:")
+                from modules.auth import hash_senha as _hash_senha
+                senha_conf = st.text_input("Senha", type="password", key=f"{sk}_pwd_{fid}", label_visibility="collapsed")
+                col_conf, col_cancel = st.columns(2)
+                with col_conf:
+                    if st.button("Confirmar", key=f"{sk}_pwdok_{fid}", use_container_width=True, type="primary"):
+                        if _hash_senha(senha_conf) == st.session_state["usuario"]["senha_hash"]:
+                            st.session_state.pop(f"{sk}_compra_done_{fid}", None)
+                            st.session_state.pop(_unlock_key, None)
+                            st.rerun()
+                        else:
+                            st.error("Senha incorreta.")
+                with col_cancel:
+                    if st.button("Cancelar", key=f"{sk}_pwdcanc_{fid}", use_container_width=True):
+                        st.session_state.pop(_unlock_key, None)
+                        st.rerun()
         else:
             if tot_geral == 0:
                 st.caption("⚠️ Selecione produtos na grade acima.")
