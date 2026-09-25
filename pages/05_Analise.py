@@ -352,11 +352,11 @@ with col_salvar:
                  help="Salva as quantidades ajustadas no banco para não perder ao navegar"):
         ok, err = _salvar_quantidades()
         if ok:
-            st.success("✅ Quantidades salvas!")
+            st.toast("✅ Quantidades salvas!", icon="💾")
             st.cache_data.clear()
             st.rerun()
         else:
-            st.error(f"Erro ao salvar: {err}")
+            st.toast(f"Erro ao salvar: {err}", icon="❌")
 
 totais = _calc_totais()
 
@@ -471,11 +471,11 @@ for i, fid in enumerate(forn_ids):
                              use_container_width=True):
                     ok2, err2 = _salvar_quantidades()
                     if ok2:
-                        st.success("✅ Quantidades salvas!")
+                        st.toast("✅ Quantidades salvas!", icon="💾")
                         st.cache_data.clear()
                         st.rerun()
                     else:
-                        st.error(f"Erro: {err2}")
+                        st.toast(f"Erro ao salvar: {err2}", icon="❌")
 
 # ── Process purchase ──────────────────────────────────────────────────────────
 comprar_fid = st.session_state.pop(f"{sk}_comprar_fid", None)

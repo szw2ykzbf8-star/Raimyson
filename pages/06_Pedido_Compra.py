@@ -8,6 +8,15 @@ usuario = requer_permissao("ordem")
 
 st.title("🛒 Pedidos de Compra")
 
+def _safe_int(v):
+    try:
+        return int(float(v)) if str(v).strip() not in ("", "nan") else 0
+    except Exception:
+        return 0
+
+def _is_pending(v):
+    return str(v).strip().lower() in ("false", "0", "")
+
 df_compras = ler_df("compras")
 df_itens_compra = ler_df("itens_compra")
 df_fornecedores = ler_df("fornecedores")
@@ -16,31 +25,37 @@ df_pedidos = ler_df("pedidos")
 df_itens_pedido = ler_df("itens_pedido")
 df_unidades = ler_df("unidades")
 
-compras_pendentes = df_compras[df_compras["pedido_gerado"] == False] if not df_compras.empty else pd.DataFrame()
+compras_pendentes = (
+    df_compras[df_compras["pedido_gerado"].apply(_is_pending)]
+    if not df_compras.empty else pd.DataFrame()
+)
 
 if compras_pendentes.empty:
     st.info("Nenhum pedido de compra pendente para envio.")
 else:
     for _, compra in compras_pendentes.iterrows():
-        forn_info = df_fornecedores[df_fornecedores["id"] == compra["fornecedor_id"]]
+        cid = _safe_int(compra["id"])
+        fid = _safe_int(compra["fornecedor_id"])
+        forn_info = df_fornecedores[df_fornecedores["id"].apply(_safe_int) == fid]
         if forn_info.empty:
             continue
         forn = forn_info.iloc[0]
 
-        with st.expander(f"Pedido #{compra['id']} — {forn['razao_social']} — R$ {float(compra['valor_total']):.2f}"):
-            itens = df_itens_compra[df_itens_compra["compra_id"] == compra["id"]]
+        with st.expander(f"Pedido #{cid} — {forn['razao_social']} — R$ {float(compra['valor_total']):.2f}"):
+            itens = df_itens_compra[df_itens_compra["compra_id"].apply(_safe_int) == cid]
 
             linhas = []
             for _, item in itens.iterrows():
-                prod_info = df_produtos[df_produtos["id"] == item["produto_id"]]
+                item_pid = _safe_int(item["produto_id"])
+                prod_info = df_produtos[df_produtos["id"].apply(_safe_int) == item_pid]
                 if prod_info.empty:
                     continue
                 prod = prod_info.iloc[0]
 
-                itens_ped = df_itens_pedido[df_itens_pedido["produto_id"] == item["produto_id"]]
+                itens_ped = df_itens_pedido[df_itens_pedido["produto_id"].apply(_safe_int) == item_pid]
                 por_unidade = {}
                 for _, ip in itens_ped.iterrows():
-                    ped = df_pedidos[df_pedidos["id"] == ip["pedido_id"]]
+                    ped = df_pedidos[df_pedidos["id"].apply(_safe_int) == _safe_int(ip["pedido_id"])]
                     if not ped.empty:
                         unidade = ped.iloc[0]["unidade"]
                         por_unidade[unidade] = ip["quantidade"]
@@ -78,9 +93,9 @@ else:
                     st.markdown(f"📱 Contato: **{forn['nome_contato']}** — {forn['telefone']}")
 
             with col2:
-                if st.button("Marcar como Enviado", key=f"enviado_{compra['id']}"):
-                    idx = df_compras[df_compras["id"] == compra["id"]].index[0]
-                    df_compras.at[idx, "pedido_gerado"] = True
+                if st.button("Marcar como Enviado", key=f"enviado_{cid}"):
+                    idx = df_compras[df_compras["id"].apply(_safe_int) == cid].index[0]
+                    df_compras.at[idx, "pedido_gerado"] = "True"
                     escrever_df("compras", df_compras)
                     st.success("Pedido marcado como enviado!")
                     st.cache_data.clear()
