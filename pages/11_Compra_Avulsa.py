@@ -493,5 +493,5 @@ if st.button(f"✅ Confirmar Compra Avulsa ({len(itens_para_salvar)} itens)", us
             f"NF-e {nfe['numero']}/{nfe['serie']} — {unidade_detectada}. "
             "O XML não foi armazenado."
         )
-        st.cache_resource.clear()
+        st.cache_data.clear()
         st.rerun()

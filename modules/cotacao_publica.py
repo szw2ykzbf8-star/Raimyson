@@ -190,7 +190,7 @@ def mostrar_pagina_publica(token: str):
                 from modules.google_sheets import get_sheet as _gs
                 _gs("respostas").append_rows(linhas)
                 st.session_state["pub_form_v"] += 1
-                st.cache_resource.clear()
+                st.cache_data.clear()
                 st.success(f"✅ Cotação enviada com sucesso! {len(linhas)} item(ns) respondido(s). Obrigado!")
                 st.balloons()
                 st.rerun()

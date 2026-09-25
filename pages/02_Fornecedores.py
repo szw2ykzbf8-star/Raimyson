@@ -206,7 +206,7 @@ with tab_lista:
                             df.at[i, "ativo"]         = ativo_e
                             escrever_df("fornecedores", df)
                             st.success("Fornecedor atualizado!")
-                            st.cache_resource.clear()
+                            st.cache_data.clear()
                             st.rerun()
 
 # ── Tab: Novo ─────────────────────────────────────────────────────────────────
@@ -314,5 +314,5 @@ with tab_novo:
             st.session_state["forn_form_v"] += 1
             st.session_state.pop("novo_cnpj_dados", None)
             st.session_state.pop("novo_cnpj_busca", None)
-            st.cache_resource.clear()
+            st.cache_data.clear()
             st.rerun()

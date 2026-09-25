@@ -106,7 +106,7 @@ with tab_unidades:
                                 df_unidades.at[i, col] = val
                             escrever_df("unidades", df_unidades)
                             st.success("Unidade atualizada!")
-                            st.cache_resource.clear()
+                            st.cache_data.clear()
                             st.rerun()
 
             with col_d:
@@ -115,13 +115,13 @@ with tab_unidades:
                 if st.button(btn_ativo, key=f"und_toggle_{i}", use_container_width=True):
                     df_unidades.at[i, "ativo"] = not ativo_val
                     escrever_df("unidades", df_unidades)
-                    st.cache_resource.clear()
+                    st.cache_data.clear()
                     st.rerun()
                 st.markdown("---")
                 if st.button("🗑️ Excluir", key=f"und_del_{i}", use_container_width=True):
                     df_unidades = df_unidades.drop(i).reset_index(drop=True)
                     escrever_df("unidades", df_unidades)
-                    st.cache_resource.clear()
+                    st.cache_data.clear()
                     st.rerun()
 
     st.markdown("---")
@@ -166,7 +166,7 @@ with tab_unidades:
                 ])
                 st.success(f"Unidade '{nome_n}' adicionada!")
                 st.session_state["und_form_v"] += 1
-                st.cache_resource.clear()
+                st.cache_data.clear()
                 st.rerun()
 
 
@@ -206,7 +206,7 @@ with tab_unidades_medida:
                             escrever_df("unidades_medida", df_um)
                             st.session_state["um_edit_v"][str(i)] = ev + 1
                             st.success("Atualizado!")
-                            st.cache_resource.clear()
+                            st.cache_data.clear()
                             st.rerun()
 
             with col_d:
@@ -215,14 +215,14 @@ with tab_unidades_medida:
                 if st.button(btn_label, key=f"um_toggle_{i}", use_container_width=True):
                     df_um.at[i, "ativo"] = not ativo_val
                     escrever_df("unidades_medida", df_um)
-                    st.cache_resource.clear()
+                    st.cache_data.clear()
                     st.rerun()
                 if not eh_padrao:
                     st.markdown("---")
                     if st.button("🗑️ Excluir", key=f"um_del_{i}", use_container_width=True):
                         df_um = df_um.drop(i).reset_index(drop=True)
                         escrever_df("unidades_medida", df_um)
-                        st.cache_resource.clear()
+                        st.cache_data.clear()
                         st.rerun()
 
     st.markdown("---")
@@ -246,7 +246,7 @@ with tab_unidades_medida:
                 append_linha("unidades_medida", [novo_id, nova_sigla.strip(), nova_desc_um.strip(), True])
                 st.success(f"Unidade '{nova_sigla.strip()}' adicionada!")
                 st.session_state["um_form_v"] += 1
-                st.cache_resource.clear()
+                st.cache_data.clear()
                 st.rerun()
 
 
@@ -338,7 +338,7 @@ with tab_usuarios:
                             df_usuarios.at[i, "permissoes"] = "" if novo_perfil == "admin" else _perm_keys_to_stored(novas_perm)
                             escrever_df("usuarios", df_usuarios)
                             st.success("Usuário atualizado!")
-                            st.cache_resource.clear()
+                            st.cache_data.clear()
                             st.rerun()
 
                 with col_d:
@@ -347,7 +347,7 @@ with tab_usuarios:
                     if st.button(btn_ativo, key=f"toggle_{i}", use_container_width=True):
                         df_usuarios.at[i, "ativo"] = not ativo_val
                         escrever_df("usuarios", df_usuarios)
-                        st.cache_resource.clear()
+                        st.cache_data.clear()
                         st.rerun()
 
                     st.markdown("---")
@@ -368,7 +368,7 @@ with tab_usuarios:
                                 escrever_df("usuarios", df_usuarios)
                                 st.session_state["reset_v"][str(i)] = rv + 1
                                 st.success("Senha redefinida. Usuário deverá trocá-la no próximo login.")
-                                st.cache_resource.clear()
+                                st.cache_data.clear()
                                 st.rerun()
 
     st.markdown("---")
@@ -418,7 +418,7 @@ with tab_usuarios:
                 ])
                 st.success(f"Usuário '{login_u}' criado! Ele deverá trocar a senha no primeiro login.")
                 st.session_state["usr_form_v"] += 1
-                st.cache_resource.clear()
+                st.cache_data.clear()
                 st.rerun()
 
 
@@ -472,7 +472,7 @@ with tab_orcamento:
                 df_orcamentos.at[idx, "valor"] = valor
                 escrever_df("orcamentos", df_orcamentos)
         st.success("Orçamentos salvos!")
-        st.cache_resource.clear()
+        st.cache_data.clear()
         st.rerun()
 
 
@@ -510,5 +510,5 @@ with tab_backup:
                 if nome_aba in xls:
                     escrever_df(chave, xls[nome_aba])
             st.success("Importação concluída!")
-            st.cache_resource.clear()
+            st.cache_data.clear()
             st.rerun()

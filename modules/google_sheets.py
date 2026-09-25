@@ -42,6 +42,7 @@ def get_sheet(nome_chave: str):
         return ws
 
 
+@st.cache_data(ttl=120)
 def ler_df(nome_chave: str) -> pd.DataFrame:
     ws = get_sheet(nome_chave)
     data = ws.get_all_records(value_render_option="UNFORMATTED_VALUE")

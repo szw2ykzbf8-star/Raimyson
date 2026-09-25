@@ -84,7 +84,7 @@ with tab_novo:
                         append_linha("itens_pedido", [item_id, novo_id, prod_id, qtd])
                         item_id += 1
                     st.session_state["pedido_form_v"] += 1
-                    st.cache_resource.clear()
+                    st.cache_data.clear()
                     st.success(f"Solicitação #{novo_id} enviada para {unidade}!")
                     st.rerun()
                 except Exception as e:
@@ -125,5 +125,5 @@ with tab_abertos:
                                 df_pedidos.at[idx, "data_bloqueio"] = datetime.datetime.now().isoformat()
                                 escrever_df("pedidos", df_pedidos)
                                 st.success("Pedido bloqueado!")
-                                st.cache_resource.clear()
+                                st.cache_data.clear()
                                 st.rerun()

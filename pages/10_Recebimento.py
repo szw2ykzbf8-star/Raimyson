@@ -366,5 +366,5 @@ if st.button(f"✅ Confirmar Recebimento ({len(itens_para_salvar)} itens)", use_
             f"NF-e {nfe['numero']}/{nfe['serie']} — status: **{status_rec}**. "
             "O XML não foi armazenado."
         )
-        st.cache_resource.clear()
+        st.cache_data.clear()
         st.rerun()

@@ -111,7 +111,7 @@ with tab_lista:
                             df.at[i, "ativo"]       = novo_ativo
                             escrever_df("produtos", df)
                             st.success("Produto atualizado!")
-                            st.cache_resource.clear()
+                            st.cache_data.clear()
                             st.rerun()
 
 with tab_novo:
@@ -184,7 +184,7 @@ with tab_novo:
             ])
             st.success(f"Produto '{descricao}' cadastrado com sucesso!")
             st.session_state["prod_form_v"] += 1
-            st.cache_resource.clear()
+            st.cache_data.clear()
             st.rerun()
 
 with tab_import:
@@ -329,7 +329,7 @@ with tab_import:
                 ws = _get_sheet("produtos")
                 ws.append_rows(novas_linhas)
                 st.success(f"{len(novas_linhas)} produto(s) importado(s) com sucesso!")
-                st.cache_resource.clear()
+                st.cache_data.clear()
                 st.rerun()
         elif not erros:
             st.info("Nenhum produto novo para importar (todos já existem).")

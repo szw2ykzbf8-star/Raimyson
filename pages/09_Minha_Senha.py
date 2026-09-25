@@ -33,6 +33,6 @@ with col2:
                         alterar_senha(usuario["login"], nova)
                         st.session_state["minha_senha_v"] += 1
                         st.success("Senha alterada com sucesso!")
-                        st.cache_resource.clear()
+                        st.cache_data.clear()
                     except Exception as e:
                         st.error(f"Erro ao salvar: {e}")

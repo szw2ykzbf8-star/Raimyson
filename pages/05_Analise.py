@@ -173,5 +173,5 @@ else:
             escrever_df("cotacoes", df_cotacoes)
 
             st.success("Compra finalizada! Acesse a página de Pedidos de Compra para enviar via WhatsApp.")
-            st.cache_resource.clear()
+            st.cache_data.clear()
             st.rerun()

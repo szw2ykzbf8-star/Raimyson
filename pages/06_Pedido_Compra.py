@@ -83,5 +83,5 @@ else:
                     df_compras.at[idx, "pedido_gerado"] = True
                     escrever_df("compras", df_compras)
                     st.success("Pedido marcado como enviado!")
-                    st.cache_resource.clear()
+                    st.cache_data.clear()
                     st.rerun()

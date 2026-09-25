@@ -108,7 +108,7 @@ with tab_nova:
                     escrever_df("pedidos", df_pedidos)
 
                 st.session_state["cotacao_criada"] = {"id": novo_id, "links": links}
-                st.cache_resource.clear()
+                st.cache_data.clear()
                 st.rerun()
 
     # Mostrar links após criação
@@ -198,7 +198,7 @@ with tab_abertas:
                     df_cotacoes.at[idx, "prazo_limite"] = novo_prazo_iso
                     escrever_df("cotacoes", df_cotacoes)
                     st.success("Prazo atualizado.")
-                    st.cache_resource.clear()
+                    st.cache_data.clear()
                     st.rerun()
 
                 # Encerrar
@@ -208,7 +208,7 @@ with tab_abertas:
                         df_cotacoes.at[idx, "status"] = "encerrada"
                         escrever_df("cotacoes", df_cotacoes)
                         st.success("Cotação encerrada. Acesse a aba Análise.")
-                        st.cache_resource.clear()
+                        st.cache_data.clear()
                         st.rerun()
 
 
@@ -250,5 +250,5 @@ with tab_encerradas:
                     df_cotacoes.at[idx, "status"] = "aberta"
                     escrever_df("cotacoes", df_cotacoes)
                     st.success("Cotação reaberta.")
-                    st.cache_resource.clear()
+                    st.cache_data.clear()
                     st.rerun()
