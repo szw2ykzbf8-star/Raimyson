@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import datetime
+import urllib.parse
+import re
 from modules.auth import requer_permissao
 from modules.google_sheets import ler_df, escrever_df, get_sheet
 
@@ -51,12 +53,14 @@ df_unidades     = ler_df("unidades")
 
 # nome → nome_fantasia map for hotel units
 _unid_fantasia = {}
+unid_map = {}
 if not df_unidades.empty:
     for _, _ur in df_unidades.iterrows():
         _nf = str(_ur.get("nome_fantasia", "") or "").strip()
         _nm = str(_ur.get("nome", "") or "").strip()
         if _nm:
             _unid_fantasia[_nm] = _nf if _nf else _nm
+            unid_map[_nm] = dict(_ur)
 
 def _unid_label(u: str) -> str:
     return _unid_fantasia.get(str(u), str(u))
@@ -169,10 +173,10 @@ def _historico(pid):
 # ── Session state ─────────────────────────────────────────────────────────────
 sk = f"analise_{cotacao_sel}"
 
-# Mostrar confirmação de compra gerada (após rerun)
-_compra_ok_nome = st.session_state.pop(f"{sk}_compra_ok", None)
-if _compra_ok_nome:
-    st.success(f"✅ Compra gerada para **{_compra_ok_nome}**! Acesse Ordem de Compra para enviar.")
+# Promover resultado pendente para estado exibível (após rerun)
+_compra_pending = st.session_state.pop(f"{sk}_compra_pending", None)
+if _compra_pending is not None:
+    st.session_state[f"{sk}_compra_done_{_compra_pending}"] = True
 
 if f"{sk}_init" not in st.session_state:
     for pid in prod_ids:
@@ -355,6 +359,144 @@ def _salvar_quantidades():
         return False, str(e)
 
 
+# ── Helpers PDF / WhatsApp ────────────────────────────────────────────────────
+_CSS_PDF = """<style>
+body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:20px}
+h2{font-size:15px;margin:0 0 4px}
+h3{font-size:12px;font-weight:bold;margin:14px 0 5px;
+   border-bottom:1px solid #bbb;padding-bottom:3px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:3px 20px;
+       margin-bottom:8px;line-height:1.65}
+.status{color:#c00;font-weight:bold;margin:4px 0 14px;font-size:11px}
+table{width:100%;border-collapse:collapse;margin-top:6px;font-size:11px}
+th{background:#f2f2f2;border:1px solid #bbb;padding:5px 6px;text-align:left}
+td{border:1px solid #ddd;padding:4px 6px;vertical-align:top}
+.total{font-weight:bold;font-size:13px;margin:10px 0 4px}
+.section{margin-bottom:20px;page-break-after:always}
+.section:last-child{page-break-after:auto}
+@media print{.no-print{display:none!important}}
+</style>"""
+
+
+def _addr_u(r):
+    parts = [
+        str(r.get("logradouro", "") or ""),
+        str(r.get("numero", "") or ""),
+        str(r.get("complemento", "") or ""),
+        str(r.get("bairro", "") or ""),
+        (str(r.get("cidade", "") or "") +
+         ((" - " + str(r.get("estado", "") or "")) if r.get("estado") else "")),
+    ]
+    return ", ".join(p for p in parts if p.strip())
+
+
+def _html_pedido_forn(fid):
+    forn = forn_map.get(fid, {})
+    forn_min = _safe_float(forn.get("pedido_minimo", 0))
+    forn_min_str = f"R$ {forn_min:.2f}" if forn_min > 0 else "—"
+    prods_sel = [pid for pid in prod_ids if _get_sel(pid) == fid]
+    secoes = []
+    idx = 1
+    for unid in unidades_cot:
+        itens_det = []
+        for pid in prods_sel:
+            qty = _get_qtd(pid, unid)
+            if qty <= 0:
+                continue
+            rd   = resp_dict.get((pid, fid), {})
+            prod = prod_map.get(pid, {})
+            itens_det.append({
+                "codigo":    str(prod.get("codigo", "") or "—"),
+                "descricao": str(prod.get("descricao", f"Produto {pid}")),
+                "obs":       str(rd.get("obs", "")),
+                "apres":     str(prod.get("apresentacao", "") or ""),
+                "unid":      str(prod.get("unidade_base", "UN")),
+                "preco":     rd.get("preco_norm", 0.0),
+                "qtd":       qty,
+            })
+        if not itens_det:
+            continue
+        unid_info = unid_map.get(str(unid), {"nome": unid, "nome_fantasia": unid})
+        total = sum(_safe_float(i["preco"]) * _safe_float(i["qtd"]) for i in itens_det)
+        thead = (
+            "<thead><tr><th>Código</th><th>Produto</th><th>Observações</th>"
+            "<th>Marca</th><th>Gramatura</th><th>Centro de Custo</th>"
+            "<th>Preço Un./KG</th><th>Qtde./KG</th><th>Total</th></tr></thead>"
+        )
+        rows = ""
+        for it in itens_det:
+            obs_cell = f"<b>Fornecedor:</b><br>{it['obs']}" if it["obs"] else "—"
+            p, q = _safe_float(it["preco"]), _safe_float(it["qtd"])
+            rows += (
+                f"<tr><td>{it['codigo']}</td><td>{it['descricao']}</td>"
+                f"<td style='font-size:10px'>{obs_cell}</td>"
+                f"<td>{it['apres']}</td><td>{it['unid'].upper()}</td>"
+                f"<td>N/A</td><td>R$ {p:.2f}</td><td>{q:g}</td>"
+                f"<td>R$ {p*q:.2f}</td></tr>"
+            )
+        secoes.append(f"""<div class="section">
+  <h2>Pedido nº {idx} | Data: {datetime.date.today().strftime('%d/%m/%Y')}</h2>
+  <p class="status">Status do pedido: Pedido realizado - aguardando fornecedor</p>
+  <h3>Comprador</h3>
+  <div class="grid2">
+    <div><b>Razão Social:</b> {unid_info.get('nome','')}<br>
+    <b>Nome Fantasia:</b> {unid_info.get('nome_fantasia','')}<br>
+    <b>CNPJ:</b> {unid_info.get('cnpj','')}</div>
+    <div><b>Endereço:</b> {_addr_u(unid_info)}</div>
+  </div>
+  <h3>Fornecedor</h3>
+  <div class="grid2">
+    <div><b>Razão Social:</b> {forn.get('razao_social','')}<br>
+    <b>Nome Fantasia:</b> {forn.get('nome_fantasia','')}<br>
+    <b>CNPJ:</b> {forn.get('cnpj','')}<br>
+    <b>Observação do Fornecedor:</b></div>
+    <div><b>Telefone:</b> {forn.get('telefone','')}<br>
+    <b>Prazo para pagamento:</b><br><b>Dias de entrega:</b><br>
+    <b>Pedido mínimo:</b> {forn_min_str}</div>
+  </div>
+  <h3>Itens do Pedido</h3>
+  <table>{thead}<tbody>{rows}</tbody></table>
+  <p><b>Comentários Gerais:</b> Pedido criado automaticamente pelo sistema de cotação</p>
+  <p class="total">Total do Pedido: R$ {total:.2f}</p>
+</div>""")
+        idx += 1
+    return _CSS_PDF + "<body>" + "".join(secoes) + "</body>"
+
+
+def _wa_link_forn(fid):
+    forn = forn_map.get(fid, {})
+    tel_raw = str(forn.get("whatsapp", "") or forn.get("telefone", "") or "")
+    tel = re.sub(r"[^\d]", "", tel_raw)
+    if tel and not tel.startswith("55"):
+        tel = "55" + tel
+    prods_sel = [pid for pid in prod_ids if _get_sel(pid) == fid]
+    nome_forn = str(forn.get("razao_social", f"#{fid}"))
+    lines = [
+        "*Pedido de Compra*",
+        f"Data: {datetime.date.today().strftime('%d/%m/%Y')}",
+        f"Fornecedor: {nome_forn}",
+    ]
+    grand_total = 0.0
+    for unid in unidades_cot:
+        itens = [
+            (pid, _get_qtd(pid, unid), resp_dict.get((pid, fid), {}).get("preco_norm", 0))
+            for pid in prods_sel if _get_qtd(pid, unid) > 0
+        ]
+        if not itens:
+            continue
+        total_unid = sum(q * p for _, q, p in itens)
+        grand_total += total_unid
+        lines.append(f"\n*{_unid_label(unid)}*")
+        for pid, q, p in itens:
+            nome_p = str(prod_map.get(pid, {}).get("descricao", f"Produto {pid}"))
+            lines.append(f"• {nome_p}: {q:g} x R$ {p:.2f} = R$ {q*p:.2f}")
+        lines.append(f"Subtotal: R$ {total_unid:.2f}")
+    lines.append(f"\n*Total Geral: R$ {grand_total:.2f}*")
+    msg = "\n".join(lines)
+    base = f"https://wa.me/{tel}" if tel else "https://wa.me/"
+    return base + "?text=" + urllib.parse.quote(msg)
+
+
 # ── FOOTER: resumo por fornecedor ─────────────────────────────────────────────
 col_res, col_salvar, _ = st.columns([3, 2, 5])
 col_res.markdown("## Resumo por Fornecedor")
@@ -423,19 +565,43 @@ for i, fid in enumerate(forn_ids):
 
         pode_comprar = tot_geral > 0 and (not avisos or ignorar)
 
-        if tot_geral == 0:
-            st.caption("⚠️ Selecione produtos na grade acima.")
-        elif avisos and not ignorar:
-            st.caption("⚠️ Marque Ignorar para prosseguir.")
-
-        if st.button("🛒 Comprar", key=f"{sk}_cpr_{fid}",
-                     use_container_width=True, type="primary"):
+        if st.session_state.get(f"{sk}_compra_done_{fid}"):
+            nome_forn_r = str(forn_map.get(fid, {}).get("razao_social", f"#{fid}"))
+            st.success(f"✅ Compra gerada para **{nome_forn_r}**!")
+            wa_col, pdf_col = st.columns(2)
+            with wa_col:
+                st.link_button(
+                    "📱 WhatsApp",
+                    _wa_link_forn(fid),
+                    use_container_width=True,
+                )
+            with pdf_col:
+                nome_safe = nome_forn_r.replace(" ", "_")[:30]
+                st.download_button(
+                    "⬇️ Gerar PDF",
+                    data=_html_pedido_forn(fid).encode("utf-8"),
+                    file_name=f"pedido_{nome_safe}_{datetime.date.today()}.html",
+                    mime="text/html",
+                    use_container_width=True,
+                    key=f"{sk}_pdf_{fid}",
+                )
+            if st.button("✓ OK", key=f"{sk}_ok_{fid}", use_container_width=True):
+                st.session_state.pop(f"{sk}_compra_done_{fid}", None)
+                st.rerun()
+        else:
             if tot_geral == 0:
-                st.toast("Nenhum produto selecionado para este fornecedor. Use os botões 'Selecionar' na grade ou 'Selecionar melhores preços'.", icon="⚠️")
-            elif not pode_comprar:
-                st.toast("Marque ✅ Ignorar para prosseguir mesmo sem atingir o pedido mínimo.", icon="⚠️")
-            else:
-                st.session_state[f"{sk}_comprar_fid"] = fid
+                st.caption("⚠️ Selecione produtos na grade acima.")
+            elif avisos and not ignorar:
+                st.caption("⚠️ Marque Ignorar para prosseguir.")
+
+            if st.button("🛒 Comprar", key=f"{sk}_cpr_{fid}",
+                         use_container_width=True, type="primary"):
+                if tot_geral == 0:
+                    st.toast("Nenhum produto selecionado para este fornecedor. Use os botões 'Selecionar' na grade ou 'Selecionar melhores preços'.", icon="⚠️")
+                elif not pode_comprar:
+                    st.toast("Marque ✅ Ignorar para prosseguir mesmo sem atingir o pedido mínimo.", icon="⚠️")
+                else:
+                    st.session_state[f"{sk}_comprar_fid"] = fid
 
         # Ajuste de quantidades — sempre disponível
         with st.expander("📦 Ajustar qtd."):
@@ -561,8 +727,7 @@ if comprar_fid is not None:
                 get_sheet("itens_compra").append_rows(linhas_itens)
             if linhas_hist:
                 get_sheet("historico_precos").append_rows(linhas_hist)
-            nome_forn = str(forn_map.get(comprar_fid, {}).get("razao_social", f"#{comprar_fid}"))
-            st.session_state[f"{sk}_compra_ok"] = nome_forn
+            st.session_state[f"{sk}_compra_pending"] = comprar_fid
             st.cache_data.clear()
             st.rerun()
         except Exception as e:
