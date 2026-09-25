@@ -169,6 +169,11 @@ def _historico(pid):
 # ── Session state ─────────────────────────────────────────────────────────────
 sk = f"analise_{cotacao_sel}"
 
+# Mostrar confirmação de compra gerada (após rerun)
+_compra_ok_nome = st.session_state.pop(f"{sk}_compra_ok", None)
+if _compra_ok_nome:
+    st.success(f"✅ Compra gerada para **{_compra_ok_nome}**! Acesse Ordem de Compra para enviar.")
+
 if f"{sk}_init" not in st.session_state:
     for pid in prod_ids:
         skey = f"{sk}_sel_{pid}"
@@ -406,10 +411,18 @@ for i, fid in enumerate(forn_ids):
             ignorar = True
 
         pode_comprar = tot_geral > 0 and (not avisos or ignorar)
+
+        if tot_geral == 0:
+            st.caption("⚠️ Selecione produtos na grade acima.")
+        elif avisos and not ignorar:
+            st.caption("⚠️ Marque Ignorar para prosseguir.")
+
         if st.button("🛒 Comprar", key=f"{sk}_cpr_{fid}",
                      use_container_width=True, type="primary"):
-            if not pode_comprar:
-                st.warning("Marque ✅ Ignorar ou ajuste as quantidades para atingir o pedido mínimo.")
+            if tot_geral == 0:
+                st.toast("Nenhum produto selecionado para este fornecedor. Use os botões 'Selecionar' na grade ou 'Selecionar melhores preços'.", icon="⚠️")
+            elif not pode_comprar:
+                st.toast("Marque ✅ Ignorar para prosseguir mesmo sem atingir o pedido mínimo.", icon="⚠️")
             else:
                 st.session_state[f"{sk}_comprar_fid"] = fid
 
@@ -526,9 +539,9 @@ if comprar_fid is not None:
             hist_id += 1
 
     if not linhas_compras:
-        st.error(
-            "Nenhum item foi selecionado para este fornecedor. "
-            "Use os botões 'Selecionar' na grade de produtos ou 'Selecionar melhores preços'."
+        st.toast(
+            "Nenhum item com quantidade > 0 encontrado. Verifique as seleções e quantidades.",
+            icon="⚠️",
         )
     else:
         try:
@@ -538,8 +551,8 @@ if comprar_fid is not None:
             if linhas_hist:
                 get_sheet("historico_precos").append_rows(linhas_hist)
             nome_forn = str(forn_map.get(comprar_fid, {}).get("razao_social", f"#{comprar_fid}"))
-            st.success(f"✅ Compra gerada para **{nome_forn}**! Acesse Ordem de Compra para enviar.")
+            st.session_state[f"{sk}_compra_ok"] = nome_forn
             st.cache_data.clear()
             st.rerun()
         except Exception as e:
-            st.error(f"Erro ao salvar compra: {e}")
+            st.toast(f"Erro ao salvar compra: {e}", icon="❌")
