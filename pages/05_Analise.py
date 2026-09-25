@@ -399,6 +399,7 @@ def _html_pedido_forn(fid):
     forn_min_str = f"R$ {forn_min:.2f}" if forn_min > 0 else "—"
     prods_sel = [pid for pid in prod_ids if _get_sel(pid) == fid]
     secoes = []
+    grand_total = 0.0
     idx = 1
     for unid in unidades_cot:
         itens_det = []
@@ -426,6 +427,7 @@ def _html_pedido_forn(fid):
             continue
         unid_info = unid_map.get(str(unid), {"nome": unid, "nome_fantasia": unid})
         total = sum(_safe_float(i["preco"]) * _safe_float(i["qtd"]) for i in itens_det)
+        grand_total += total
         thead = (
             "<thead><tr><th>Código</th><th>Produto</th><th>Gram. Solicitada</th>"
             "<th>Marca</th><th>Obs</th><th>Gram. Informada</th>"
@@ -470,7 +472,11 @@ def _html_pedido_forn(fid):
   <p class="total">Total do Pedido: R$ {total:.2f}</p>
 </div>""")
         idx += 1
-    return _CSS_PDF + "<body>" + "".join(secoes) + "</body>"
+    total_geral_html = (
+        f"<div style='margin-top:24px;padding:12px 0;border-top:2px solid #333;text-align:right'>"
+        f"<b style='font-size:14px'>Total Geral do Fornecedor: R$ {grand_total:.2f}</b></div>"
+    )
+    return _CSS_PDF + "<body>" + "".join(secoes) + total_geral_html + "</body>"
 
 
 def _wa_link_forn(fid):
@@ -508,18 +514,7 @@ def _wa_link_forn(fid):
 
 
 # ── FOOTER: resumo por fornecedor ─────────────────────────────────────────────
-col_res, col_salvar, _ = st.columns([3, 2, 5])
-col_res.markdown("## Resumo por Fornecedor")
-with col_salvar:
-    if st.button("💾 Salvar quantidades", use_container_width=True,
-                 help="Salva as quantidades ajustadas no banco para não perder ao navegar"):
-        ok, err = _salvar_quantidades()
-        if ok:
-            st.toast("✅ Quantidades salvas!", icon="💾")
-            st.cache_data.clear()
-            st.rerun()
-        else:
-            st.toast(f"Erro ao salvar: {err}", icon="❌")
+st.markdown("## Resumo por Fornecedor")
 
 totais = _calc_totais()
 
@@ -614,11 +609,15 @@ for i, fid in enumerate(forn_ids):
                     st.session_state[f"{sk}_comprar_fid"] = fid
 
         # Ajuste de quantidades — sempre disponível
+        compra_feita = bool(st.session_state.get(f"{sk}_compra_done_{fid}"))
         with st.expander("📦 Ajustar qtd."):
             prods_fid = [pid for pid in prod_ids if _get_sel(pid) == fid]
             if not prods_fid:
                 st.caption("Nenhum produto selecionado para este fornecedor.")
             else:
+                if compra_feita:
+                    st.caption("🔒 Compra já gerada — quantidades bloqueadas.")
+
                 adj_h = st.columns([2] + [1] * len(unidades_cot))
                 adj_h[0].markdown("**Produto**")
                 for j, u in enumerate(unidades_cot):
@@ -638,6 +637,7 @@ for i, fid in enumerate(forn_ids):
                         adj_r[j + 1].number_input(
                             "", min_value=0.0, step=0.5,
                             key=qkey, label_visibility="collapsed",
+                            disabled=compra_feita,
                         )
 
                 # Subtotais por unidade
@@ -655,7 +655,7 @@ for i, fid in enumerate(forn_ids):
                     )
 
                 if st.button("💾 Salvar quantidades", key=f"{sk}_save_{fid}",
-                             use_container_width=True):
+                             use_container_width=True, disabled=compra_feita):
                     ok2, err2 = _salvar_quantidades()
                     if ok2:
                         st.toast("✅ Quantidades salvas!", icon="💾")

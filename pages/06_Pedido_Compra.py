@@ -233,7 +233,12 @@ else:
                 })
 
             # Download (abrir no browser e Ctrl+P → Salvar PDF)
-            html_completo = _CSS + "<body>" + "".join(secoes_html) + "</body>"
+            total_geral = sum(info["valor"] for info in compras_info)
+            total_geral_html = (
+                f"<div style='margin-top:24px;padding:12px 0;border-top:2px solid #333;text-align:right'>"
+                f"<b style='font-size:14px'>Total Geral do Fornecedor: R$ {total_geral:.2f}</b></div>"
+            )
+            html_completo = _CSS + "<body>" + "".join(secoes_html) + total_geral_html + "</body>"
             nome_safe = nome_forn.replace(" ", "_")[:30]
             col_dl, _ = st.columns([2, 4])
             with col_dl:
