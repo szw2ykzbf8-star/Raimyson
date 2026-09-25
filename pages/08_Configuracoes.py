@@ -478,11 +478,62 @@ with tab_orcamento:
 
 # ── TAB: BACKUP ──────────────────────────────────────────────────────────────
 with tab_backup:
-    st.subheader("Exportar / Importar Banco de Dados")
+    import os as _os
     from config import SHEETS
+    from modules.google_sheets import exportar_para_sheets, migrar_sheets_para_pg
 
-    st.markdown("**Exportar todas as abas como Excel**")
-    if st.button("Gerar Exportação"):
+    _usando_pg = bool(_os.environ.get("DATABASE_URL"))
+
+    if _usando_pg:
+        st.success("🐘 **Banco de dados: PostgreSQL (Railway)**")
+        st.caption("Google Sheets está disponível apenas como backup.")
+    else:
+        st.info("📊 **Banco de dados: Google Sheets**")
+        st.caption("Configure DATABASE_URL no Railway para migrar para PostgreSQL.")
+
+    # ── Migração Google Sheets → PostgreSQL ──────────────────────────────────
+    if _usando_pg:
+        st.markdown("---")
+        st.markdown("### Migração de Dados")
+        st.warning(
+            "⚠️ **Migrar Google Sheets → PostgreSQL** apaga os dados atuais do PostgreSQL "
+            "e importa tudo do Google Sheets. Use apenas uma vez, na primeira configuração."
+        )
+        if st.button("🔄 Migrar Google Sheets → PostgreSQL", type="primary"):
+            with st.spinner("Migrando dados… pode demorar alguns segundos."):
+                resultado = migrar_sheets_para_pg()
+            erros = {k: v for k, v in resultado.items() if isinstance(v, str)}
+            ok = {k: v for k, v in resultado.items() if not isinstance(v, str)}
+            st.success(f"✅ Migração concluída! {len(ok)} tabelas importadas.")
+            for k, n in ok.items():
+                st.caption(f"• {k}: {n} registros")
+            if erros:
+                st.error("Erros em algumas tabelas:")
+                for k, e in erros.items():
+                    st.caption(f"• {k}: {e}")
+            st.cache_data.clear()
+
+    # ── Backup PostgreSQL → Google Sheets ────────────────────────────────────
+    if _usando_pg:
+        st.markdown("---")
+        st.markdown("### Backup para Google Sheets")
+        st.caption("Exporta todos os dados do PostgreSQL para a planilha Google Sheets.")
+        if st.button("☁️ Exportar PostgreSQL → Google Sheets"):
+            with st.spinner("Exportando…"):
+                resultado = exportar_para_sheets()
+            erros = {k: v for k, v in resultado.items() if isinstance(v, str)}
+            ok = {k: v for k, v in resultado.items() if not isinstance(v, str)}
+            st.success(f"✅ Backup concluído! {len(ok)} tabelas exportadas.")
+            if erros:
+                st.error("Erros:")
+                for k, e in erros.items():
+                    st.caption(f"• {k}: {e}")
+
+    # ── Exportar Excel ────────────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### Exportar como Excel")
+    st.caption("Baixa todos os dados como arquivo .xlsx para guardar localmente.")
+    if st.button("Gerar arquivo Excel"):
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
             for chave, nome_aba in SHEETS.items():
@@ -499,8 +550,9 @@ with tab_backup:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
+    # ── Importar Excel ────────────────────────────────────────────────────────
     st.markdown("---")
-    st.markdown("**Importar dados de backup**")
+    st.markdown("### Importar de Excel")
     arquivo = st.file_uploader("Selecione o arquivo Excel de backup", type=["xlsx"])
     if arquivo:
         xls = pd.read_excel(arquivo, sheet_name=None)

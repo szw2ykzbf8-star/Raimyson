@@ -1,13 +1,15 @@
+import os
 import gspread
 from google.oauth2.service_account import Credentials
 import streamlit as st
 import pandas as pd
 from config import CREDENTIALS_FILE, SCOPES, SPREADSHEET_NAME, SHEETS
 
+# ── Google Sheets implementation (always available for backup export) ─────────
 
 @st.cache_resource
-def get_client():
-    import os, json as _json
+def _gs_get_client():
+    import json as _json
     creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
     if creds_json:
         info = _json.loads(creds_json)
@@ -18,8 +20,8 @@ def get_client():
 
 
 @st.cache_resource
-def get_spreadsheet():
-    client = get_client()
+def _gs_get_spreadsheet():
+    client = _gs_get_client()
     try:
         sh = client.open(SPREADSHEET_NAME)
     except gspread.SpreadsheetNotFound:
@@ -31,8 +33,8 @@ def get_spreadsheet():
 
 
 @st.cache_resource
-def get_sheet(nome_chave: str):
-    sh = get_spreadsheet()
+def _gs_get_sheet(nome_chave: str):
+    sh = _gs_get_spreadsheet()
     nome_aba = SHEETS[nome_chave]
     try:
         return sh.worksheet(nome_aba)
@@ -43,8 +45,8 @@ def get_sheet(nome_chave: str):
 
 
 @st.cache_data(ttl=120)
-def ler_df(nome_chave: str) -> pd.DataFrame:
-    ws = get_sheet(nome_chave)
+def _gs_ler_df(nome_chave: str) -> pd.DataFrame:
+    ws = _gs_get_sheet(nome_chave)
     data = ws.get_all_records(value_render_option="UNFORMATTED_VALUE")
     df = pd.DataFrame(data)
     for col in df.columns:
@@ -53,19 +55,19 @@ def ler_df(nome_chave: str) -> pd.DataFrame:
     return df
 
 
-def escrever_df(nome_chave: str, df: pd.DataFrame):
-    ws = get_sheet(nome_chave)
+def _gs_escrever_df(nome_chave: str, df: pd.DataFrame):
+    ws = _gs_get_sheet(nome_chave)
     ws.clear()
     ws.update([df.columns.tolist()] + df.values.tolist())
 
 
-def append_linha(nome_chave: str, linha: list):
-    ws = get_sheet(nome_chave)
+def _gs_append_linha(nome_chave: str, linha: list):
+    ws = _gs_get_sheet(nome_chave)
     ws.append_row(linha)
 
 
-def atualizar_celula(nome_chave: str, row: int, col: int, valor):
-    ws = get_sheet(nome_chave)
+def _gs_atualizar_celula(nome_chave: str, row: int, col: int, valor):
+    ws = _gs_get_sheet(nome_chave)
     ws.update_cell(row, col, valor)
 
 
@@ -96,7 +98,6 @@ def _inicializar_abas(sh):
     primeira_chave = list(cabecalhos.keys())[0]
     aba_padrao.update_title(primeira_chave)
     aba_padrao.update([cabecalhos[primeira_chave]])
-
     for nome, cols in list(cabecalhos.items())[1:]:
         ws = sh.add_worksheet(title=nome, rows=1000, cols=len(cols) + 5)
         ws.update([cols])
@@ -111,10 +112,8 @@ _UNIDADES_MEDIDA_PADRAO = [
 
 
 def _garantir_abas(sh):
-    """Ensure all tabs exist with proper headers; handles schema migrations safely."""
     cabecalhos = _cabecalhos()
     abas_existentes = {ws.title: ws for ws in sh.worksheets()}
-
     for nome, cols in cabecalhos.items():
         if nome not in abas_existentes:
             ws = sh.add_worksheet(title=nome, rows=1000, cols=len(cols) + 5)
@@ -126,8 +125,7 @@ def _garantir_abas(sh):
             primeira_linha = ws.row_values(1)
             if primeira_linha != cols:
                 if nome == "UnidadesMedida":
-                    # Schema change on seed table: clear and re-seed preserving custom entries.
-                    dados_atuais = ws.get_all_values()[1:]  # skip old header
+                    dados_atuais = ws.get_all_values()[1:]
                     old_cols = primeira_linha
                     ws.clear()
                     ws.update([cols])
@@ -147,8 +145,52 @@ def _garantir_abas(sh):
                     else:
                         ws.append_rows(_UNIDADES_MEDIDA_PADRAO)
                 elif primeira_linha and primeira_linha[0] == cols[0]:
-                    # Old schema header row — update in place, data rows stay below.
                     ws.update([cols])
                 else:
-                    # Data row exists with no header — insert header above.
                     ws.insert_row(cols, index=1)
+
+
+# ── Backup export: PostgreSQL → Google Sheets ─────────────────────────────────
+
+def exportar_para_sheets() -> dict:
+    """Copy all data from PostgreSQL to Google Sheets. Returns {table: rows_written}."""
+    resultado = {}
+    for chave in SHEETS:
+        try:
+            df = ler_df(chave)
+            _gs_escrever_df(chave, df)
+            resultado[chave] = len(df)
+        except Exception as e:
+            resultado[chave] = f"Erro: {e}"
+    return resultado
+
+
+def migrar_sheets_para_pg() -> dict:
+    """Copy all data from Google Sheets to PostgreSQL. Returns {table: rows_written}."""
+    resultado = {}
+    for chave in SHEETS:
+        try:
+            df = _gs_ler_df(chave)
+            escrever_df(chave, df)
+            resultado[chave] = len(df)
+        except Exception as e:
+            resultado[chave] = f"Erro: {e}"
+    return resultado
+
+
+# ── Routing: use PostgreSQL when DATABASE_URL is set ─────────────────────────
+
+if os.environ.get("DATABASE_URL"):
+    from modules.database import (
+        ler_df,
+        escrever_df,
+        append_linha,
+        get_sheet,
+        atualizar_celula,
+    )
+else:
+    ler_df          = _gs_ler_df
+    escrever_df     = _gs_escrever_df
+    append_linha    = _gs_append_linha
+    get_sheet       = _gs_get_sheet
+    atualizar_celula = _gs_atualizar_celula
