@@ -74,7 +74,7 @@ def _cabecalhos():
         "Fornecedores": ["id", "razao_social", "cnpj", "nome_contato", "telefone", "ativo", "data_cadastro", "nome_fantasia", "cep", "logradouro", "numero", "complemento", "bairro", "cidade", "estado", "pedido_minimo"],
         "Unidades": ["id", "nome", "nome_fantasia", "cnpj", "cep", "logradouro", "numero", "complemento", "bairro", "cidade", "estado", "ativo"],
         "Usuarios": ["id", "nome", "login", "senha_hash", "perfil", "unidades_acesso", "ativo", "trocar_senha", "permissoes"],
-        "Pedidos": ["id", "unidade", "status", "criado_por", "data_criacao", "data_bloqueio"],
+        "Pedidos": ["id", "unidade", "status", "criado_por", "data_criacao", "data_bloqueio", "cotacao_id"],
         "ItensPedido": ["id", "pedido_id", "produto_id", "quantidade"],
         "Cotacoes": ["id", "data_criacao", "prazo_limite", "status", "criado_por"],
         "RespostasFornecedores": ["id", "cotacao_id", "fornecedor_id", "produto_id", "preco", "tipo_embalagem", "qtd_por_embalagem", "observacao", "data_resposta"],
@@ -85,6 +85,7 @@ def _cabecalhos():
         "UnidadesMedida": ["id", "nome", "descricao", "ativo"],
         "ItensRecebimento": ["id", "compra_id", "produto_id", "qtd_pedida", "qtd_recebida"],
         "NfeMapeamento": ["id", "fornecedor_id", "nfe_cprod", "produto_id"],
+        "CotacaoTokens": ["id", "cotacao_id", "fornecedor_id", "token"],
     }
 
 

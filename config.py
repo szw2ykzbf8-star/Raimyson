@@ -1,5 +1,7 @@
 import os
 
+BASE_URL = os.environ.get("APP_BASE_URL", "https://compras-hhoteis.up.railway.app")
+
 CREDENTIALS_FILE = os.path.join(os.path.dirname(__file__), "h-hoteis-compras-ab8bb9c498fc.json")
 
 SCOPES = [
@@ -28,6 +30,7 @@ SHEETS = {
     "unidades_medida":   "UnidadesMedida",
     "itens_recebimento": "ItensRecebimento",
     "nfe_mapeamento":    "NfeMapeamento",
+    "cotacao_tokens":    "CotacaoTokens",
 }
 
 # Unidades cadastradas

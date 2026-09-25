@@ -7,6 +7,13 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# ── Public quotation form (token-based, no auth required) ────────────────────
+_token = st.query_params.get("token", "")
+if _token:
+    from modules.cotacao_publica import mostrar_pagina_publica
+    mostrar_pagina_publica(_token)
+    st.stop()
+
 from modules.auth import criar_admin_inicial, login_page, pagina_trocar_senha
 
 try:
