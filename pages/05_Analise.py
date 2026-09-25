@@ -47,6 +47,19 @@ df_fornecedores = ler_df("fornecedores")
 df_pedidos      = ler_df("pedidos")
 df_itens        = ler_df("itens_pedido")
 df_hist_precos  = ler_df("historico_precos")
+df_unidades     = ler_df("unidades")
+
+# nome → nome_fantasia map for hotel units
+_unid_fantasia = {}
+if not df_unidades.empty:
+    for _, _ur in df_unidades.iterrows():
+        _nf = str(_ur.get("nome_fantasia", "") or "").strip()
+        _nm = str(_ur.get("nome", "") or "").strip()
+        if _nm:
+            _unid_fantasia[_nm] = _nf if _nf else _nm
+
+def _unid_label(u: str) -> str:
+    return _unid_fantasia.get(str(u), str(u))
 
 # ── Cotação selector ──────────────────────────────────────────────────────────
 cotacoes_com_resp = pd.DataFrame()
@@ -243,7 +256,7 @@ for pid in prod_ids:
         if len(qtds_pos) > 1:
             with st.expander("▸ por hotel"):
                 for u, q in qtds_pos.items():
-                    st.caption(f"{u}: {q:.1f}")
+                    st.caption(f"{_unid_label(u)}: {q:.1f}")
 
     with row[2]:
         if hist:
@@ -351,7 +364,7 @@ for i, fid in enumerate(forn_ids):
             n_avisos = len(avisos)
             with st.expander(f"⚠️ {n_avisos} aviso(s) de mínimo"):
                 for u, f in avisos:
-                    st.caption(f"⚠️ {u}: faltam R$ {f:.2f}")
+                    st.caption(f"⚠️ {_unid_label(u)}: faltam R$ {f:.2f}")
             ignorar = st.checkbox("Ignorar", key=f"{sk}_ign_{fid}")
         else:
             if tot_geral > 0 and ped_min > 0:
@@ -374,7 +387,7 @@ for i, fid in enumerate(forn_ids):
                 adj_h = st.columns([2] + [1] * len(unidades_cot))
                 adj_h[0].markdown("**Produto**")
                 for j, u in enumerate(unidades_cot):
-                    adj_h[j + 1].markdown(f"**{u}**")
+                    adj_h[j + 1].markdown(f"**{_unid_label(u)}**")
 
                 for pid in prods_fid:
                     prod   = prod_map.get(pid, {})
