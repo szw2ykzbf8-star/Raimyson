@@ -33,8 +33,11 @@ _SEED_UNIDADES_MEDIDA = [
 @st.cache_resource
 def get_engine():
     url = os.environ["DATABASE_URL"]
+    # Force psycopg2 dialect (SQLAlchemy 2.x defaults to psycopg v3 otherwise)
     if url.startswith("postgres://"):
-        url = url.replace("postgres://", "postgresql://", 1)
+        url = url.replace("postgres://", "postgresql+psycopg2://", 1)
+    elif url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
     engine = create_engine(url, pool_pre_ping=True, pool_size=5, max_overflow=10)
     _criar_tabelas(engine)
     return engine
