@@ -122,7 +122,8 @@ def mostrar_pagina_publica(token: str):
 
     if ja_respondeu:
         st.success("✅ Sua resposta já foi registrada. Obrigado!")
-        st.caption("Se precisar corrigir algum preço, preencha novamente abaixo — a nova resposta será adicionada.")
+        st.info("Para alterar seus preços, entre em contato com o comprador responsável.")
+        st.stop()
 
     st.markdown("---")
     st.markdown("### Itens para cotação")
