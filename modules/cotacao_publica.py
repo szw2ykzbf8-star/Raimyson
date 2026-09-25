@@ -130,7 +130,7 @@ def mostrar_pagina_publica(token: str):
         for _, row in consolidado.iterrows():
             pid  = int(row["produto_id"])
             prod = pid_to_prod.get(pid)
-            if not prod:
+            if prod is None:
                 continue
 
             nome_prod  = str(prod.get("descricao", f"Produto {pid}"))
