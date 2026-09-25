@@ -14,6 +14,35 @@ if _token:
     mostrar_pagina_publica(_token)
     st.stop()
 
+import os as _os
+
+# ── First-run migration (PostgreSQL empty → import from Google Sheets) ────────
+if _os.environ.get("DATABASE_URL"):
+    from modules.google_sheets import ler_df as _ler_df_check
+    try:
+        _df_users = _ler_df_check("usuarios")
+        if _df_users.empty:
+            st.title("🔧 Configuração inicial")
+            st.warning(
+                "O banco de dados PostgreSQL está vazio. "
+                "Clique abaixo para importar os dados do Google Sheets."
+            )
+            if st.button("▶️ Migrar dados do Google Sheets → PostgreSQL", type="primary"):
+                from modules.google_sheets import migrar_sheets_para_pg
+                with st.spinner("Migrando… aguarde."):
+                    resultado = migrar_sheets_para_pg()
+                erros = {k: v for k, v in resultado.items() if isinstance(v, str)}
+                ok = {k: v for k, v in resultado.items() if not isinstance(v, str)}
+                st.success(f"✅ Migração concluída! {len(ok)} tabelas importadas.")
+                if erros:
+                    for k, e in erros.items():
+                        st.caption(f"• {k}: {e}")
+                st.cache_data.clear()
+                st.rerun()
+            st.stop()
+    except Exception:
+        pass
+
 from modules.auth import criar_admin_inicial, login_page, pagina_trocar_senha
 
 try:
