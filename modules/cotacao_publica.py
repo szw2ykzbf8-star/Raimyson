@@ -171,7 +171,7 @@ def mostrar_pagina_publica(token: str):
             col1, col2, col3 = st.columns([2, 2, 2])
             with col1:
                 preco = st.number_input(
-                    "Preço por embalagem (R$)",
+                    "Preço por embalagem (R$) *",
                     value=0.0, min_value=0.0, step=0.01, format="%.2f",
                     key=f"pub_preco_{pid}",
                 )
@@ -187,7 +187,7 @@ def mostrar_pagina_publica(token: str):
             col_marca, col_obs = st.columns([2, 3])
             with col_marca:
                 marca = st.text_input(
-                    "Marca", key=f"pub_marca_{pid}",
+                    "Marca *", key=f"pub_marca_{pid}",
                     placeholder="Ex: Sadia, Nestlé…",
                 )
             with col_obs:
@@ -206,8 +206,11 @@ def mostrar_pagina_publica(token: str):
 
     if enviar:
         itens_ok = [(pid, c) for pid, c in campos.items() if c["preco"] > 0]
+        itens_sem_marca = [pid for pid, c in itens_ok if not str(c.get("marca", "")).strip()]
         if not itens_ok:
             st.error("Informe o preço de ao menos um item para enviar.")
+        elif itens_sem_marca:
+            st.error("⚠️ Os campos marcados com * são obrigatórios. Preencha a **Marca** de todos os itens cotados.")
         else:
             try:
                 df_resp2 = ler_df("respostas")
