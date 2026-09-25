@@ -407,9 +407,11 @@ for i, fid in enumerate(forn_ids):
 
         pode_comprar = tot_geral > 0 and (not avisos or ignorar)
         if st.button("🛒 Comprar", key=f"{sk}_cpr_{fid}",
-                     disabled=not pode_comprar,
                      use_container_width=True, type="primary"):
-            st.session_state[f"{sk}_comprar_fid"] = fid
+            if not pode_comprar:
+                st.warning("Marque ✅ Ignorar ou ajuste as quantidades para atingir o pedido mínimo.")
+            else:
+                st.session_state[f"{sk}_comprar_fid"] = fid
 
         # Ajuste de quantidades — sempre disponível
         with st.expander("📦 Ajustar qtd."):
@@ -523,16 +525,21 @@ if comprar_fid is not None:
             ])
             hist_id += 1
 
-    try:
-        if linhas_compras:
+    if not linhas_compras:
+        st.error(
+            "Nenhum item foi selecionado para este fornecedor. "
+            "Use os botões 'Selecionar' na grade de produtos ou 'Selecionar melhores preços'."
+        )
+    else:
+        try:
             get_sheet("compras").append_rows(linhas_compras)
-        if linhas_itens:
-            get_sheet("itens_compra").append_rows(linhas_itens)
-        if linhas_hist:
-            get_sheet("historico_precos").append_rows(linhas_hist)
-        nome_forn = str(forn_map.get(comprar_fid, {}).get("razao_social", f"#{comprar_fid}"))
-        st.success(f"✅ Compra gerada para **{nome_forn}**! Acesse Ordem de Compra para enviar.")
-        st.cache_data.clear()
-        st.rerun()
-    except Exception as e:
-        st.error(f"Erro ao salvar compra: {e}")
+            if linhas_itens:
+                get_sheet("itens_compra").append_rows(linhas_itens)
+            if linhas_hist:
+                get_sheet("historico_precos").append_rows(linhas_hist)
+            nome_forn = str(forn_map.get(comprar_fid, {}).get("razao_social", f"#{comprar_fid}"))
+            st.success(f"✅ Compra gerada para **{nome_forn}**! Acesse Ordem de Compra para enviar.")
+            st.cache_data.clear()
+            st.rerun()
+        except Exception as e:
+            st.error(f"Erro ao salvar compra: {e}")
