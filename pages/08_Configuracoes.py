@@ -480,7 +480,7 @@ with tab_orcamento:
 with tab_backup:
     import os as _os
     from config import SHEETS
-    from modules.google_sheets import exportar_para_sheets, migrar_sheets_para_pg
+    from modules.google_sheets import exportar_para_sheets
 
     _usando_pg = bool(_os.environ.get("DATABASE_URL"))
 
@@ -490,28 +490,6 @@ with tab_backup:
     else:
         st.info("📊 **Banco de dados: Google Sheets**")
         st.caption("Configure DATABASE_URL no Railway para migrar para PostgreSQL.")
-
-    # ── Migração Google Sheets → PostgreSQL ──────────────────────────────────
-    if _usando_pg:
-        st.markdown("---")
-        st.markdown("### Migração de Dados")
-        st.warning(
-            "⚠️ **Migrar Google Sheets → PostgreSQL** apaga os dados atuais do PostgreSQL "
-            "e importa tudo do Google Sheets. Use apenas uma vez, na primeira configuração."
-        )
-        if st.button("🔄 Migrar Google Sheets → PostgreSQL", type="primary"):
-            with st.spinner("Migrando dados… pode demorar alguns segundos."):
-                resultado = migrar_sheets_para_pg()
-            erros = {k: v for k, v in resultado.items() if isinstance(v, str)}
-            ok = {k: v for k, v in resultado.items() if not isinstance(v, str)}
-            st.success(f"✅ Migração concluída! {len(ok)} tabelas importadas.")
-            for k, n in ok.items():
-                st.caption(f"• {k}: {n} registros")
-            if erros:
-                st.error("Erros em algumas tabelas:")
-                for k, e in erros.items():
-                    st.caption(f"• {k}: {e}")
-            st.cache_data.clear()
 
     # ── Backup PostgreSQL → Google Sheets ────────────────────────────────────
     if _usando_pg:
