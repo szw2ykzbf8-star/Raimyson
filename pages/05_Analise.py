@@ -119,6 +119,7 @@ for _, r in respostas.iterrows():
         "tipo":       str(r.get("tipo_embalagem", "")),
         "qtd_emb":    _safe_float(r.get("qtd_por_embalagem", 1), 1.0),
         "obs":        str(r.get("observacao", "")),
+        "marca":      str(r.get("marca", "")),
     }
 
 # Best price per product
@@ -409,8 +410,7 @@ def _html_pedido_forn(fid):
                 "codigo":    str(prod.get("codigo", "") or "—"),
                 "descricao": str(prod.get("descricao", f"Produto {pid}")),
                 "obs":       str(rd.get("obs", "")),
-                "apres":     str(prod.get("apresentacao", "") or ""),
-                "unid":      str(prod.get("unidade_base", "UN")),
+                "marca":     str(rd.get("marca", "")),
                 "preco":     rd.get("preco_norm", 0.0),
                 "qtd":       qty,
             })
@@ -420,18 +420,17 @@ def _html_pedido_forn(fid):
         total = sum(_safe_float(i["preco"]) * _safe_float(i["qtd"]) for i in itens_det)
         thead = (
             "<thead><tr><th>Código</th><th>Produto</th><th>Observações</th>"
-            "<th>Marca</th><th>Gramatura</th><th>Centro de Custo</th>"
-            "<th>Preço Un./KG</th><th>Qtde./KG</th><th>Total</th></tr></thead>"
+            "<th>Marca</th><th>Preço Un./KG</th><th>Qtde./KG</th><th>Total</th></tr></thead>"
         )
         rows = ""
         for it in itens_det:
-            obs_cell = f"<b>Fornecedor:</b><br>{it['obs']}" if it["obs"] else "—"
+            obs_cell = it["obs"] if it["obs"] else "—"
             p, q = _safe_float(it["preco"]), _safe_float(it["qtd"])
             rows += (
                 f"<tr><td>{it['codigo']}</td><td>{it['descricao']}</td>"
                 f"<td style='font-size:10px'>{obs_cell}</td>"
-                f"<td>{it['apres']}</td><td>{it['unid'].upper()}</td>"
-                f"<td>N/A</td><td>R$ {p:.2f}</td><td>{q:g}</td>"
+                f"<td>{it['marca']}</td>"
+                f"<td>R$ {p:.2f}</td><td>{q:g}</td>"
                 f"<td>R$ {p*q:.2f}</td></tr>"
             )
         secoes.append(f"""<div class="section">

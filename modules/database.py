@@ -11,7 +11,7 @@ COLUMNS = {
     "pedidos":           ["id", "unidade", "status", "criado_por", "data_criacao", "data_bloqueio", "cotacao_id"],
     "itens_pedido":      ["id", "pedido_id", "produto_id", "quantidade"],
     "cotacoes":          ["id", "data_criacao", "prazo_limite", "status", "criado_por", "nome"],
-    "respostas":         ["id", "cotacao_id", "fornecedor_id", "produto_id", "preco", "tipo_embalagem", "qtd_por_embalagem", "observacao", "data_resposta"],
+    "respostas":         ["id", "cotacao_id", "fornecedor_id", "produto_id", "preco", "tipo_embalagem", "qtd_por_embalagem", "observacao", "marca", "data_resposta"],
     "compras":           ["id", "cotacao_id", "fornecedor_id", "data_compra", "valor_total", "pedido_gerado", "nfe_chave", "nfe_numero", "status_recebimento", "unidade"],
     "itens_compra":      ["id", "compra_id", "produto_id", "quantidade", "preco_unitario", "preco_normalizado", "fator"],
     "orcamentos":        ["id", "unidade", "mes", "ano", "valor"],
@@ -48,9 +48,10 @@ def _criar_tabelas(engine):
         for tabela, cols in COLUMNS.items():
             col_defs = ", ".join(f'"{c}" TEXT' for c in cols)
             conn.execute(text(f'CREATE TABLE IF NOT EXISTS "{tabela}" ({col_defs})'))
-    # Migrate: add nome column to cotacoes if missing
+    # Migrations
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE \"cotacoes\" ADD COLUMN IF NOT EXISTS \"nome\" TEXT DEFAULT ''"))
+        conn.execute(text("ALTER TABLE \"respostas\" ADD COLUMN IF NOT EXISTS \"marca\" TEXT DEFAULT ''"))
 
     # Seed unidades_medida when empty
     with engine.begin() as conn:

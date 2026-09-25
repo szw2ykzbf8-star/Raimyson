@@ -168,13 +168,21 @@ def mostrar_pagina_publica(token: str):
                     key=f"pub_qtdemb_{pid}",
                     help=f"Ex: caixa com 12 {ub} → informe 12",
                 )
-            obs = st.text_input(
-                "Observação", key=f"pub_obs_{pid}",
-                placeholder="Prazo de entrega, marca, disponibilidade…",
-            )
+            col_marca, col_obs = st.columns([2, 3])
+            with col_marca:
+                marca = st.text_input(
+                    "Marca", key=f"pub_marca_{pid}",
+                    placeholder="Ex: Sadia, Nestlé…",
+                )
+            with col_obs:
+                obs = st.text_input(
+                    "Observação", key=f"pub_obs_{pid}",
+                    placeholder="Prazo de entrega, disponibilidade…",
+                )
             campos[pid] = {
                 "preco": preco, "tipo_embalagem": tipo_emb,
                 "qtd_por_embalagem": qtd_emb, "observacao": obs,
+                "marca": marca,
             }
             st.markdown("---")
 
@@ -194,7 +202,7 @@ def mostrar_pagina_publica(token: str):
                     linhas.append([
                         prox_id, cotacao_id, fornec_id, pid,
                         c["preco"], c["tipo_embalagem"], c["qtd_por_embalagem"],
-                        c["observacao"], now_iso,
+                        c["observacao"], c.get("marca", ""), now_iso,
                     ])
                     prox_id += 1
                 from modules.google_sheets import get_sheet as _gs

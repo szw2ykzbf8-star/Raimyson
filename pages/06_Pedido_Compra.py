@@ -81,7 +81,7 @@ def _rows_html(itens_det):
     html = ""
     for it in itens_det:
         obs = str(it.get("obs_fornecedor", "") or "")
-        obs_cell = f"<b>Fornecedor:</b><br>{obs}" if obs else "—"
+        obs_cell = obs if obs else "—"
         p = _safe_float(it.get("preco_unitario", 0))
         q = _safe_float(it.get("quantidade", 0))
         html += (
@@ -89,9 +89,7 @@ def _rows_html(itens_det):
             f"<td>{it.get('codigo','—')}</td>"
             f"<td>{it.get('descricao','—')}</td>"
             f"<td style='font-size:10px'>{obs_cell}</td>"
-            f"<td>{it.get('apresentacao','')}</td>"
-            f"<td>{it.get('unidade_base','UN').upper()}</td>"
-            f"<td>N/A</td>"
+            f"<td>{it.get('marca','')}</td>"
             f"<td>R$ {p:.2f}</td>"
             f"<td>{q:g}</td>"
             f"<td>R$ {p*q:.2f}</td>"
@@ -115,7 +113,6 @@ def _secao(compra, forn, unid_info, itens_det):
     thead = (
         "<thead><tr>"
         "<th>Código</th><th>Produto</th><th>Observações</th><th>Marca</th>"
-        "<th>Gramatura</th><th>Centro de Custo</th>"
         "<th>Preço Un./KG</th><th>Qtde./KG</th><th>Total</th>"
         "</tr></thead>"
     )
@@ -198,6 +195,7 @@ else:
                     prod = prod_map.get(pid, {})
 
                     obs_forn = ""
+                    marca_forn = ""
                     if not df_respostas.empty:
                         resp = df_respostas[
                             (df_respostas["cotacao_id"].apply(_safe_int)   == cot_id) &
@@ -205,14 +203,14 @@ else:
                             (df_respostas["produto_id"].apply(_safe_int)   == pid)
                         ]
                         if not resp.empty:
-                            obs_forn = str(resp.iloc[0].get("observacao", "") or "")
+                            obs_forn    = str(resp.iloc[0].get("observacao", "") or "")
+                            marca_forn  = str(resp.iloc[0].get("marca", "") or "")
 
                     itens_det.append({
                         "codigo":         str(prod.get("codigo", "") or "—"),
                         "descricao":      str(prod.get("descricao", f"Produto {pid}")),
                         "obs_fornecedor": obs_forn,
-                        "apresentacao":   str(prod.get("apresentacao", "") or ""),
-                        "unidade_base":   str(prod.get("unidade_base", "UN")),
+                        "marca":          marca_forn,
                         "preco_unitario": _safe_float(item.get("preco_unitario", 0)),
                         "quantidade":     _safe_float(item.get("quantidade", 0)),
                     })
