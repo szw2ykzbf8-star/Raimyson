@@ -169,6 +169,8 @@ def mostrar_pagina_publica(token: str):
         prod = pid_to_prod.get(pid)
         if prod is None:
             continue
+        if str(prod.get("compra_direta", "False")).strip().lower() in ("true", "1"):
+            continue
         pid_list.append((pid, prod, float(row["qtd_total"])))
 
     # ── Um bloco por produto: situação + campos de preço juntos ──────────────
