@@ -209,7 +209,7 @@ _FL_COTACOES = [
     {"t":"p","text":"Clicar em Iniciar Cotação"},
     {"t":"p","text":"Copiar e enviar o link para cada fornecedor"},
     {"t":"d","text":"Todos os fornecedores responderam?","yes":"Sim","no":"Não → aguardar ou|fechar prazo"},
-    {"t":"p","text":"Fechar prazo (🔒) → status Em Compra"},
+    {"t":"p","text":"Fechar prazo → status Em Compra"},
     {"t":"p","text":"Ir para Análise de Preços e gerar pedidos"},
     {"t":"p","text":"Em Pedido de Compra, clicar Enviado em cada fornecedor"},
     {"t":"p","text":"Cotação encerrada automaticamente"},
@@ -536,8 +536,9 @@ if "🛒 Ordem de Compra" in ti:
 
         with st.expander("📌 Como marcar o pedido como enviado"):
             st.markdown("""
-- Após enviar o PDF ao fornecedor, clique em **✅ Marcar tudo como enviado**.
+- Após enviar o PDF ao fornecedor, clique em **✅ Enviado**.
 - Isso marca **todas as compras do grupo** (todas as unidades daquele fornecedor) como enviadas de uma vez.
+- Quando o último fornecedor da cotação for marcado como enviado, a cotação é **encerrada automaticamente**.
 - O pedido sai da lista de pendentes e não aparece mais nesta tela.
 
 > Pedidos marcados como enviados podem ser consultados nos **Relatórios**.
