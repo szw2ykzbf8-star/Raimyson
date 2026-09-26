@@ -45,7 +45,7 @@ tab_novo, tab_abertos = st.tabs(["Nova Solicitação", "Solicitações Abertas"]
 with tab_novo:
     unidade = st.selectbox("Unidade", unidades_disponiveis)
 
-    produtos_ativos = df_produtos[df_produtos["ativo"] == True] if not df_produtos.empty else pd.DataFrame()
+    produtos_ativos = df_produtos[df_produtos["ativo"].astype(str).str.upper().isin(["TRUE", "1", "SIM"])] if not df_produtos.empty else pd.DataFrame()
 
     if produtos_ativos.empty:
         st.warning("Nenhum produto ativo cadastrado.")
