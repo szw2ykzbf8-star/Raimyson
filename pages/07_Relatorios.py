@@ -244,7 +244,7 @@ with tab2:
             df_ic = df_itens_compra.copy()
             df_ic["produto_id"] = df_ic["produto_id"].apply(_safe_int)
             df_ic["quantidade"] = df_ic["quantidade"].apply(_safe_float)
-            _pni = "preco_norm" if "preco_norm" in df_ic.columns else "preco"
+            _pni = "preco_normalizado" if "preco_normalizado" in df_ic.columns else "preco_unitario"
             df_ic["pn"]    = df_ic[_pni].apply(_safe_float)
             df_ic["valor"] = df_ic["quantidade"] * df_ic["pn"]
 
@@ -326,7 +326,7 @@ with tab2:
             df_ic2 = df_itens_compra.copy()
             df_ic2["produto_id"] = df_ic2["produto_id"].apply(_safe_int)
             df_ic2["quantidade"] = df_ic2["quantidade"].apply(_safe_float)
-            _pni2 = "preco_norm" if "preco_norm" in df_ic2.columns else "preco"
+            _pni2 = "preco_normalizado" if "preco_normalizado" in df_ic2.columns else "preco_unitario"
             df_ic2["pn"]    = df_ic2[_pni2].apply(_safe_float)
             df_ic2["valor"] = df_ic2["quantidade"] * df_ic2["pn"]
 
