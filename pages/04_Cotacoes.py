@@ -59,7 +59,9 @@ with tab_nova:
         prazo_completo = datetime.datetime.combine(prazo, hora).isoformat()
 
         fornecedores_ativos = (
-            df_fornecedores[df_fornecedores["ativo"] == True]
+            df_fornecedores[
+                df_fornecedores["ativo"].astype(str).str.lower().isin(["true", "1", "sim"])
+            ]
             if not df_fornecedores.empty else pd.DataFrame()
         )
         if not fornecedores_ativos.empty:

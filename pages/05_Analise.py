@@ -292,7 +292,7 @@ def _historico(pid):
         return []
     hist = df_hist_precos[
         (df_hist_precos["produto_id"].apply(_safe_int) == pid) &
-        (df_hist_precos["ganhou"] == True)
+        (df_hist_precos["ganhou"].astype(str).str.lower().isin(["true", "1", "sim"]))
     ].copy()
     if hist.empty:
         return []
