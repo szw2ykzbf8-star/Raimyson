@@ -162,9 +162,6 @@ def mostrar_pagina_publica(token: str):
         "Preço e marca são obrigatórios apenas para itens marcados como **Atende**."
     )
 
-    if "pub_form_v" not in st.session_state:
-        st.session_state["pub_form_v"] = 0
-
     # ── Pré-montar lista de itens ─────────────────────────────────────────────
     pid_list = []
     for _, row in consolidado.iterrows():
@@ -174,10 +171,13 @@ def mostrar_pagina_publica(token: str):
             continue
         pid_list.append((pid, prod, float(row["qtd_total"])))
 
-    # ── Seletores de situação fora do form (atualizam UI ao mudar) ────────────
+    # ── Um bloco por produto: situação + campos de preço juntos ──────────────
     for pid, prod, qtd_total in pid_list:
-        nome_prod = str(prod.get("descricao", f"Produto {pid}"))
-        apres     = str(prod.get("apresentacao", ""))
+        nome_prod  = str(prod.get("descricao", f"Produto {pid}"))
+        apres      = str(prod.get("apresentacao", ""))
+        ub         = str(prod.get("unidade_base", ""))
+        qtd_padrao = float(prod.get("qtd_base_por_apresentacao", 1) or 1)
+
         col_n, col_s = st.columns([3, 4])
         with col_n:
             st.markdown(f"**{nome_prod}**")
@@ -190,9 +190,42 @@ def mostrar_pagina_publica(token: str):
                 horizontal=True,
                 label_visibility="collapsed",
             )
+
+        if st.session_state.get(f"pub_status_{pid}", "Atende") == "Atende":
+            col1, col2, col3 = st.columns([2, 2, 2])
+            with col1:
+                st.number_input(
+                    "Preço por embalagem (R$) *",
+                    value=st.session_state.get(f"pub_preco_{pid}", 0.0),
+                    min_value=0.0, step=0.01, format="%.2f",
+                    key=f"pub_preco_{pid}",
+                )
+            with col2:
+                tipos = _tipos_embalagem()
+                st.selectbox("Tipo de embalagem", tipos, key=f"pub_emb_{pid}")
+            with col3:
+                st.number_input(
+                    f"Qtd de {ub} por embalagem",
+                    value=st.session_state.get(f"pub_qtdemb_{pid}", qtd_padrao),
+                    min_value=0.001, step=0.5,
+                    key=f"pub_qtdemb_{pid}",
+                    help=f"Ex: caixa com 12 {ub} → informe 12",
+                )
+            col_marca, col_obs = st.columns([2, 3])
+            with col_marca:
+                st.text_input(
+                    "Marca *", key=f"pub_marca_{pid}",
+                    placeholder="Ex: Sadia, Nestlé…",
+                )
+            with col_obs:
+                st.text_input(
+                    "Observação", key=f"pub_obs_{pid}",
+                    placeholder="Prazo de entrega, disponibilidade…",
+                )
+
         st.markdown("---")
 
-    # ── Formulário: apenas itens com status = Atende ──────────────────────────
+    # ── Botão de envio ────────────────────────────────────────────────────────
     itens_atende = [
         (pid, prod, qtd_total)
         for pid, prod, qtd_total in pid_list
@@ -205,56 +238,19 @@ def mostrar_pagina_publica(token: str):
             "Caso isso esteja correto, entre em contato com o comprador para registrar sua indisponibilidade."
         )
     else:
-        st.markdown(f"### Preencha os preços — {len(itens_atende)} item(ns) marcado(s) como Atende")
-
-        with st.form(f"cot_publica_{st.session_state['pub_form_v']}"):
-            campos = {}
-            for pid, prod, qtd_total in itens_atende:
-                nome_prod  = str(prod.get("descricao", f"Produto {pid}"))
-                ub         = str(prod.get("unidade_base", ""))
-                qtd_padrao = float(prod.get("qtd_base_por_apresentacao", 1) or 1)
-
-                st.markdown(f"**{nome_prod}** · Qtd: {qtd_total:.0f}")
-
-                col1, col2, col3 = st.columns([2, 2, 2])
-                with col1:
-                    preco = st.number_input(
-                        "Preço por embalagem (R$) *",
-                        value=0.0, min_value=0.0, step=0.01, format="%.2f",
-                        key=f"pub_preco_{pid}",
-                    )
-                with col2:
-                    tipo_emb = st.selectbox("Tipo de embalagem", _tipos_embalagem(), key=f"pub_emb_{pid}")
-                with col3:
-                    qtd_emb = st.number_input(
-                        f"Qtd de {ub} por embalagem",
-                        value=qtd_padrao, min_value=0.001, step=0.5,
-                        key=f"pub_qtdemb_{pid}",
-                        help=f"Ex: caixa com 12 {ub} → informe 12",
-                    )
-                col_marca, col_obs = st.columns([2, 3])
-                with col_marca:
-                    marca = st.text_input(
-                        "Marca *", key=f"pub_marca_{pid}",
-                        placeholder="Ex: Sadia, Nestlé…",
-                    )
-                with col_obs:
-                    obs = st.text_input(
-                        "Observação", key=f"pub_obs_{pid}",
-                        placeholder="Prazo de entrega, disponibilidade…",
-                    )
-                campos[pid] = {
-                    "preco": preco, "tipo_embalagem": tipo_emb,
-                    "qtd_por_embalagem": qtd_emb, "observacao": obs,
-                    "marca": marca,
+        if st.button("📤 Enviar Cotação", use_container_width=True, type="primary"):
+            campos = {
+                pid: {
+                    "preco":            float(st.session_state.get(f"pub_preco_{pid}", 0)),
+                    "tipo_embalagem":   str(st.session_state.get(f"pub_emb_{pid}", "")),
+                    "qtd_por_embalagem": float(st.session_state.get(f"pub_qtdemb_{pid}", 1)),
+                    "observacao":       str(st.session_state.get(f"pub_obs_{pid}", "")),
+                    "marca":            str(st.session_state.get(f"pub_marca_{pid}", "")),
                 }
-                st.markdown("---")
-
-            enviar = st.form_submit_button("📤 Enviar Cotação", use_container_width=True, type="primary")
-
-        if enviar:
+                for pid, _, _ in itens_atende
+            }
             itens_sem_preco = [pid for pid, c in campos.items() if c["preco"] <= 0]
-            itens_sem_marca = [pid for pid, c in campos.items() if not str(c.get("marca", "")).strip()]
+            itens_sem_marca = [pid for pid, c in campos.items() if not c["marca"].strip()]
             if itens_sem_preco:
                 nomes = [str(pid_to_prod.get(p, {}).get("descricao", f"#{p}")) for p in itens_sem_preco]
                 st.error(f"⚠️ Informe o preço de todos os itens que você Atende: {', '.join(nomes)}")
@@ -271,12 +267,11 @@ def mostrar_pagina_publica(token: str):
                         linhas.append([
                             prox_id, cotacao_id, fornec_id, pid,
                             c["preco"], c["tipo_embalagem"], c["qtd_por_embalagem"],
-                            c["observacao"], c.get("marca", ""), now_iso,
+                            c["observacao"], c["marca"], now_iso,
                         ])
                         prox_id += 1
                     from modules.google_sheets import get_sheet as _gs
                     _gs("respostas").append_rows(linhas)
-                    st.session_state["pub_form_v"] += 1
                     st.cache_data.clear()
                     st.success(f"✅ Cotação enviada! {len(linhas)} item(ns) respondido(s). Obrigado!")
                     st.balloons()
