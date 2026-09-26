@@ -158,92 +158,128 @@ def mostrar_pagina_publica(token: str):
     st.markdown("---")
     st.markdown("### Itens para cotação")
     st.caption(
-        "Informe **preço por embalagem**, **tipo** e **quantidade de unidades base por embalagem** "
-        "para cada item que você fornece. Deixe o preço em **R$ 0,00** para os que não trabalha."
+        "Selecione a **situação** de cada item. "
+        "Preço e marca são obrigatórios apenas para itens marcados como **Atende**."
     )
 
     if "pub_form_v" not in st.session_state:
         st.session_state["pub_form_v"] = 0
 
-    with st.form(f"cot_publica_{st.session_state['pub_form_v']}"):
-        campos = {}
-        for _, row in consolidado.iterrows():
-            pid  = int(row["produto_id"])
-            prod = pid_to_prod.get(pid)
-            if prod is None:
-                continue
+    # ── Pré-montar lista de itens ─────────────────────────────────────────────
+    pid_list = []
+    for _, row in consolidado.iterrows():
+        pid  = int(row["produto_id"])
+        prod = pid_to_prod.get(pid)
+        if prod is None:
+            continue
+        pid_list.append((pid, prod, float(row["qtd_total"])))
 
-            nome_prod  = str(prod.get("descricao", f"Produto {pid}"))
-            apres      = str(prod.get("apresentacao", ""))
-            ub         = str(prod.get("unidade_base", ""))
-            qtd_padrao = float(prod.get("qtd_base_por_apresentacao", 1) or 1)
-            qtd_total  = float(row["qtd_total"])
-
+    # ── Seletores de situação fora do form (atualizam UI ao mudar) ────────────
+    for pid, prod, qtd_total in pid_list:
+        nome_prod = str(prod.get("descricao", f"Produto {pid}"))
+        apres     = str(prod.get("apresentacao", ""))
+        col_n, col_s = st.columns([3, 4])
+        with col_n:
             st.markdown(f"**{nome_prod}**")
-            st.caption(f"Apresentação padrão: {apres}  |  Qtd solicitada: **{qtd_total:.0f}**")
+            st.caption(f"{apres} · Qtd solicitada: **{qtd_total:.0f}**")
+        with col_s:
+            st.radio(
+                "Situação",
+                ["Atende", "Não possui", "Não trabalha"],
+                key=f"pub_status_{pid}",
+                horizontal=True,
+                label_visibility="collapsed",
+            )
+        st.markdown("---")
 
-            col1, col2, col3 = st.columns([2, 2, 2])
-            with col1:
-                preco = st.number_input(
-                    "Preço por embalagem (R$) *",
-                    value=0.0, min_value=0.0, step=0.01, format="%.2f",
-                    key=f"pub_preco_{pid}",
-                )
-            with col2:
-                tipo_emb = st.selectbox("Tipo de embalagem", _tipos_embalagem(), key=f"pub_emb_{pid}")
-            with col3:
-                qtd_emb = st.number_input(
-                    f"Qtd de {ub} por embalagem",
-                    value=qtd_padrao, min_value=0.001, step=0.5,
-                    key=f"pub_qtdemb_{pid}",
-                    help=f"Ex: caixa com 12 {ub} → informe 12",
-                )
-            col_marca, col_obs = st.columns([2, 3])
-            with col_marca:
-                marca = st.text_input(
-                    "Marca *", key=f"pub_marca_{pid}",
-                    placeholder="Ex: Sadia, Nestlé…",
-                )
-            with col_obs:
-                obs = st.text_input(
-                    "Observação", key=f"pub_obs_{pid}",
-                    placeholder="Prazo de entrega, disponibilidade…",
-                )
-            campos[pid] = {
-                "preco": preco, "tipo_embalagem": tipo_emb,
-                "qtd_por_embalagem": qtd_emb, "observacao": obs,
-                "marca": marca,
-            }
-            st.markdown("---")
+    # ── Formulário: apenas itens com status = Atende ──────────────────────────
+    itens_atende = [
+        (pid, prod, qtd_total)
+        for pid, prod, qtd_total in pid_list
+        if st.session_state.get(f"pub_status_{pid}", "Atende") == "Atende"
+    ]
 
-        enviar = st.form_submit_button("📤 Enviar Cotação", use_container_width=True, type="primary")
+    if not itens_atende:
+        st.warning(
+            "Todos os itens foram marcados como *Não possui* ou *Não trabalha*. "
+            "Caso isso esteja correto, entre em contato com o comprador para registrar sua indisponibilidade."
+        )
+    else:
+        st.markdown(f"### Preencha os preços — {len(itens_atende)} item(ns) marcado(s) como Atende")
 
-    if enviar:
-        itens_ok = [(pid, c) for pid, c in campos.items() if c["preco"] > 0]
-        itens_sem_marca = [pid for pid, c in itens_ok if not str(c.get("marca", "")).strip()]
-        if not itens_ok:
-            st.error("Informe o preço de ao menos um item para enviar.")
-        elif itens_sem_marca:
-            st.error("⚠️ Os campos marcados com * são obrigatórios. Preencha a **Marca** de todos os itens cotados.")
-        else:
-            try:
-                df_resp2 = ler_df("respostas")
-                prox_id  = int(df_resp2["id"].max()) + 1 if not df_resp2.empty else 1
-                now_iso  = datetime.datetime.now().isoformat()
-                linhas   = []
-                for pid, c in itens_ok:
-                    linhas.append([
-                        prox_id, cotacao_id, fornec_id, pid,
-                        c["preco"], c["tipo_embalagem"], c["qtd_por_embalagem"],
-                        c["observacao"], c.get("marca", ""), now_iso,
-                    ])
-                    prox_id += 1
-                from modules.google_sheets import get_sheet as _gs
-                _gs("respostas").append_rows(linhas)
-                st.session_state["pub_form_v"] += 1
-                st.cache_data.clear()
-                st.success(f"✅ Cotação enviada com sucesso! {len(linhas)} item(ns) respondido(s). Obrigado!")
-                st.balloons()
-                st.rerun()
-            except Exception as e:
-                st.error(f"Erro ao salvar: {e}")
+        with st.form(f"cot_publica_{st.session_state['pub_form_v']}"):
+            campos = {}
+            for pid, prod, qtd_total in itens_atende:
+                nome_prod  = str(prod.get("descricao", f"Produto {pid}"))
+                ub         = str(prod.get("unidade_base", ""))
+                qtd_padrao = float(prod.get("qtd_base_por_apresentacao", 1) or 1)
+
+                st.markdown(f"**{nome_prod}** · Qtd: {qtd_total:.0f}")
+
+                col1, col2, col3 = st.columns([2, 2, 2])
+                with col1:
+                    preco = st.number_input(
+                        "Preço por embalagem (R$) *",
+                        value=0.0, min_value=0.0, step=0.01, format="%.2f",
+                        key=f"pub_preco_{pid}",
+                    )
+                with col2:
+                    tipo_emb = st.selectbox("Tipo de embalagem", _tipos_embalagem(), key=f"pub_emb_{pid}")
+                with col3:
+                    qtd_emb = st.number_input(
+                        f"Qtd de {ub} por embalagem",
+                        value=qtd_padrao, min_value=0.001, step=0.5,
+                        key=f"pub_qtdemb_{pid}",
+                        help=f"Ex: caixa com 12 {ub} → informe 12",
+                    )
+                col_marca, col_obs = st.columns([2, 3])
+                with col_marca:
+                    marca = st.text_input(
+                        "Marca *", key=f"pub_marca_{pid}",
+                        placeholder="Ex: Sadia, Nestlé…",
+                    )
+                with col_obs:
+                    obs = st.text_input(
+                        "Observação", key=f"pub_obs_{pid}",
+                        placeholder="Prazo de entrega, disponibilidade…",
+                    )
+                campos[pid] = {
+                    "preco": preco, "tipo_embalagem": tipo_emb,
+                    "qtd_por_embalagem": qtd_emb, "observacao": obs,
+                    "marca": marca,
+                }
+                st.markdown("---")
+
+            enviar = st.form_submit_button("📤 Enviar Cotação", use_container_width=True, type="primary")
+
+        if enviar:
+            itens_sem_preco = [pid for pid, c in campos.items() if c["preco"] <= 0]
+            itens_sem_marca = [pid for pid, c in campos.items() if not str(c.get("marca", "")).strip()]
+            if itens_sem_preco:
+                nomes = [str(pid_to_prod.get(p, {}).get("descricao", f"#{p}")) for p in itens_sem_preco]
+                st.error(f"⚠️ Informe o preço de todos os itens que você Atende: {', '.join(nomes)}")
+            elif itens_sem_marca:
+                nomes = [str(pid_to_prod.get(p, {}).get("descricao", f"#{p}")) for p in itens_sem_marca]
+                st.error(f"⚠️ Informe a marca de todos os itens que você Atende: {', '.join(nomes)}")
+            else:
+                try:
+                    df_resp2 = ler_df("respostas")
+                    prox_id  = int(df_resp2["id"].max()) + 1 if not df_resp2.empty else 1
+                    now_iso  = datetime.datetime.now().isoformat()
+                    linhas   = []
+                    for pid, c in campos.items():
+                        linhas.append([
+                            prox_id, cotacao_id, fornec_id, pid,
+                            c["preco"], c["tipo_embalagem"], c["qtd_por_embalagem"],
+                            c["observacao"], c.get("marca", ""), now_iso,
+                        ])
+                        prox_id += 1
+                    from modules.google_sheets import get_sheet as _gs
+                    _gs("respostas").append_rows(linhas)
+                    st.session_state["pub_form_v"] += 1
+                    st.cache_data.clear()
+                    st.success(f"✅ Cotação enviada! {len(linhas)} item(ns) respondido(s). Obrigado!")
+                    st.balloons()
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro ao salvar: {e}")
