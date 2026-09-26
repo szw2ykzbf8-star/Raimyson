@@ -93,9 +93,10 @@ _PAGINAS_CONFIG = {
     "fornecedores": ("pages/02_Fornecedores.py", "Fornecedores",      "🏭"),
     "relatorios":   ("pages/07_Relatorios.py",   "Relatórios",        "📈"),
     "configuracoes":("pages/08_Configuracoes.py","Configurações",     "⚙️"),
+    "admin_sistema":("pages/13_Admin.py",        "Administração",      "🔧"),
 }
 _PERFIL_PADRAO = {
-    "admin":     ["pedidos","cotacoes","analise","ordem","recebimento","compra_avulsa","produtos","fornecedores","relatorios","configuracoes"],
+    "admin":     ["pedidos","cotacoes","analise","ordem","recebimento","compra_avulsa","produtos","fornecedores","relatorios","configuracoes","admin_sistema"],
     "comprador": ["pedidos","cotacoes","analise","ordem","recebimento","compra_avulsa","produtos","fornecedores","relatorios"],
     "digitador": ["pedidos"],
 }
@@ -109,8 +110,10 @@ else:
 # configuracoes é sempre do admin e nunca de outros perfis
 if perfil == "admin":
     permissoes.add("configuracoes")
+    permissoes.add("admin_sistema")
 else:
     permissoes.discard("configuracoes")
+    permissoes.discard("admin_sistema")
 
 
 def _pg(chave):
@@ -141,8 +144,13 @@ if "relatorios" in permissoes:
 # Ao adicionar novos grupos de navegação, insira-os ANTES deste bloco.
 nav["Suporte"] = [ajuda]
 
-if "configuracoes" in permissoes:
-    nav["Sistema"] = [_pg("configuracoes")]
+if "configuracoes" in permissoes or "admin_sistema" in permissoes:
+    sistema = []
+    if "configuracoes" in permissoes:
+        sistema.append(_pg("configuracoes"))
+    if "admin_sistema" in permissoes:
+        sistema.append(_pg("admin_sistema"))
+    nav["Sistema"] = sistema
 
 pg = st.navigation(nav)
 
