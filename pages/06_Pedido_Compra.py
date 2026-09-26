@@ -46,6 +46,9 @@ df_fornecedores = ler_df("fornecedores")
 df_produtos     = ler_df("produtos")
 df_unidades     = ler_df("unidades")
 df_respostas    = ler_df("respostas")
+df_cotacoes     = ler_df("cotacoes")
+
+cot_map = {_safe_int(r["id"]): str(r.get("nome", "") or "").strip() for _, r in df_cotacoes.iterrows()} if not df_cotacoes.empty else {}
 
 prod_map = {_safe_int(r["id"]): r for _, r in df_produtos.iterrows()} if not df_produtos.empty else {}
 forn_map = {_safe_int(r["id"]): r for _, r in df_fornecedores.iterrows()} if not df_fornecedores.empty else {}
@@ -100,7 +103,7 @@ def _rows_html(itens_det):
     return html
 
 
-def _secao(compra, forn, unid_info, itens_det):
+def _secao(compra, forn, unid_info, itens_det, nome_cot=""):
     cid = _safe_int(compra["id"])
     data_str = str(compra.get("data_compra", ""))
     try:
@@ -108,6 +111,7 @@ def _secao(compra, forn, unid_info, itens_det):
     except Exception:
         data_fmt = str(datetime.date.today())
 
+    cot_label = f" | Cotação: {nome_cot}" if nome_cot else ""
     total = sum(_safe_float(i["preco_unitario"]) * _safe_float(i["quantidade"]) for i in itens_det)
     forn_min = _safe_float(forn.get("pedido_minimo", 0))
     forn_min_str = f"R$ {forn_min:.2f}" if forn_min > 0 else "—"
@@ -121,7 +125,7 @@ def _secao(compra, forn, unid_info, itens_det):
     )
 
     return f"""<div class="section">
-  <h2>Pedido nº {cid} | Data: {data_fmt}</h2>
+  <h2>Pedido nº {cid}{cot_label} | Data: {data_fmt}</h2>
   <p class="status">Status do pedido: Pedido realizado - aguardando fornecedor</p>
 
   <h3>Comprador</h3>
@@ -224,12 +228,14 @@ else:
                         "quantidade":     _safe_float(item.get("quantidade", 0)),
                     })
 
+                nome_cot_compra = cot_map.get(cot_id, "")
                 total_itens += len(itens_det)
-                secoes_html.append(_secao(compra, forn, unid_info, itens_det))
+                secoes_html.append(_secao(compra, forn, unid_info, itens_det, nome_cot_compra))
                 compras_info.append({
-                    "cid":   cid,
-                    "label": str(unid_info.get("nome_fantasia", unid_nome) or unid_nome),
-                    "valor": _safe_float(compra["valor_total"]),
+                    "cid":      cid,
+                    "label":    str(unid_info.get("nome_fantasia", unid_nome) or unid_nome),
+                    "valor":    _safe_float(compra["valor_total"]),
+                    "nome_cot": nome_cot_compra,
                 })
 
             # Download (abrir no browser e Ctrl+P → Salvar PDF)
@@ -239,13 +245,17 @@ else:
                 f"<b style='font-size:14px'>Total Geral do Fornecedor: R$ {total_geral:.2f}</b></div>"
             )
             html_completo = _CSS + "<body>" + "".join(secoes_html) + total_geral_html + "</body>"
-            nome_safe = nome_forn.replace(" ", "_")[:30]
+            _nome_cot_grp = next((i["nome_cot"] for i in compras_info if i.get("nome_cot")), "")
+            import re as _re
+            nome_safe = _re.sub(r"[^\w]", "_", nome_forn)[:30]
+            cot_safe  = _re.sub(r"[^\w]", "_", _nome_cot_grp)[:20] if _nome_cot_grp else ""
+            fname     = f"{nome_safe}_{cot_safe}_{datetime.date.today()}.html" if cot_safe else f"{nome_safe}_{datetime.date.today()}.html"
             col_dl, _ = st.columns([2, 4])
             with col_dl:
                 st.download_button(
                     "⬇️ Baixar pedido (imprimir / salvar PDF)",
                     data=html_completo.encode("utf-8"),
-                    file_name=f"pedido_{nome_safe}_{datetime.date.today()}.html",
+                    file_name=fname,
                     mime="text/html",
                     use_container_width=True,
                     key=f"dl_{fid}",

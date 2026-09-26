@@ -92,6 +92,11 @@ cotacao_sel = _safe_int(st.selectbox(
     "Cotação", options=cotacoes_com_resp["id"].tolist(), format_func=_label_cot,
 ))
 
+# Nome da cotação selecionada (para PDF e nome de arquivo)
+_cot_row = cotacoes_com_resp[cotacoes_com_resp["id"].apply(_safe_int) == cotacao_sel]
+nome_cot = str(_cot_row.iloc[0].get("nome", "") or "").strip() if not _cot_row.empty else ""
+nome_cot_label = nome_cot if nome_cot else f"Cotação #{cotacao_sel}"
+
 # ── Build data for this cotação ───────────────────────────────────────────────
 respostas = (
     df_respostas[df_respostas["cotacao_id"].apply(_safe_int) == cotacao_sel].copy()
@@ -447,7 +452,7 @@ def _html_pedido_forn(fid):
                 f"<td>R$ {p*q:.2f}</td></tr>"
             )
         secoes.append(f"""<div class="section">
-  <h2>Pedido nº {idx} | Data: {datetime.date.today().strftime('%d/%m/%Y')}</h2>
+  <h2>Pedido nº {idx} | Cotação: {nome_cot_label} | Data: {datetime.date.today().strftime('%d/%m/%Y')}</h2>
   <p class="status">Status do pedido: Pedido realizado - aguardando fornecedor</p>
   <h3>Comprador</h3>
   <div class="grid2">
@@ -573,11 +578,12 @@ for i, fid in enumerate(forn_ids):
         if st.session_state.get(f"{sk}_compra_done_{fid}"):
             nome_forn_r = str(forn_map.get(fid, {}).get("razao_social", f"#{fid}"))
             st.success(f"✅ Compra gerada para **{nome_forn_r}**!")
-            nome_safe = nome_forn_r.replace(" ", "_")[:30]
+            nome_safe = re.sub(r"[^\w]", "_", nome_forn_r)[:30]
+            cot_safe = re.sub(r"[^\w]", "_", nome_cot)[:20] if nome_cot else f"cot{cotacao_sel}"
             st.download_button(
                 "⬇️ Gerar PDF",
                 data=_html_pedido_forn(fid).encode("utf-8"),
-                file_name=f"pedido_{nome_safe}_{datetime.date.today()}.html",
+                file_name=f"{nome_safe}_{cot_safe}_{datetime.date.today()}.html",
                 mime="text/html",
                 use_container_width=True,
                 key=f"{sk}_pdf_{fid}",
