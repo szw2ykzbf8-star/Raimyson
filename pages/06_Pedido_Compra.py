@@ -107,11 +107,12 @@ def _secao(compra, forn, unid_info, itens_det, nome_cot=""):
     cid = _safe_int(compra["id"])
     data_str = str(compra.get("data_compra", ""))
     try:
-        data_fmt = datetime.datetime.fromisoformat(data_str).strftime("%d/%m/%Y %H:%M")
+        data_fmt = datetime.datetime.fromisoformat(data_str).strftime("%d/%m/%Y")
     except Exception:
-        data_fmt = str(datetime.date.today())
+        data_fmt = datetime.date.today().strftime("%d/%m/%Y")
 
-    cot_label = f" | Cotação: {nome_cot}" if nome_cot else ""
+    cot_display = nome_cot if nome_cot else (f"Cotação #{_safe_int(compra.get('cotacao_id', 0))}" if _safe_int(compra.get('cotacao_id', 0)) else "")
+    cot_label = f" | Cotação: {cot_display}" if cot_display else ""
     total = sum(_safe_float(i["preco_unitario"]) * _safe_float(i["quantidade"]) for i in itens_det)
     forn_min = _safe_float(forn.get("pedido_minimo", 0))
     forn_min_str = f"R$ {forn_min:.2f}" if forn_min > 0 else "—"
