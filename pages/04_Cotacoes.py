@@ -277,10 +277,36 @@ with tab_encerradas:
             with st.expander(f"{label_cot_enc} — Prazo: {prazo_str} — {n_resp}/{n_total} respostas"):
                 st.write(f"Criada por: **{cot.get('criado_por', '—')}**")
                 st.write(f"Respostas: **{n_resp}** de **{n_total}** fornecedores")
-                if st.button("Reabrir cotação", key=f"reabrir_{cot_id}"):
-                    idx = df_cotacoes[df_cotacoes["id"].apply(_safe_int) == cot_id].index[0]
-                    df_cotacoes.at[idx, "status"] = "aberta"
-                    escrever_df("cotacoes", df_cotacoes)
-                    st.success("Cotação reaberta.")
-                    st.cache_data.clear()
-                    st.rerun()
+                btn_reabrir, btn_excluir = st.columns(2)
+                with btn_reabrir:
+                    if st.button("Reabrir cotação", key=f"reabrir_{cot_id}", use_container_width=True):
+                        idx = df_cotacoes[df_cotacoes["id"].apply(_safe_int) == cot_id].index[0]
+                        df_cotacoes.at[idx, "status"] = "aberta"
+                        escrever_df("cotacoes", df_cotacoes)
+                        st.success("Cotação reaberta.")
+                        st.cache_data.clear()
+                        st.rerun()
+                with btn_excluir:
+                    _del_key = f"del_cot_{cot_id}"
+                    if not st.session_state.get(_del_key):
+                        if st.button("🗑️ Excluir", key=f"exc_{cot_id}", use_container_width=True):
+                            st.session_state[_del_key] = True
+                            st.rerun()
+                    else:
+                        st.warning("Isso apagará a cotação e todas as respostas. Confirma?")
+                        c1, c2 = st.columns(2)
+                        with c1:
+                            if st.button("✅ Confirmar exclusão", key=f"exc_ok_{cot_id}", use_container_width=True, type="primary"):
+                                df_tokens_upd = df_tokens[df_tokens["cotacao_id"].apply(_safe_int) != cot_id].reset_index(drop=True)
+                                df_resp_upd   = df_respostas[df_respostas["cotacao_id"].apply(_safe_int) != cot_id].reset_index(drop=True)
+                                df_cot_upd    = df_cotacoes[df_cotacoes["id"].apply(_safe_int) != cot_id].reset_index(drop=True)
+                                escrever_df("cotacao_tokens", df_tokens_upd)
+                                escrever_df("respostas", df_resp_upd)
+                                escrever_df("cotacoes", df_cot_upd)
+                                st.session_state.pop(_del_key, None)
+                                st.cache_data.clear()
+                                st.rerun()
+                        with c2:
+                            if st.button("Cancelar", key=f"exc_no_{cot_id}", use_container_width=True):
+                                st.session_state.pop(_del_key, None)
+                                st.rerun()
