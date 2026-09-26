@@ -231,12 +231,25 @@ _FL_ANALISE = [
 _FL_ORDEM = [
     {"t":"s","text":"Início"},
     {"t":"p","text":"Acessar Ordem de Compra no menu"},
+    {"t":"d","text":"Aba Pedidos Regulares ou Compra Direta?","yes":"Pedidos Regulares","no":"Compra Direta →|ver aba Compra Direta"},
     {"t":"p","text":"Expandir o fornecedor desejado"},
     {"t":"p","text":"Clicar em Baixar pedido (imprimir / salvar PDF)"},
     {"t":"p","text":"Abrir o arquivo .html baixado no navegador"},
     {"t":"p","text":"Pressionar Ctrl+P → Salvar como PDF"},
     {"t":"p","text":"Enviar o PDF ao fornecedor"},
     {"t":"p","text":"Clicar em Enviado para cada fornecedor"},
+    {"t":"e","text":"Fim"},
+]
+
+_FL_DIRETA = [
+    {"t":"s","text":"Início"},
+    {"t":"p","text":"Acessar Ordem de Compra → aba Compra Direta"},
+    {"t":"d","text":"Há itens pendentes?","yes":"Sim","no":"Não → todos|já comprados"},
+    {"t":"p","text":"Expandir a unidade hoteleira desejada"},
+    {"t":"p","text":"Marcar o checkbox dos itens já comprados"},
+    {"t":"p","text":"Clicar em Marcar selecionados como comprado"},
+    {"t":"d","text":"Todos os itens e pedidos regulares concluídos?","yes":"Sim","no":"Não → aguardar|demais itens"},
+    {"t":"p","text":"Cotação encerrada automaticamente"},
     {"t":"e","text":"Fim"},
 ]
 
@@ -417,7 +430,7 @@ Uma cotação passa por três status ao longo do ciclo:
 
 - **Alterar prazo:** dentro de uma cotação Aberta, use o formulário de alteração de prazo e clique em **Salvar prazo**.
 - **Fechar prazo:** clique em **🔒 Fechar prazo** para impedir novas respostas e avançar para *Em Compra*. Faça isso antes de ir para Análise de Preços.
-- **Encerramento automático:** quando você clicar em **✅ Enviado** no último pedido de compra gerado para essa cotação, o sistema a encerra automaticamente.
+- **Encerramento automático:** quando todos os pedidos de compra estiverem marcados como **Enviado** e todos os itens de **Compra Direta** estiverem marcados como **comprado**, o sistema encerra a cotação automaticamente.
 - **Reabrir:** na aba **Encerradas**, clique em **Reabrir cotação** para permitir novas respostas dos fornecedores.
 - **Excluir** *(somente Administrador)*: na aba **Encerradas**, clique em **🗑️ Excluir** e confirme. Isso apaga a cotação, todos os links e todas as respostas vinculadas. **Esta ação não pode ser desfeita.**
             """)
@@ -551,11 +564,47 @@ if "🛒 Ordem de Compra" in ti:
 - Se o objetivo é corrigir valores ou quantidades, utilize a opção **Liberar para nova compra** na tela de Análise de Preços.
             """)
 
-        with st.expander("⚠️ Pontos de atenção"):
+        with st.expander("⚠️ Pontos de atenção — Pedidos Regulares"):
             st.markdown("""
-- Esta tela exibe apenas pedidos **pendentes de envio**. Pedidos já marcados como enviados não aparecem aqui.
+- Esta aba exibe apenas pedidos **pendentes de envio**. Pedidos já marcados como enviados não aparecem aqui.
 - O PDF inclui: número do pedido, nome da cotação, data, dados do comprador (unidade hoteleira), dados do fornecedor, tabela de itens com gramatura solicitada, gramatura informada, marca, observação, preço unitário, quantidade e total.
 - O total geral de todas as unidades daquele fornecedor é exibido ao final do PDF.
+            """)
+
+        st.markdown("---")
+        st.markdown("### 🛒 Aba: Compra Direta")
+        st.markdown(
+            "Produtos marcados como **Compra Direta** no cadastro não passam pelo processo de cotação — "
+            "você os compra diretamente com o fornecedor de sua escolha. "
+            "Esta aba lista todos esses itens pendentes por unidade hoteleira, com a quantidade solicitada, "
+            "para que você possa marcá-los como comprado sem risco de esquecer algum."
+        )
+
+        st.markdown("**Fluxo desta etapa:**")
+        _h, _ht = _svg_flow(_FL_DIRETA)
+        components.html(_h, height=_ht, scrolling=False)
+
+        with st.expander("📌 Como usar a aba Compra Direta"):
+            st.markdown("""
+1. Acesse **Ordem de Compra** no menu lateral.
+2. Clique na aba **🛒 Compra Direta**.
+3. Se houver itens pendentes, eles aparecerão agrupados por **Unidade Hoteleira** com o nome da cotação correspondente.
+4. Expanda a unidade desejada.
+5. **Marque o checkbox** ao lado de cada item que já foi comprado.
+6. Clique em **💾 Marcar selecionados como comprado**.
+7. Repita para todas as unidades até que todos os itens estejam marcados.
+
+> A cotação só será **encerrada automaticamente** quando todos os pedidos regulares estiverem marcados como *Enviado* **e** todos os itens de Compra Direta estiverem marcados como *comprado*.
+            """)
+
+        with st.expander("📌 Como marcar um produto como Compra Direta"):
+            st.markdown("""
+1. Acesse **Produtos** no menu lateral.
+2. Localize o produto na lista e expanda-o.
+3. Marque a caixa **Compra Direta** no painel de edição e clique em **💾 Salvar**.
+4. Para novos produtos, marque a opção **Compra Direta (não cotacionar)** antes de cadastrar.
+
+> Produtos marcados como Compra Direta continuam aparecendo nas solicitações — a diferença é que, ao fechar o prazo de uma cotação, eles são separados automaticamente e listados na aba Compra Direta em vez de serem incluídos nos pedidos aos fornecedores.
             """)
 
 
@@ -660,6 +709,7 @@ if "📦 Cadastros" in ti:
 - Produtos **inativos** não aparecem na tela de Solicitações de Compra.
 - A **Apresentação** é o que o fornecedor verá como referência ao cotar — descreva com clareza (ex.: *Fardo 5kg*, *Pacote 500g*).
 - O campo **Gramatura Solicitada** no PDF vem diretamente deste campo de Apresentação.
+- Produtos com **Compra Direta** marcado não são incluídos nos pedidos de cotação — eles aparecem na aba **Compra Direta** de Ordem de Compra para controle manual.
                 """)
 
         if "fornecedores" in perm:

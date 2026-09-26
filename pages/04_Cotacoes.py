@@ -11,19 +11,28 @@ usuario = requer_permissao("cotacoes")
 
 st.title("💰 Cotações")
 
-df_pedidos     = ler_df("pedidos")
-df_itens       = ler_df("itens_pedido")
-df_produtos    = ler_df("produtos")
+df_pedidos      = ler_df("pedidos")
+df_itens        = ler_df("itens_pedido")
+df_produtos     = ler_df("produtos")
 df_fornecedores = ler_df("fornecedores")
-df_cotacoes    = ler_df("cotacoes")
-df_respostas   = ler_df("respostas")
-df_tokens      = ler_df("cotacao_tokens")
+df_cotacoes     = ler_df("cotacoes")
+df_respostas    = ler_df("respostas")
+df_tokens       = ler_df("cotacao_tokens")
+df_compras_dir  = ler_df("compras_diretas")
+
 
 def _safe_int(v):
     try:
         return int(float(v)) if str(v).strip() not in ("", "nan") else 0
     except Exception:
         return 0
+
+
+def _safe_float(v, default=0.0):
+    try:
+        return float(v) if str(v).strip() not in ("", "nan") else default
+    except Exception:
+        return default
 
 
 tab_nova, tab_abertas, tab_encerradas = st.tabs(["Nova Cotação", "Em Andamento", "Encerradas"])
@@ -179,8 +188,20 @@ with tab_abertas:
                 if status_cot == "em_compra":
                     st.info(
                         "🔵 Prazo encerrado — pedidos de compra em andamento. "
-                        "A cotação será arquivada automaticamente quando todos os pedidos forem marcados como Enviado."
+                        "A cotação será arquivada automaticamente quando todos os pedidos forem marcados como Enviado "
+                        "e todos os itens de Compra Direta forem marcados como comprado."
                     )
+                    cd_cot = (
+                        df_compras_dir[df_compras_dir["cotacao_id"].apply(_safe_int) == cot_id]
+                        if not df_compras_dir.empty else pd.DataFrame()
+                    )
+                    if not cd_cot.empty:
+                        n_cd_total = len(cd_cot)
+                        n_cd_comp = len(cd_cot[cd_cot["comprado"].apply(lambda v: str(v).strip().lower() in ("true", "1"))])
+                        if n_cd_comp < n_cd_total:
+                            st.warning(f"🛒 Compra Direta: **{n_cd_comp}/{n_cd_total}** itens marcados como comprado — acesse Ordem de Compra → aba Compra Direta.")
+                        else:
+                            st.success(f"✅ Compra Direta: todos os {n_cd_total} itens marcados como comprado.")
                 else:
                     # Status por fornecedor + link
                     if not toks_cot.empty:
@@ -249,6 +270,41 @@ with tab_abertas:
                         idx = df_cotacoes[df_cotacoes["id"].apply(_safe_int) == cot_id].index[0]
                         df_cotacoes.at[idx, "status"] = "em_compra"
                         escrever_df("cotacoes", df_cotacoes)
+
+                        # Auto-populate ComprasDiretas for products flagged as compra_direta
+                        if not df_pedidos.empty and not df_produtos.empty and not df_itens.empty:
+                            prod_cd = {
+                                _safe_int(r["id"]): r
+                                for _, r in df_produtos.iterrows()
+                                if str(r.get("compra_direta", "False")).strip().lower() in ("true", "1")
+                            }
+                            if prod_cd:
+                                pedidos_cot = df_pedidos[df_pedidos["cotacao_id"].apply(_safe_int) == cot_id]
+                                cd_agg = {}  # {(produto_id, unidade): quantidade}
+                                for _, ped in pedidos_cot.iterrows():
+                                    unid_ped = str(ped.get("unidade", ""))
+                                    ped_id = _safe_int(ped["id"])
+                                    itens_ped = df_itens[df_itens["pedido_id"].apply(_safe_int) == ped_id]
+                                    for _, item in itens_ped.iterrows():
+                                        pid = _safe_int(item["produto_id"])
+                                        if pid in prod_cd:
+                                            key = (pid, unid_ped)
+                                            cd_agg[key] = cd_agg.get(key, 0) + _safe_float(item.get("quantidade", 0))
+                                if cd_agg:
+                                    # Clear any existing ComprasDiretas for this cotacao first
+                                    df_cd_cur = ler_df("compras_diretas")
+                                    if not df_cd_cur.empty:
+                                        df_cd_cur = df_cd_cur[df_cd_cur["cotacao_id"].apply(_safe_int) != cot_id].reset_index(drop=True)
+                                        escrever_df("compras_diretas", df_cd_cur)
+                                    else:
+                                        df_cd_cur = pd.DataFrame(columns=["id", "cotacao_id", "produto_id", "unidade", "quantidade", "comprado"])
+                                    next_id = int(df_cd_cur["id"].apply(_safe_int).max()) + 1 if not df_cd_cur.empty else 1
+                                    novas_cd = []
+                                    for (pid, unid), qtd in cd_agg.items():
+                                        novas_cd.append([next_id, cot_id, pid, unid, qtd, "False"])
+                                        next_id += 1
+                                    get_sheet("compras_diretas").append_rows(novas_cd)
+
                         st.success("Prazo fechado. Acesse a Análise para gerar os pedidos de compra.")
                         st.cache_data.clear()
                         st.rerun()

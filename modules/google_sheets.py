@@ -73,7 +73,7 @@ def _gs_atualizar_celula(nome_chave: str, row: int, col: int, valor):
 
 def _cabecalhos():
     return {
-        "Produtos": ["id", "descricao", "apresentacao", "unidade_base", "qtd_base_por_apresentacao", "observacao", "ativo", "data_cadastro", "codigo"],
+        "Produtos": ["id", "descricao", "apresentacao", "unidade_base", "qtd_base_por_apresentacao", "observacao", "ativo", "data_cadastro", "codigo", "compra_direta"],
         "Fornecedores": ["id", "razao_social", "cnpj", "nome_contato", "telefone", "ativo", "data_cadastro", "nome_fantasia", "cep", "logradouro", "numero", "complemento", "bairro", "cidade", "estado", "pedido_minimo"],
         "Unidades": ["id", "nome", "nome_fantasia", "cnpj", "cep", "logradouro", "numero", "complemento", "bairro", "cidade", "estado", "ativo"],
         "Usuarios": ["id", "nome", "login", "senha_hash", "perfil", "unidades_acesso", "ativo", "trocar_senha", "permissoes"],
@@ -89,6 +89,7 @@ def _cabecalhos():
         "ItensRecebimento": ["id", "compra_id", "produto_id", "qtd_pedida", "qtd_recebida"],
         "NfeMapeamento": ["id", "fornecedor_id", "nfe_cprod", "produto_id"],
         "CotacaoTokens": ["id", "cotacao_id", "fornecedor_id", "token"],
+        "ComprasDiretas": ["id", "cotacao_id", "produto_id", "unidade", "quantidade", "comprado"],
     }
 
 

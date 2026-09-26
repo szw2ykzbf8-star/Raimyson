@@ -97,18 +97,29 @@ with tab_lista:
                 with col2:
                     st.markdown("&nbsp;", unsafe_allow_html=True)
                     novo_ativo = st.checkbox("Ativo", value=is_ativo(row["ativo"]), key=f"ativo_{i}")
+                    cd_atual = row.get("compra_direta", "False")
+                    novo_cd = st.checkbox(
+                        "Compra Direta",
+                        value=(cd_atual is True or str(cd_atual).upper() == "TRUE"),
+                        key=f"cd_{i}",
+                        help="Produto comprado diretamente, sem cotação. Será listado separadamente em Ordem de Compra.",
+                    )
                     if st.button("💾 Salvar", key=f"salvar_{i}", use_container_width=True):
                         if not nova_desc or not nova_apres:
                             st.error("Descrição e apresentação são obrigatórias.")
                         else:
                             df["codigo"] = df["codigo"].astype(object) if "codigo" in df.columns else ""
-                            df.at[i, "codigo"]      = novo_cod.strip()
-                            df.at[i, "descricao"]   = nova_desc
-                            df.at[i, "apresentacao"] = nova_apres
-                            df.at[i, "unidade_base"] = nova_ub
+                            if "compra_direta" not in df.columns:
+                                df["compra_direta"] = "False"
+                            df["compra_direta"] = df["compra_direta"].astype(object)
+                            df.at[i, "codigo"]        = novo_cod.strip()
+                            df.at[i, "descricao"]     = nova_desc
+                            df.at[i, "apresentacao"]  = nova_apres
+                            df.at[i, "unidade_base"]  = nova_ub
                             df.at[i, "qtd_base_por_apresentacao"] = nova_qtd
-                            df.at[i, "observacao"]  = nova_obs
-                            df.at[i, "ativo"]       = str(novo_ativo)
+                            df.at[i, "observacao"]    = nova_obs
+                            df.at[i, "ativo"]         = str(novo_ativo)
+                            df.at[i, "compra_direta"] = str(novo_cd)
                             escrever_df("produtos", df)
                             st.success("Produto atualizado!")
                             st.cache_data.clear()
@@ -164,6 +175,11 @@ with tab_novo:
             placeholder="Ex: Perecível. Preferir marca X.",
             help="Informação extra visível apenas internamente"
         )
+        compra_direta = st.checkbox(
+            "Compra Direta (não cotacionar)",
+            value=False,
+            help="Marque se este produto é comprado diretamente sem passar por cotação. Será listado em Ordem de Compra na aba Compra Direta.",
+        )
         salvar = st.form_submit_button("✅ Cadastrar Produto", use_container_width=True)
 
     if salvar:
@@ -181,6 +197,7 @@ with tab_novo:
                 "True",
                 datetime.date.today().isoformat(),
                 codigo.strip(),
+                str(compra_direta),
             ])
             st.success(f"Produto '{descricao}' cadastrado com sucesso!")
             st.session_state["prod_form_v"] += 1
@@ -247,6 +264,8 @@ with tab_import:
             df_imp["observacao"] = ""
         if "codigo" not in df_imp.columns:
             df_imp["codigo"] = ""
+        if "compra_direta" not in df_imp.columns:
+            df_imp["compra_direta"] = "False"
 
         # Normaliza
         df_imp = df_imp.dropna(subset=["descricao"]).copy()
@@ -322,6 +341,7 @@ with tab_import:
                         "True",
                         hoje,
                         r["codigo"],
+                        str(r.get("compra_direta", "False")).strip() or "False",
                     ])
                     proximo_id += 1
 

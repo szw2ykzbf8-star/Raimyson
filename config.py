@@ -31,6 +31,7 @@ SHEETS = {
     "itens_recebimento": "ItensRecebimento",
     "nfe_mapeamento":    "NfeMapeamento",
     "cotacao_tokens":    "CotacaoTokens",
+    "compras_diretas":   "ComprasDiretas",
 }
 
 # Unidades cadastradas

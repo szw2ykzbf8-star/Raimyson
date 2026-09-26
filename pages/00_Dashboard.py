@@ -42,5 +42,20 @@ with col3:
 with col4:
     st.metric("Produtos ativos", prod_ativos)
 
+# ── Alerta: Compras Diretas pendentes ────────────────────────────────────────
+try:
+    df_cd = ler_df("compras_diretas")
+    if not df_cd.empty:
+        cd_pend = df_cd[~df_cd["comprado"].apply(lambda v: str(v).strip().lower() in ("true", "1"))]
+        if not cd_pend.empty:
+            n_itens = len(cd_pend)
+            n_unids = cd_pend["unidade"].nunique()
+            st.warning(
+                f"🛒 **{n_itens} item(ns) de Compra Direta pendente(s)** em {n_unids} unidade(s). "
+                "Acesse **Ordem de Compra → Compra Direta** para marcar como comprado."
+            )
+except Exception:
+    pass
+
 st.markdown("---")
 st.info("Use o menu lateral para navegar entre os módulos.")

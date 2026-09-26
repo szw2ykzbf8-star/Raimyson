@@ -4,7 +4,7 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 
 COLUMNS = {
-    "produtos":          ["id", "descricao", "apresentacao", "unidade_base", "qtd_base_por_apresentacao", "observacao", "ativo", "data_cadastro", "codigo"],
+    "produtos":          ["id", "descricao", "apresentacao", "unidade_base", "qtd_base_por_apresentacao", "observacao", "ativo", "data_cadastro", "codigo", "compra_direta"],
     "fornecedores":      ["id", "razao_social", "cnpj", "nome_contato", "telefone", "ativo", "data_cadastro", "nome_fantasia", "cep", "logradouro", "numero", "complemento", "bairro", "cidade", "estado", "pedido_minimo"],
     "unidades":          ["id", "nome", "nome_fantasia", "cnpj", "cep", "logradouro", "numero", "complemento", "bairro", "cidade", "estado", "ativo"],
     "usuarios":          ["id", "nome", "login", "senha_hash", "perfil", "unidades_acesso", "ativo", "trocar_senha", "permissoes"],
@@ -20,6 +20,7 @@ COLUMNS = {
     "itens_recebimento": ["id", "compra_id", "produto_id", "qtd_pedida", "qtd_recebida"],
     "nfe_mapeamento":    ["id", "fornecedor_id", "nfe_cprod", "produto_id"],
     "cotacao_tokens":    ["id", "cotacao_id", "fornecedor_id", "token"],
+    "compras_diretas":   ["id", "cotacao_id", "produto_id", "unidade", "quantidade", "comprado"],
 }
 
 _SEED_UNIDADES_MEDIDA = [
@@ -52,6 +53,7 @@ def _criar_tabelas(engine):
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE \"cotacoes\" ADD COLUMN IF NOT EXISTS \"nome\" TEXT DEFAULT ''"))
         conn.execute(text("ALTER TABLE \"respostas\" ADD COLUMN IF NOT EXISTS \"marca\" TEXT DEFAULT ''"))
+        conn.execute(text("ALTER TABLE \"produtos\" ADD COLUMN IF NOT EXISTS \"compra_direta\" TEXT DEFAULT 'False'"))
 
     # Seed unidades_medida when empty
     with engine.begin() as conn:
