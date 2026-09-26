@@ -581,10 +581,30 @@ with tab3:
                         pivot["Produto"]    = pivot["produto_id"].map(prod_map).fillna("?")
                         pivot["Fornecedor"] = pivot["fornecedor_id"].map(forn_map).fillna("?")
                         pivot_t = pivot.pivot(index="Produto", columns="Fornecedor", values="pn")
+
+                        def _color_row(row):
+                            vals = row.dropna()
+                            if len(vals) < 2:
+                                return [""] * len(row)
+                            mn, mx = vals.min(), vals.max()
+                            styles = []
+                            for v in row:
+                                if pd.isna(v):
+                                    styles.append("")
+                                elif mn == mx:
+                                    styles.append("")
+                                elif v == mn:
+                                    styles.append("background-color:#c6efce;color:#276221")
+                                elif v == mx:
+                                    styles.append("background-color:#ffc7ce;color:#9c0006")
+                                else:
+                                    styles.append("")
+                            return styles
+
                         st.dataframe(
                             pivot_t.style
                                    .format("R$ {:.2f}", na_rep="—")
-                                   .background_gradient(axis=1, cmap="RdYlGn_r"),
+                                   .apply(_color_row, axis=1),
                             use_container_width=True,
                         )
 
