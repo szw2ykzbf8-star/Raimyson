@@ -579,7 +579,7 @@ for i, fid in enumerate(forn_ids):
             with st.expander(f"⚠️ {n_avisos} aviso(s) de mínimo"):
                 for u, f in avisos:
                     st.caption(f"⚠️ {_unid_label(u)}: faltam R$ {f:.2f}")
-            ignorar = st.checkbox("Ignorar", key=f"{sk}_ign_{fid}")
+            ignorar = st.checkbox("Ignorar pedido mínimo", key=f"{sk}_ign_{fid}")
         else:
             if tot_geral > 0 and ped_min > 0:
                 st.caption("✅ Mín. atingido")
