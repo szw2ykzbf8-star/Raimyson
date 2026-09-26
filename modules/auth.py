@@ -27,7 +27,7 @@ def alterar_senha(login: str, nova_senha: str):
     df["senha_hash"] = df["senha_hash"].astype(object)
     df["trocar_senha"] = df["trocar_senha"].astype(object)
     df.at[i, "senha_hash"] = hash_senha(nova_senha)
-    df.at[i, "trocar_senha"] = False
+    df.at[i, "trocar_senha"] = "False"
     escrever_df("usuarios", df)
 
 
@@ -151,5 +151,5 @@ def criar_admin_inicial():
         return
     append_linha("usuarios", [
         1, "Administrador", "admin", hash_senha("admin123"),
-        "admin", "todos", True, False, "",
+        "admin", "todos", "True", "False", "",
     ])

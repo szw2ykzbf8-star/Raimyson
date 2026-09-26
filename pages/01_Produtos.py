@@ -108,7 +108,7 @@ with tab_lista:
                             df.at[i, "unidade_base"] = nova_ub
                             df.at[i, "qtd_base_por_apresentacao"] = nova_qtd
                             df.at[i, "observacao"]  = nova_obs
-                            df.at[i, "ativo"]       = novo_ativo
+                            df.at[i, "ativo"]       = str(novo_ativo)
                             escrever_df("produtos", df)
                             st.success("Produto atualizado!")
                             st.cache_data.clear()
@@ -178,7 +178,7 @@ with tab_novo:
                 unidade_base,
                 qtd_base,
                 observacao.strip(),
-                True,
+                "True",
                 datetime.date.today().isoformat(),
                 codigo.strip(),
             ])
@@ -319,7 +319,7 @@ with tab_import:
                         r["unidade_base"],
                         float(r["qtd_base_por_apresentacao"]),
                         r["observacao"],
-                        True,
+                        "True",
                         hoje,
                         r["codigo"],
                     ])

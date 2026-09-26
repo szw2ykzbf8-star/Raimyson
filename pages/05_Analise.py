@@ -863,7 +863,7 @@ if comprar_fid is not None:
         linhas_compras.append([
             compra_id, cotacao_sel, comprar_fid,
             datetime.date.today().isoformat(),
-            round(valor_unid, 2), False, "", "", "", unid,
+            round(valor_unid, 2), "False", "", "", "", unid,
         ])
         for pid in prods_fid:
             if (pid, comprar_fid) not in resp_dict:

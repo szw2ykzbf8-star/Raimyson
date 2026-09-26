@@ -104,10 +104,10 @@ def _inicializar_abas(sh):
 
 
 _UNIDADES_MEDIDA_PADRAO = [
-    [1, "kg", "Kilograma", True],
-    [2, "lt", "Litro",     True],
-    [3, "un", "Unidade",   True],
-    [4, "mt", "Metro",     True],
+    [1, "kg", "Kilograma", "True"],
+    [2, "lt", "Litro",     "True"],
+    [3, "un", "Unidade",   "True"],
+    [4, "mt", "Metro",     "True"],
 ]
 
 

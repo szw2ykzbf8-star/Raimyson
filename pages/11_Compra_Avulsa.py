@@ -392,7 +392,7 @@ if st.button(f"✅ Confirmar Compra Avulsa ({len(itens_para_salvar)} itens)", us
                     formatar_cnpj(cnpj_emit_digits),
                     "",
                     formatar_telefone(api_data.get("ddd_telefone_1", "") or ""),
-                    True,
+                    "True",
                     datetime.date.today().isoformat(),
                     api_data.get("nome_fantasia", "") or "",
                     api_data.get("cep", "") or "",
@@ -409,7 +409,7 @@ if st.button(f"✅ Confirmar Compra Avulsa ({len(itens_para_salvar)} itens)", us
                     novo_fid,
                     nfe["nome_emit"] or formatar_cnpj(cnpj_emit_digits),
                     formatar_cnpj(cnpj_emit_digits),
-                    "", "", True,
+                    "", "", "True",
                     datetime.date.today().isoformat(),
                     "", "", "", "", "", "", "", "",
                 ])
@@ -426,7 +426,7 @@ if st.button(f"✅ Confirmar Compra Avulsa ({len(itens_para_salvar)} itens)", us
             fid,
             nfe["data"] or datetime.date.today().isoformat(),
             nfe["valor_total"],
-            False,
+            "False",
             nfe["chave"],
             f"{nfe['numero']}/{nfe['serie']}",
             "recebido",
@@ -456,7 +456,7 @@ if st.button(f"✅ Confirmar Compra Avulsa ({len(itens_para_salvar)} itens)", us
 
             linhas_hp.append([
                 prox_hp, pid, fid, "",
-                item["vunit"], apres, fator, preco_norm, True,
+                item["vunit"], apres, fator, preco_norm, "True",
                 nfe["data"] or datetime.date.today().isoformat(),
             ])
             prox_hp += 1

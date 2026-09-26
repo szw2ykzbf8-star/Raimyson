@@ -113,7 +113,7 @@ with tab_unidades:
                 st.markdown("&nbsp;")
                 btn_ativo = "❌ Inativar" if ativo_val else "✅ Ativar"
                 if st.button(btn_ativo, key=f"und_toggle_{i}", use_container_width=True):
-                    df_unidades.at[i, "ativo"] = not ativo_val
+                    df_unidades.at[i, "ativo"] = str(not ativo_val)
                     escrever_df("unidades", df_unidades)
                     st.cache_data.clear()
                     st.rerun()
@@ -162,7 +162,7 @@ with tab_unidades:
                 append_linha("unidades", [
                     novo_id, nome_n.strip(), fantasia_n.strip(), cnpj_n.strip(),
                     cep_n.strip(), log_n.strip(), num_n.strip(), comp_n.strip(),
-                    bairro_n.strip(), cid_n.strip(), est_n.strip(), True,
+                    bairro_n.strip(), cid_n.strip(), est_n.strip(), "True",
                 ])
                 st.success(f"Unidade '{nome_n}' adicionada!")
                 st.session_state["und_form_v"] += 1
@@ -213,7 +213,7 @@ with tab_unidades_medida:
                 st.markdown("&nbsp;")
                 btn_label = "❌ Inativar" if ativo_val else "✅ Ativar"
                 if st.button(btn_label, key=f"um_toggle_{i}", use_container_width=True):
-                    df_um.at[i, "ativo"] = not ativo_val
+                    df_um.at[i, "ativo"] = str(not ativo_val)
                     escrever_df("unidades_medida", df_um)
                     st.cache_data.clear()
                     st.rerun()
@@ -243,7 +243,7 @@ with tab_unidades_medida:
                 st.error(f"A sigla '{nova_sigla}' já existe.")
             else:
                 novo_id = int(df_um["id"].max()) + 1 if not df_um.empty else 1
-                append_linha("unidades_medida", [novo_id, nova_sigla.strip(), nova_desc_um.strip(), True])
+                append_linha("unidades_medida", [novo_id, nova_sigla.strip(), nova_desc_um.strip(), "True"])
                 st.success(f"Unidade '{nova_sigla.strip()}' adicionada!")
                 st.session_state["um_form_v"] += 1
                 st.cache_data.clear()
@@ -345,7 +345,7 @@ with tab_usuarios:
                     st.markdown("&nbsp;")
                     btn_ativo = "❌ Inativar" if ativo_val else "✅ Ativar"
                     if st.button(btn_ativo, key=f"toggle_{i}", use_container_width=True):
-                        df_usuarios.at[i, "ativo"] = not ativo_val
+                        df_usuarios.at[i, "ativo"] = str(not ativo_val)
                         escrever_df("usuarios", df_usuarios)
                         st.cache_data.clear()
                         st.rerun()
@@ -364,7 +364,7 @@ with tab_usuarios:
                                 st.error("Senhas não coincidem.")
                             else:
                                 df_usuarios.at[i, "senha_hash"] = hash_senha(nova_s)
-                                df_usuarios.at[i, "trocar_senha"] = True
+                                df_usuarios.at[i, "trocar_senha"] = "True"
                                 escrever_df("usuarios", df_usuarios)
                                 st.session_state["reset_v"][str(i)] = rv + 1
                                 st.success("Senha redefinida. Usuário deverá trocá-la no próximo login.")
@@ -414,7 +414,7 @@ with tab_usuarios:
                 perm_str = "" if perfil_u == "admin" else _perm_keys_to_stored(novas_perm_u)
                 append_linha("usuarios", [
                     novo_id, nome_u.strip(), login_u.strip(),
-                    hash_senha(senha_u), perfil_u, acesso_str, True, True, perm_str,
+                    hash_senha(senha_u), perfil_u, acesso_str, "True", "True", perm_str,
                 ])
                 st.success(f"Usuário '{login_u}' criado! Ele deverá trocar a senha no primeiro login.")
                 st.session_state["usr_form_v"] += 1
