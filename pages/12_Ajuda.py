@@ -184,9 +184,11 @@ _FL_COTACOES = [
     {"t":"p","text":"Selecionar os fornecedores participantes"},
     {"t":"p","text":"Clicar em Iniciar Cotação"},
     {"t":"p","text":"Copiar e enviar o link para cada fornecedor"},
-    {"t":"d","text":"Todos os fornecedores responderam?","yes":"Sim","no":"Não → aguardar ou|encerrar manualmente"},
-    {"t":"p","text":"Encerrar a Cotação"},
-    {"t":"p","text":"Ir para Análise de Preços"},
+    {"t":"d","text":"Todos os fornecedores responderam?","yes":"Sim","no":"Não → aguardar ou|fechar prazo"},
+    {"t":"p","text":"Fechar prazo (🔒) → status Em Compra"},
+    {"t":"p","text":"Ir para Análise de Preços e gerar pedidos"},
+    {"t":"p","text":"Em Pedido de Compra, clicar Enviado em cada fornecedor"},
+    {"t":"p","text":"Cotação encerrada automaticamente"},
     {"t":"e","text":"Fim"},
 ]
 
@@ -379,11 +381,20 @@ if "💰 Cotações" in ti:
 - Para permitir que um fornecedor **corrija** sua resposta, clique em **🔓 Liberar** — isso apaga a resposta atual e libera o preenchimento novamente.
             """)
 
-        with st.expander("📌 Como alterar o prazo ou encerrar a cotação"):
+        with st.expander("📌 Como alterar o prazo ou avançar o ciclo da cotação"):
             st.markdown("""
-- **Alterar prazo:** dentro da cotação em andamento, use o formulário de alteração de prazo e clique em **Salvar prazo**.
-- **Encerrar antecipadamente:** clique em **⛔ Encerrar cotação** a qualquer momento, mesmo antes do prazo.
-- **Reabrir:** na aba **Encerradas**, clique em **Reabrir cotação** para permitir novas respostas.
+Uma cotação passa por três status ao longo do ciclo:
+
+| Status | Significado |
+|--------|-------------|
+| 🟢 **Aberta** | Fornecedores ainda podem preencher os preços |
+| 🔵 **Em Compra** | Prazo fechado; análise e geração de pedidos em andamento |
+| ✅ **Encerrada** | Todos os pedidos enviados; cotação finalizada |
+
+- **Alterar prazo:** dentro de uma cotação Aberta, use o formulário de alteração de prazo e clique em **Salvar prazo**.
+- **Fechar prazo:** clique em **🔒 Fechar prazo** para impedir novas respostas e avançar para *Em Compra*. Faça isso antes de ir para Análise de Preços.
+- **Encerramento automático:** quando você clicar em **✅ Enviado** no último pedido de compra gerado para essa cotação, o sistema a encerra automaticamente.
+- **Reabrir:** na aba **Encerradas**, clique em **Reabrir cotação** para permitir novas respostas dos fornecedores.
 - **Excluir** *(somente Administrador)*: na aba **Encerradas**, clique em **🗑️ Excluir** e confirme. Isso apaga a cotação, todos os links e todas as respostas vinculadas. **Esta ação não pode ser desfeita.**
             """)
 
