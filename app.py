@@ -148,4 +148,13 @@ if st.sidebar.button("Sair", use_container_width=True):
     del st.session_state["usuario"]
     st.rerun()
 
+st.sidebar.markdown(
+    "<div style='text-align:center;font-size:0.62em;color:#aaa;margin-top:10px;line-height:1.6'>"
+    "Desenvolvido por <b>Raimyson Felix</b><br>"
+    "para <b>Grupo H Hotéis</b><br>"
+    "© 2026 · Todos os direitos reservados"
+    "</div>",
+    unsafe_allow_html=True,
+)
+
 pg.run()

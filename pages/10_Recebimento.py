@@ -74,6 +74,7 @@ df_fornec      = ler_df("fornecedores")
 df_itens_c     = ler_df("itens_compra")
 df_produtos    = ler_df("produtos")
 df_mapeamento  = ler_df("nfe_mapeamento")
+df_unidades    = ler_df("unidades")
 
 # ── Build product lookup ──────────────────────────────────────────────────────
 
@@ -120,15 +121,26 @@ if not df_fornec.empty:
     for _, r in df_fornec.iterrows():
         nome_fornec[int(r["id"])] = str(r["razao_social"])
 
+unid_fantasia = {}
+if not df_unidades.empty:
+    for _, r in df_unidades.iterrows():
+        _nm = str(r.get("nome", "") or "").strip()
+        _nf = str(r.get("nome_fantasia", "") or "").strip()
+        if _nm:
+            unid_fantasia[_nm] = _nf if _nf else _nm
+
 compras_opts = {"— Selecione —": None}
 for _, r in df_compras.iterrows():
     fid    = int(float(r.get("fornecedor_id") or 0))
     fnome  = nome_fornec.get(fid, f"Fornecedor {fid}")
+    unid   = str(r.get("unidade", "") or "").strip()
+    hotel  = unid_fantasia.get(unid, unid)
     data   = str(r.get("data_compra", ""))[:10]
     status = str(r.get("status_recebimento", "") or "pendente")
     chave  = str(r.get("nfe_chave", "") or "").strip()
     icone  = "✅" if chave else "🕐"
-    label  = f"{icone} Compra #{int(r['id'])} — {fnome} — {data} — {status}"
+    hotel_part = f" — {hotel}" if hotel else ""
+    label  = f"{icone} Compra #{int(r['id'])} — {fnome}{hotel_part} — {data} — {status}"
     compras_opts[label] = int(r["id"])
 
 compra_sel_label = st.selectbox("Ordem de Compra", list(compras_opts.keys()))

@@ -66,32 +66,163 @@ if not df_unidades.empty:
 def _unid_label(u: str) -> str:
     return _unid_fantasia.get(str(u), str(u))
 
-# ── Cotação selector ──────────────────────────────────────────────────────────
-cotacoes_com_resp = pd.DataFrame()
-if not df_cotacoes.empty and not df_respostas.empty:
-    ids_com_resp = set(df_respostas["cotacao_id"].apply(_safe_int).unique())
-    cotacoes_com_resp = df_cotacoes[
-        df_cotacoes["status"].isin(["aberta", "encerrada"]) &
-        df_cotacoes["id"].apply(_safe_int).isin(ids_com_resp)
+# Mapas globais (usados nas duas tabs)
+prod_map = {_safe_int(r["id"]): r for _, r in df_produtos.iterrows()} if not df_produtos.empty else {}
+forn_map = {_safe_int(r["id"]): r for _, r in df_fornecedores.iterrows()} if not df_fornecedores.empty else {}
+
+# ── Separar cotações ativas vs encerradas ────────────────────────────────────
+_ids_com_resp = set()
+if not df_respostas.empty:
+    _ids_com_resp = set(df_respostas["cotacao_id"].apply(_safe_int).unique())
+
+_cots_ativas = pd.DataFrame()
+_cots_enc    = pd.DataFrame()
+if not df_cotacoes.empty:
+    _cots_ativas = df_cotacoes[
+        (df_cotacoes["status"] == "aberta") &
+        df_cotacoes["id"].apply(_safe_int).isin(_ids_com_resp)
+    ]
+    _cots_enc = df_cotacoes[
+        (df_cotacoes["status"] == "encerrada") &
+        df_cotacoes["id"].apply(_safe_int).isin(_ids_com_resp)
     ]
 
-if cotacoes_com_resp.empty:
-    st.info("Nenhuma cotação com respostas disponível para análise.")
+tab_ativa, tab_enc = st.tabs(["📋 Cotação Ativa", "📁 Encerradas (consulta)"])
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB ENCERRADAS (read-only)
+# ─────────────────────────────────────────────────────────────────────────────
+with tab_enc:
+    if _cots_enc.empty:
+        st.info("Nenhuma cotação encerrada com respostas.")
+    else:
+        def _label_enc(x):
+            row = _cots_enc[_cots_enc["id"].apply(_safe_int) == _safe_int(x)]
+            if row.empty:
+                return f"Cotação #{_safe_int(x)}"
+            nome = str(row.iloc[0].get("nome", "") or "").strip()
+            return nome if nome else f"Cotação #{_safe_int(x)}"
+
+        cot_enc_sel = _safe_int(st.selectbox(
+            "Cotação encerrada", options=_cots_enc["id"].tolist(),
+            format_func=_label_enc, key="enc_sel",
+        ))
+
+        resps_enc = (
+            df_respostas[df_respostas["cotacao_id"].apply(_safe_int) == cot_enc_sel].copy()
+            if not df_respostas.empty else pd.DataFrame()
+        )
+        if resps_enc.empty:
+            st.warning("Nenhuma resposta registrada para esta cotação.")
+        else:
+            prod_ids_enc = sorted({_safe_int(r["produto_id"]) for _, r in resps_enc.iterrows()})
+            forn_ids_enc = sorted({_safe_int(r["fornecedor_id"]) for _, r in resps_enc.iterrows()})
+
+            st.caption("🔒 Visualização somente leitura — nenhuma informação foi alterada.")
+            st.markdown("---")
+
+            # Cabeçalho
+            _cols_e = [2.5, 1.5] + [1.8] * len(forn_ids_enc)
+            hdr_e = st.columns(_cols_e)
+            hdr_e[0].markdown("**Produto**")
+            hdr_e[1].markdown("**Qtd**")
+            for _i, _fid in enumerate(forn_ids_enc):
+                _fn = str(forn_map.get(_fid, {}).get("razao_social", f"#{_fid}"))
+                _fn_c = (_fn[:20] + "…") if len(_fn) > 20 else _fn
+                hdr_e[2 + _i].markdown(f"**{_fn_c}**")
+
+            # Checar compras para esta cotação (para marcar vencedores)
+            _compras_enc = (
+                df_compras[df_compras["cotacao_id"].apply(_safe_int) == cot_enc_sel]
+                if not df_compras.empty and "cotacao_id" in df_compras.columns else pd.DataFrame()
+            )
+            _forn_comprado = set()
+            if not _compras_enc.empty:
+                _forn_comprado = set(_compras_enc["fornecedor_id"].apply(_safe_int).unique())
+
+            # Tabela de preços
+            peds_enc = (
+                df_pedidos[df_pedidos["cotacao_id"].apply(_safe_int) == cot_enc_sel]
+                if not df_pedidos.empty and "cotacao_id" in df_pedidos.columns else pd.DataFrame()
+            )
+            for _pid in prod_ids_enc:
+                _prod = prod_map.get(_pid, {})
+                _nome_p = str(_prod.get("descricao", f"Produto {_pid}"))
+                _apres  = str(_prod.get("apresentacao", ""))
+                _qtd_tot = 0.0
+                if not peds_enc.empty and not df_itens.empty:
+                    for _, _ped in peds_enc.iterrows():
+                        _it = df_itens[
+                            (df_itens["pedido_id"].apply(_safe_int) == _safe_int(_ped["id"])) &
+                            (df_itens["produto_id"].apply(_safe_int) == _pid)
+                        ]
+                        if not _it.empty:
+                            _qtd_tot += _safe_float(_it.iloc[0]["quantidade"])
+
+                _row_e = st.columns(_cols_e)
+                _row_e[0].markdown(f"**{_nome_p}**")
+                if _apres:
+                    _row_e[0].caption(_apres)
+                _row_e[1].markdown(f"{_qtd_tot:g}")
+
+                _resps_p = {
+                    _safe_int(r["fornecedor_id"]): r
+                    for _, r in resps_enc[resps_enc["produto_id"].apply(_safe_int) == _pid].iterrows()
+                }
+                _precos_p = [(fid, _preco_norm(r["preco"], r.get("tipo_embalagem",""), r.get("qtd_por_embalagem",1)))
+                             for fid, r in _resps_p.items()]
+                _melhor_fid = min(_precos_p, key=lambda x: x[1])[0] if _precos_p else None
+
+                for _i, _fid in enumerate(forn_ids_enc):
+                    with _row_e[2 + _i]:
+                        if _fid not in _resps_p:
+                            st.caption("—")
+                            continue
+                        _r = _resps_p[_fid]
+                        _pn = _preco_norm(_r["preco"], _r.get("tipo_embalagem",""), _r.get("qtd_por_embalagem",1))
+                        _comprou = _fid in _forn_comprado
+                        _is_best = _fid == _melhor_fid
+                        if _comprou:
+                            _bg = "background:#dbeafe;border:2px solid #3b82f6;border-radius:6px;padding:5px"
+                            _badge = "<br><small style='color:#1d4ed8'>✓ Comprado</small>"
+                        elif _is_best:
+                            _bg = "background:#dcfce7;border:1px solid #86efac;border-radius:6px;padding:5px"
+                            _badge = "<br><small style='color:#15803d'>★ Melhor</small>"
+                        else:
+                            _bg = "border:1px solid #e5e7eb;border-radius:6px;padding:5px"
+                            _badge = ""
+                        st.markdown(
+                            f"<div style='{_bg}'><b>R$ {_pn:.2f}</b>{_badge}</div>",
+                            unsafe_allow_html=True,
+                        )
+                        if str(_r.get("marca","")).strip():
+                            st.caption(f"🏷️ {str(_r['marca'])[:20]}")
+
+                st.markdown("<hr style='margin:4px 0'>", unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB ATIVA
+# ─────────────────────────────────────────────────────────────────────────────
+cotacao_sel = None  # será definido dentro da tab ativa
+with tab_ativa:
+    if _cots_ativas.empty:
+        st.info("Nenhuma cotação ativa com respostas disponível para análise.")
+    else:
+        cotacoes_com_resp = _cots_ativas
+
+        def _label_cot(x):
+            row = cotacoes_com_resp[cotacoes_com_resp["id"].apply(_safe_int) == _safe_int(x)]
+            if row.empty:
+                return f"Cotação #{_safe_int(x)}"
+            nome = str(row.iloc[0].get("nome", "") or "").strip()
+            return nome if nome else f"Cotação #{_safe_int(x)}"
+
+        cotacao_sel = _safe_int(st.selectbox(
+            "Cotação", options=cotacoes_com_resp["id"].tolist(), format_func=_label_cot,
+        ))
+
+if cotacao_sel is None:
     st.stop()
-
-def _label_cot(x):
-    row = cotacoes_com_resp[cotacoes_com_resp["id"].apply(_safe_int) == _safe_int(x)]
-    if row.empty:
-        return f"Cotação #{_safe_int(x)}"
-    nome = str(row.iloc[0].get("nome", "") or "").strip()
-    status = str(row.iloc[0]["status"]).capitalize()
-    if nome:
-        return f"{nome} — {status}"
-    return f"Cotação #{_safe_int(x)} — {status}"
-
-cotacao_sel = _safe_int(st.selectbox(
-    "Cotação", options=cotacoes_com_resp["id"].tolist(), format_func=_label_cot,
-))
 
 # Nome da cotação selecionada (para PDF e nome de arquivo)
 _cot_row = cotacoes_com_resp[cotacoes_com_resp["id"].apply(_safe_int) == cotacao_sel]
@@ -106,9 +237,6 @@ respostas = (
 if respostas.empty:
     st.warning("Nenhuma resposta de fornecedor para esta cotação.")
     st.stop()
-
-prod_map = {_safe_int(r["id"]): r for _, r in df_produtos.iterrows()} if not df_produtos.empty else {}
-forn_map = {_safe_int(r["id"]): r for _, r in df_fornecedores.iterrows()} if not df_fornecedores.empty else {}
 
 forn_ids = sorted({_safe_int(r["fornecedor_id"]) for _, r in respostas.iterrows()})
 prod_ids = sorted({_safe_int(r["produto_id"]) for _, r in respostas.iterrows()})

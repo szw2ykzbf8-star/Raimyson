@@ -2,8 +2,26 @@ import secrets
 import streamlit as st
 import pandas as pd
 import datetime
+from zoneinfo import ZoneInfo
 from modules.google_sheets import ler_df, append_linha
 from config import TIPOS_EMBALAGEM as _TIPOS_FALLBACK
+
+_TZ_BR = ZoneInfo("America/Sao_Paulo")
+
+
+def _agora_br() -> datetime.datetime:
+    return datetime.datetime.now(_TZ_BR)
+
+
+def _prazo_br(iso_str: str) -> datetime.datetime:
+    """Converte string ISO para datetime com fuso horário Brasil."""
+    try:
+        dt = datetime.datetime.fromisoformat(str(iso_str))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=_TZ_BR)
+        return dt.astimezone(_TZ_BR)
+    except Exception:
+        return datetime.datetime.max.replace(tzinfo=_TZ_BR)
 
 
 def _tipos_embalagem():
@@ -67,12 +85,8 @@ def mostrar_pagina_publica(token: str):
     nome_forn = str(forn_row.iloc[0]["razao_social"]) if not forn_row.empty else "Fornecedor"
 
     # ── Verificar prazo ───────────────────────────────────────────────────────
-    try:
-        prazo_dt = datetime.datetime.fromisoformat(str(cot["prazo_limite"]))
-    except Exception:
-        prazo_dt = datetime.datetime.max
-
-    encerrada = str(cot.get("status", "aberta")) != "aberta" or datetime.datetime.now() > prazo_dt
+    prazo_dt  = _prazo_br(str(cot["prazo_limite"]))
+    encerrada = str(cot.get("status", "aberta")) != "aberta" or _agora_br() > prazo_dt
 
     st.markdown(f"### Olá, **{nome_forn}**!")
     col_p, col_c = st.columns(2)

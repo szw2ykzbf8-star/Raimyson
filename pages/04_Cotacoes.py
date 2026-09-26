@@ -1,9 +1,10 @@
 import streamlit as st
 import pandas as pd
 import datetime
+from zoneinfo import ZoneInfo
 from modules.auth import requer_permissao
 from modules.google_sheets import ler_df, escrever_df, append_linha, get_sheet
-from modules.cotacao_publica import gerar_token
+from modules.cotacao_publica import gerar_token, _prazo_br, _agora_br
 from config import TIPOS_EMBALAGEM, BASE_URL
 
 usuario = requer_permissao("cotacoes")
@@ -140,12 +141,8 @@ with tab_abertas:
             cot_id = _safe_int(cot["id"])
             nome_cot_val = str(cot.get("nome", "") or "").strip()
             label_cot_aberta = nome_cot_val if nome_cot_val else f"#{cot_id}"
-            try:
-                prazo_dt = datetime.datetime.fromisoformat(str(cot["prazo_limite"]))
-            except Exception:
-                prazo_dt = datetime.datetime.max
-
-            expirada = datetime.datetime.now() > prazo_dt
+            prazo_dt     = _prazo_br(str(cot["prazo_limite"]))
+            expirada     = _agora_br() > prazo_dt
             status_label = "⏰ Expirada" if expirada else "🟢 Aberta"
 
             with st.expander(
@@ -210,12 +207,13 @@ with tab_abertas:
                 with st.form(f"prazo_{cot_id}"):
                     st.markdown("**Alterar prazo:**")
                     c1, c2 = st.columns(2)
+                    _prazo_local = prazo_dt.astimezone(ZoneInfo("America/Sao_Paulo"))
                     novo_prazo = c1.date_input(
-                        "Nova data", value=prazo_dt.date(), key=f"nd_{cot_id}",
+                        "Nova data", value=_prazo_local.date(), key=f"nd_{cot_id}",
                         format="DD/MM/YYYY",
                     )
                     nova_hora = c2.time_input(
-                        "Nova hora", value=prazo_dt.time(), key=f"nh_{cot_id}",
+                        "Nova hora", value=_prazo_local.time(), key=f"nh_{cot_id}",
                         step=3600,
                     )
                     salvar_prazo = st.form_submit_button("Salvar prazo")
@@ -257,7 +255,7 @@ with tab_encerradas:
             nome_cot_enc = str(cot.get("nome", "") or "").strip()
             label_cot_enc = nome_cot_enc if nome_cot_enc else f"#{cot_id}"
             try:
-                prazo_dt = datetime.datetime.fromisoformat(str(cot["prazo_limite"]))
+                prazo_dt  = _prazo_br(str(cot["prazo_limite"]))
                 prazo_str = prazo_dt.strftime("%d/%m/%Y %H:%M")
             except Exception:
                 prazo_str = "—"
