@@ -1,7 +1,8 @@
 import streamlit as st
+from modules.auth import requer_login
 from modules.google_sheets import ler_df
 
-usuario = st.session_state.get("usuario", {})
+usuario = requer_login()
 
 st.title("Dashboard")
 st.markdown(f"Bem-vindo, **{usuario.get('nome', '')}**!")

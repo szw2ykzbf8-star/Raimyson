@@ -122,8 +122,7 @@ def _get_permissoes(usuario: dict) -> set:
 
 def requer_login():
     if "usuario" not in st.session_state:
-        login_page()
-        st.stop()
+        st.switch_page("app.py")
     return st.session_state["usuario"]
 
 
