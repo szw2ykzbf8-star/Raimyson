@@ -212,17 +212,22 @@ with tab_lista:
 # ── Tab: Novo ─────────────────────────────────────────────────────────────────
 
 with tab_novo:
+    if "forn_form_v" not in st.session_state:
+        st.session_state["forn_form_v"] = 0
+
+    _fv = st.session_state["forn_form_v"]
+
     st.markdown("#### Consultar CNPJ")
     col_ci, col_cb = st.columns([3, 1])
     with col_ci:
         cnpj_busca = st.text_input(
             "CNPJ",
             placeholder="00.000.000/0000-00 ou apenas os 14 dígitos",
-            key="novo_cnpj_busca",
+            key=f"novo_cnpj_busca_{_fv}",
         )
     with col_cb:
         st.markdown("&nbsp;", unsafe_allow_html=True)
-        if st.button("🔍 Consultar", use_container_width=True, key="btn_consultar_cnpj"):
+        if st.button("🔍 Consultar", use_container_width=True, key=f"btn_consultar_cnpj_{_fv}"):
             digits = limpar_cnpj(cnpj_busca)
             if len(digits) != 14:
                 st.error("CNPJ deve ter 14 dígitos.")
@@ -245,15 +250,12 @@ with tab_novo:
     st.markdown("---")
     st.markdown("#### Dados do Fornecedor")
 
-    if "forn_form_v" not in st.session_state:
-        st.session_state["forn_form_v"] = 0
-
-    with st.form(f"novo_fornecedor_{st.session_state['forn_form_v']}"):
+    with st.form(f"novo_fornecedor_{_fv}"):
         col1, col2 = st.columns(2)
         with col1:
             razao_social  = st.text_input("Razão Social *",  value=dados.get("razao_social",  ""))
             nome_fantasia = st.text_input("Nome Fantasia",   value=dados.get("nome_fantasia",  ""))
-            cnpj_form     = st.text_input("CNPJ *",          value=dados.get("cnpj", formatar_cnpj(limpar_cnpj(cnpj_busca)) if "novo_cnpj_busca" in st.session_state else ""))
+            cnpj_form     = st.text_input("CNPJ *",          value=dados.get("cnpj", formatar_cnpj(limpar_cnpj(cnpj_busca)) if cnpj_busca else ""))
         with col2:
             nome_contato = st.text_input("Nome do Contato *", placeholder="Preenchimento manual")
             telefone     = st.text_input("Telefone/WhatsApp", value=dados.get("telefone", ""))
@@ -313,6 +315,5 @@ with tab_novo:
             st.success(f"Fornecedor '{razao_social}' cadastrado!")
             st.session_state["forn_form_v"] += 1
             st.session_state.pop("novo_cnpj_dados", None)
-            st.session_state.pop("novo_cnpj_busca", None)
             st.cache_data.clear()
             st.rerun()
