@@ -266,26 +266,29 @@ else:
             preview_h = min(total_itens * 52 + n_hoteis * 380, 950)
             components.html(html_completo, height=preview_h, scrolling=True)
 
-            # Marcar como enviado / Deletar
-            st.markdown("**Marcar como enviado:**")
-            n_cols = min(n_hoteis, 4)
-            cols_env = st.columns(n_cols)
+            # Resumo das unidades
+            st.markdown("**Unidades neste pedido:**")
+            resumo_cols = st.columns(min(n_hoteis, 4))
             for i, info in enumerate(compras_info):
-                with cols_env[i % n_cols]:
-                    st.caption(f"{info['label']} — R$ {info['valor']:.2f}")
-                    btn_env, btn_del = st.columns(2)
-                    with btn_env:
-                        if st.button("✅ Enviado", key=f"env_{info['cid']}", use_container_width=True):
-                            idx = df_compras[df_compras["id"].apply(_safe_int) == info["cid"]].index[0]
-                            df_compras.at[idx, "pedido_gerado"] = "True"
-                            escrever_df("compras", df_compras)
-                            st.cache_data.clear()
-                            st.rerun()
-                    with btn_del:
-                        if st.button("🗑️ Deletar", key=f"del_{info['cid']}", use_container_width=True):
-                            df_compras_upd = df_compras[df_compras["id"].apply(_safe_int) != info["cid"]].reset_index(drop=True)
-                            df_itens_upd = df_itens_compra[df_itens_compra["compra_id"].apply(_safe_int) != info["cid"]].reset_index(drop=True)
-                            escrever_df("compras", df_compras_upd)
-                            escrever_df("itens_compra", df_itens_upd)
-                            st.cache_data.clear()
-                            st.rerun()
+                resumo_cols[i % min(n_hoteis, 4)].caption(f"{info['label']} — R$ {info['valor']:.2f}")
+
+            # Um único Enviado / Deletar para o fornecedor inteiro
+            todos_cids = [info["cid"] for info in compras_info]
+            col_env, col_del = st.columns(2)
+            with col_env:
+                if st.button("✅ Marcar tudo como enviado", key=f"env_{fid}", use_container_width=True):
+                    for cid_env in todos_cids:
+                        idx = df_compras[df_compras["id"].apply(_safe_int) == cid_env].index
+                        if len(idx):
+                            df_compras.at[idx[0], "pedido_gerado"] = "True"
+                    escrever_df("compras", df_compras)
+                    st.cache_data.clear()
+                    st.rerun()
+            with col_del:
+                if st.button("🗑️ Deletar pedido", key=f"del_{fid}", use_container_width=True):
+                    df_compras_upd = df_compras[~df_compras["id"].apply(_safe_int).isin(todos_cids)].reset_index(drop=True)
+                    df_itens_upd = df_itens_compra[~df_itens_compra["compra_id"].apply(_safe_int).isin(todos_cids)].reset_index(drop=True)
+                    escrever_df("compras", df_compras_upd)
+                    escrever_df("itens_compra", df_itens_upd)
+                    st.cache_data.clear()
+                    st.rerun()
