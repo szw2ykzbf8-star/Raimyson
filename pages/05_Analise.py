@@ -79,7 +79,7 @@ _cots_ativas = pd.DataFrame()
 _cots_enc    = pd.DataFrame()
 if not df_cotacoes.empty:
     _cots_ativas = df_cotacoes[
-        (df_cotacoes["status"] == "aberta") &
+        df_cotacoes["status"].isin(["aberta", "em_compra"]) &
         df_cotacoes["id"].apply(_safe_int).isin(_ids_com_resp)
     ]
     _cots_enc = df_cotacoes[

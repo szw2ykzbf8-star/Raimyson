@@ -131,21 +131,28 @@ with tab_nova:
 
 # ── Em Andamento ──────────────────────────────────────────────────────────────
 with tab_abertas:
-    cotacoes_abertas = (
-        df_cotacoes[df_cotacoes["status"] == "aberta"]
+    cotacoes_andamento = (
+        df_cotacoes[df_cotacoes["status"].isin(["aberta", "em_compra"])]
         if not df_cotacoes.empty else pd.DataFrame()
     )
 
-    if cotacoes_abertas.empty:
+    if cotacoes_andamento.empty:
         st.info("Nenhuma cotação em andamento.")
     else:
-        for _, cot in cotacoes_abertas.iterrows():
-            cot_id = _safe_int(cot["id"])
+        for _, cot in cotacoes_andamento.iterrows():
+            cot_id      = _safe_int(cot["id"])
+            status_cot  = str(cot.get("status", "aberta"))
             nome_cot_val = str(cot.get("nome", "") or "").strip()
             label_cot_aberta = nome_cot_val if nome_cot_val else f"#{cot_id}"
-            prazo_dt     = _prazo_br(str(cot["prazo_limite"]))
-            expirada     = _agora_br() > prazo_dt
-            status_label = "⏰ Expirada" if expirada else "🟢 Aberta"
+            prazo_dt    = _prazo_br(str(cot["prazo_limite"]))
+            expirada    = _agora_br() > prazo_dt
+
+            if status_cot == "em_compra":
+                status_label = "🔵 Em compra"
+            elif expirada:
+                status_label = "⏰ Expirada"
+            else:
+                status_label = "🟢 Aberta"
 
             with st.expander(
                 f"{label_cot_aberta} — {status_label} — Prazo: {prazo_dt.strftime('%d/%m/%Y %H:%M')}"
@@ -165,81 +172,86 @@ with tab_abertas:
                     resps_cot["fornecedor_id"].apply(_safe_int).tolist()
                 ) if not resps_cot.empty else set()
 
-                n_resp = len(forn_responderam)
+                n_resp  = len(forn_responderam)
                 n_total = len(toks_cot)
                 st.write(f"Respostas recebidas: **{n_resp}/{n_total}** fornecedores")
 
-                # Status por fornecedor + link
-                if not toks_cot.empty:
-                    st.markdown("**Links e situação:**")
-                    for _, tr in toks_cot.iterrows():
-                        fid = _safe_int(tr["fornecedor_id"])
-                        tok = str(tr["token"])
-                        forn_row = (
-                            df_fornecedores[df_fornecedores["id"].apply(_safe_int) == fid]
-                            if not df_fornecedores.empty else pd.DataFrame()
+                if status_cot == "em_compra":
+                    st.info(
+                        "🔵 Prazo encerrado — pedidos de compra em andamento. "
+                        "A cotação será arquivada automaticamente quando todos os pedidos forem marcados como Enviado."
+                    )
+                else:
+                    # Status por fornecedor + link
+                    if not toks_cot.empty:
+                        st.markdown("**Links e situação:**")
+                        for _, tr in toks_cot.iterrows():
+                            fid = _safe_int(tr["fornecedor_id"])
+                            tok = str(tr["token"])
+                            forn_row = (
+                                df_fornecedores[df_fornecedores["id"].apply(_safe_int) == fid]
+                                if not df_fornecedores.empty else pd.DataFrame()
+                            )
+                            nome_f = str(forn_row.iloc[0]["razao_social"]) if not forn_row.empty else f"Fornecedor {fid}"
+                            respondeu = fid in forn_responderam
+                            icone = "✅" if respondeu else "⏳"
+                            link = f"{BASE_URL}/?token={tok}"
+                            col_icon, col_link, col_btn = st.columns([3, 5, 2])
+                            col_icon.markdown(f"{icone} **{nome_f}**")
+                            col_link.code(link, language=None)
+                            if respondeu:
+                                if col_btn.button(
+                                    "🔓 Liberar", key=f"liberar_{cot_id}_{fid}",
+                                    help="Apaga a resposta atual e libera novo preenchimento",
+                                    use_container_width=True,
+                                ):
+                                    df_respostas_upd = df_respostas[
+                                        ~(
+                                            (df_respostas["cotacao_id"].apply(_safe_int) == cot_id) &
+                                            (df_respostas["fornecedor_id"].apply(_safe_int) == fid)
+                                        )
+                                    ].reset_index(drop=True)
+                                    escrever_df("respostas", df_respostas_upd)
+                                    st.success(f"Resposta de {nome_f} apagada. O fornecedor pode preencher novamente.")
+                                    st.cache_data.clear()
+                                    st.rerun()
+
+                    st.markdown("---")
+
+                    # Alterar prazo
+                    with st.form(f"prazo_{cot_id}"):
+                        st.markdown("**Alterar prazo:**")
+                        c1, c2 = st.columns(2)
+                        _prazo_local = prazo_dt.astimezone(ZoneInfo("America/Sao_Paulo"))
+                        novo_prazo = c1.date_input(
+                            "Nova data", value=_prazo_local.date(), key=f"nd_{cot_id}",
+                            format="DD/MM/YYYY",
                         )
-                        nome_f = str(forn_row.iloc[0]["razao_social"]) if not forn_row.empty else f"Fornecedor {fid}"
-                        respondeu = fid in forn_responderam
-                        icone = "✅" if respondeu else "⏳"
-                        link = f"{BASE_URL}/?token={tok}"
-                        col_icon, col_link, col_btn = st.columns([3, 5, 2])
-                        col_icon.markdown(f"{icone} **{nome_f}**")
-                        col_link.code(link, language=None)
-                        if respondeu:
-                            if col_btn.button(
-                                "🔓 Liberar", key=f"liberar_{cot_id}_{fid}",
-                                help="Apaga a resposta atual e libera novo preenchimento",
-                                use_container_width=True,
-                            ):
-                                df_respostas_upd = df_respostas[
-                                    ~(
-                                        (df_respostas["cotacao_id"].apply(_safe_int) == cot_id) &
-                                        (df_respostas["fornecedor_id"].apply(_safe_int) == fid)
-                                    )
-                                ].reset_index(drop=True)
-                                escrever_df("respostas", df_respostas_upd)
-                                st.success(f"Resposta de {nome_f} apagada. O fornecedor pode preencher novamente.")
-                                st.cache_data.clear()
-                                st.rerun()
+                        nova_hora = c2.time_input(
+                            "Nova hora", value=_prazo_local.time(), key=f"nh_{cot_id}",
+                            step=3600,
+                        )
+                        salvar_prazo = st.form_submit_button("Salvar prazo")
 
-                st.markdown("---")
+                    if salvar_prazo:
+                        novo_prazo_iso = datetime.datetime.combine(novo_prazo, nova_hora).isoformat()
+                        idx = df_cotacoes[df_cotacoes["id"].apply(_safe_int) == cot_id].index[0]
+                        df_cotacoes.at[idx, "prazo_limite"] = novo_prazo_iso
+                        escrever_df("cotacoes", df_cotacoes)
+                        st.success("Prazo atualizado.")
+                        st.cache_data.clear()
+                        st.rerun()
 
-                # Alterar prazo
-                with st.form(f"prazo_{cot_id}"):
-                    st.markdown("**Alterar prazo:**")
-                    c1, c2 = st.columns(2)
-                    _prazo_local = prazo_dt.astimezone(ZoneInfo("America/Sao_Paulo"))
-                    novo_prazo = c1.date_input(
-                        "Nova data", value=_prazo_local.date(), key=f"nd_{cot_id}",
-                        format="DD/MM/YYYY",
-                    )
-                    nova_hora = c2.time_input(
-                        "Nova hora", value=_prazo_local.time(), key=f"nh_{cot_id}",
-                        step=3600,
-                    )
-                    salvar_prazo = st.form_submit_button("Salvar prazo")
-
-                if salvar_prazo:
-                    novo_prazo_iso = datetime.datetime.combine(novo_prazo, nova_hora).isoformat()
-                    idx = df_cotacoes[df_cotacoes["id"].apply(_safe_int) == cot_id].index[0]
-                    df_cotacoes.at[idx, "prazo_limite"] = novo_prazo_iso
-                    escrever_df("cotacoes", df_cotacoes)
-                    st.success("Prazo atualizado.")
-                    st.cache_data.clear()
-                    st.rerun()
-
-                # Encerrar — disponível sempre; aviso extra se ainda não venceu
-                label_enc = "⛔ Encerrar cotação" if not expirada else "Encerrar e ir para análise"
-                if not expirada:
-                    st.caption("⚠️ O prazo ainda não venceu. Você pode encerrar antecipadamente se já tiver respostas suficientes.")
-                if st.button(label_enc, key=f"enc_{cot_id}"):
-                    idx = df_cotacoes[df_cotacoes["id"].apply(_safe_int) == cot_id].index[0]
-                    df_cotacoes.at[idx, "status"] = "encerrada"
-                    escrever_df("cotacoes", df_cotacoes)
-                    st.success("Cotação encerrada. Acesse a aba Análise.")
-                    st.cache_data.clear()
-                    st.rerun()
+                    # Fechar prazo → em_compra
+                    if not expirada:
+                        st.caption("⚠️ O prazo ainda não venceu. Você pode fechar antecipadamente se já tiver respostas suficientes.")
+                    if st.button("🔒 Fechar prazo", key=f"enc_{cot_id}"):
+                        idx = df_cotacoes[df_cotacoes["id"].apply(_safe_int) == cot_id].index[0]
+                        df_cotacoes.at[idx, "status"] = "em_compra"
+                        escrever_df("cotacoes", df_cotacoes)
+                        st.success("Prazo fechado. Acesse a Análise para gerar os pedidos de compra.")
+                        st.cache_data.clear()
+                        st.rerun()
 
 
 # ── Encerradas ────────────────────────────────────────────────────────────────

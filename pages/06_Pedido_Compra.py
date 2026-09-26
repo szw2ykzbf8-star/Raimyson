@@ -282,6 +282,25 @@ else:
                         if len(idx):
                             df_compras.at[idx[0], "pedido_gerado"] = "True"
                     escrever_df("compras", df_compras)
+
+                    # Encerra cotação automaticamente se todos os pedidos foram enviados
+                    cot_ids_forn = set(compras_forn["cotacao_id"].apply(_safe_int).unique()) - {0}
+                    for cot_id_chk in cot_ids_forn:
+                        mask_cot = df_compras["cotacao_id"].apply(_safe_int) == cot_id_chk
+                        todas = df_compras[mask_cot]
+                        tudo_enviado = (
+                            not todas.empty and
+                            todas["pedido_gerado"].apply(
+                                lambda v: str(v).strip().lower() not in ("false", "0", "")
+                            ).all()
+                        )
+                        if tudo_enviado:
+                            df_cot_upd = ler_df("cotacoes")
+                            idx_cot = df_cot_upd[df_cot_upd["id"].apply(_safe_int) == cot_id_chk].index
+                            if len(idx_cot):
+                                df_cot_upd.at[idx_cot[0], "status"] = "encerrada"
+                                escrever_df("cotacoes", df_cot_upd)
+
                     st.cache_data.clear()
                     st.rerun()
             with col_del:
