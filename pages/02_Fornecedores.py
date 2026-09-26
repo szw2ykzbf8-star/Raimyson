@@ -203,7 +203,7 @@ with tab_lista:
                             df.at[i, "cep"]           = st.session_state[f"e_cep_{i}"]
                             df.at[i, "estado"]        = st.session_state[f"e_estado_{i}"]
                             df.at[i, "pedido_minimo"] = st.session_state[f"e_pedido_minimo_{i}"]
-                            df.at[i, "ativo"]         = ativo_e
+                            df.at[i, "ativo"]         = str(ativo_e)
                             escrever_df("fornecedores", df)
                             st.success("Fornecedor atualizado!")
                             st.cache_data.clear()
@@ -298,7 +298,7 @@ with tab_novo:
                 cnpj_form.strip(),
                 nome_contato.strip(),
                 telefone.strip(),
-                True,
+                "True",
                 datetime.date.today().isoformat(),
                 nome_fantasia.strip(),
                 cep.strip(),
