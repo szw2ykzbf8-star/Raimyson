@@ -136,10 +136,13 @@ if cadastros:
 if "relatorios" in permissoes:
     nav["Análises"] = [_pg("relatorios")]
 
+# IMPORTANTE: "Suporte" e "Sistema" devem ser SEMPRE os dois últimos grupos do menu,
+# nesta ordem: Suporte penúltimo, Configurações/Sistema por último.
+# Ao adicionar novos grupos de navegação, insira-os ANTES deste bloco.
+nav["Suporte"] = [ajuda]
+
 if "configuracoes" in permissoes:
     nav["Sistema"] = [_pg("configuracoes")]
-
-nav["Suporte"] = [ajuda]
 
 pg = st.navigation(nav)
 
