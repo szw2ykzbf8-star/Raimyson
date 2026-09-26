@@ -324,10 +324,9 @@ with ti["🗺️ Visão Geral"]:
     with col3:
         st.markdown("**Administrador**")
         st.markdown(
-            "Tudo que o comprador acessa, mais os módulos de **Configurações** e **Administração** — "
-            "onde é possível gerenciar unidades hoteleiras, unidades de medida, usuários, orçamentos, "
-            "realizar backup dos dados e executar **limpeza de dados** do sistema. "
-            "Também é o único perfil que pode **excluir cotações**."
+            "Tudo que o comprador acessa, mais o módulo de **Configurações** — onde é possível "
+            "gerenciar unidades hoteleiras, unidades de medida, usuários, orçamentos e realizar "
+            "backup dos dados. Também é o único perfil que pode **excluir cotações**."
         )
 
     st.markdown("---")
@@ -793,10 +792,6 @@ if "⚙️ Configurações" in ti:
         st.markdown(
             "Área exclusiva do perfil **Administrador**. Reúne o gerenciamento de unidades "
             "hoteleiras, unidades de medida, usuários, orçamentos e backup dos dados."
-        )
-        st.info(
-            "💡 Para limpeza de dados (cotações encerradas, histórico de preços, recebimentos), "
-            "acesse **Administração** no menu lateral."
         )
 
         with st.expander("📌 Unidades Hoteleiras"):

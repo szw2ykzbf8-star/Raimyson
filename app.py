@@ -110,10 +110,9 @@ else:
 # configuracoes é sempre do admin e nunca de outros perfis
 if perfil == "admin":
     permissoes.add("configuracoes")
-    permissoes.add("admin_sistema")
 else:
     permissoes.discard("configuracoes")
-    permissoes.discard("admin_sistema")
+permissoes.discard("admin_sistema")
 
 
 def _pg(chave):
