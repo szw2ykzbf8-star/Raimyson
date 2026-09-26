@@ -121,6 +121,7 @@ def _pg(chave):
 # ── Pages ────────────────────────────────────────────────────────────────────
 dashboard   = st.Page("pages/00_Dashboard.py",   title="Dashboard",     icon="🏠", default=True)
 minha_senha = st.Page("pages/09_Minha_Senha.py", title="Alterar Senha", icon="🔐")
+ajuda       = st.Page("pages/12_Ajuda.py",        title="Central de Ajuda", icon="📖")
 
 nav = {"": [dashboard, minha_senha]}
 
@@ -137,6 +138,8 @@ if "relatorios" in permissoes:
 
 if "configuracoes" in permissoes:
     nav["Sistema"] = [_pg("configuracoes")]
+
+nav["Suporte"] = [ajuda]
 
 pg = st.navigation(nav)
 
