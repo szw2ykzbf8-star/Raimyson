@@ -82,7 +82,7 @@ def mostrar_pagina_publica(token: str):
     # ── Carregar nome do fornecedor ───────────────────────────────────────────
     df_forn  = ler_df("fornecedores")
     forn_row = df_forn[df_forn["id"].apply(lambda x: int(float(x))) == fornec_id]
-    nome_forn = str(forn_row.iloc[0]["razao_social"]) if not forn_row.empty else "Fornecedor"
+    nome_forn = str(forn_row.iloc[0].get("nome_fantasia") or forn_row.iloc[0]["razao_social"]) if not forn_row.empty else "Fornecedor"
 
     # ── Verificar prazo ───────────────────────────────────────────────────────
     prazo_dt  = _prazo_br(str(cot["prazo_limite"]))

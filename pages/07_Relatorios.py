@@ -59,7 +59,7 @@ if not df_produtos.empty:
 forn_map = {}
 if not df_fornecedores.empty:
     for _, r in df_fornecedores.iterrows():
-        forn_map[_safe_int(r["id"])] = str(r.get("razao_social", ""))
+        forn_map[_safe_int(r["id"])] = str(r.get("nome_fantasia") or r.get("razao_social") or "")
 
 cot_nome_map = {}
 if not df_cotacoes.empty:

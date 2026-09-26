@@ -68,9 +68,10 @@ with tab_nova:
             selecionados = st.multiselect(
                 "Fornecedores para esta cotação",
                 options=fornecedores_ativos["id"].tolist(),
-                format_func=lambda x: fornecedores_ativos[
-                    fornecedores_ativos["id"] == x
-                ]["razao_social"].values[0],
+                format_func=lambda x: str(
+                    fornecedores_ativos[fornecedores_ativos["id"] == x]["nome_fantasia"].values[0]
+                    or fornecedores_ativos[fornecedores_ativos["id"] == x]["razao_social"].values[0]
+                ),
             )
         else:
             st.warning("Nenhum fornecedor ativo cadastrado.")
@@ -98,9 +99,8 @@ with tab_nova:
                 for fid in selecionados:
                     tok = gerar_token()
                     token_rows.append([tok_id, novo_id, fid, tok])
-                    nome_forn = fornecedores_ativos[
-                        fornecedores_ativos["id"] == fid
-                    ]["razao_social"].values[0]
+                    _r = fornecedores_ativos[fornecedores_ativos["id"] == fid]
+                    nome_forn = str(_r["nome_fantasia"].values[0] or _r["razao_social"].values[0])
                     links[nome_forn] = f"{BASE_URL}/?token={tok}"
                     tok_id += 1
 
@@ -192,7 +192,7 @@ with tab_abertas:
                                 df_fornecedores[df_fornecedores["id"].apply(_safe_int) == fid]
                                 if not df_fornecedores.empty else pd.DataFrame()
                             )
-                            nome_f = str(forn_row.iloc[0]["razao_social"]) if not forn_row.empty else f"Fornecedor {fid}"
+                            nome_f = str(forn_row.iloc[0].get("nome_fantasia") or forn_row.iloc[0]["razao_social"]) if not forn_row.empty else f"Fornecedor {fid}"
                             respondeu = fid in forn_responderam
                             icone = "✅" if respondeu else "⏳"
                             link = f"{BASE_URL}/?token={tok}"

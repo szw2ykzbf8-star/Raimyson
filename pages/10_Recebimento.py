@@ -119,7 +119,7 @@ if df_compras.empty:
 nome_fornec = {}
 if not df_fornec.empty:
     for _, r in df_fornec.iterrows():
-        nome_fornec[int(r["id"])] = str(r["razao_social"])
+        nome_fornec[int(r["id"])] = str(r.get("nome_fantasia") or r["razao_social"])
 
 unid_fantasia = {}
 if not df_unidades.empty:

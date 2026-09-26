@@ -127,7 +127,7 @@ with tab_enc:
             hdr_e[0].markdown("**Produto**")
             hdr_e[1].markdown("**Qtd**")
             for _i, _fid in enumerate(forn_ids_enc):
-                _fn = str(forn_map.get(_fid, {}).get("razao_social", f"#{_fid}"))
+                _fn = str(forn_map.get(_fid, {}).get("nome_fantasia") or forn_map.get(_fid, {}).get("razao_social") or f"#{_fid}")
                 _fn_c = (_fn[:20] + "…") if len(_fn) > 20 else _fn
                 hdr_e[2 + _i].markdown(f"**{_fn_c}**")
 
@@ -300,7 +300,7 @@ def _historico(pid):
     result = []
     for _, h in hist.iterrows():
         fid  = _safe_int(h["fornecedor_id"])
-        nome = str(forn_map.get(fid, {}).get("razao_social", f"#{fid}"))
+        nome = str(forn_map.get(fid, {}).get("nome_fantasia") or forn_map.get(fid, {}).get("razao_social") or f"#{fid}")
         pn   = _safe_float(h.get("preco_normalizado", h.get("preco", 0)))
         result.append({"data": str(h.get("data", ""))[:10], "preco": pn, "fornecedor": nome})
     return result
@@ -379,7 +379,7 @@ hdr[0].markdown("**Produto**")
 hdr[1].markdown("**Quantidade**")
 hdr[2].markdown("**Última Compra**")
 for i, fid in enumerate(forn_ids):
-    nome = str(forn_map.get(fid, {}).get("razao_social", f"#{fid}"))
+    nome = str(forn_map.get(fid, {}).get("nome_fantasia") or forn_map.get(fid, {}).get("razao_social") or f"#{fid}")
     nome_c   = (nome[:22] + "…") if len(nome) > 22 else nome
     ped_min  = _safe_float(forn_map.get(fid, {}).get("pedido_minimo", 0))
     min_txt  = f"*Mín: R$ {ped_min:.0f}*" if ped_min > 0 else ""
@@ -631,7 +631,7 @@ def _wa_link_forn(fid):
     if tel and not tel.startswith("55"):
         tel = "55" + tel
     prods_sel = [pid for pid in prod_ids if _get_sel(pid) == fid]
-    nome_forn = str(forn.get("razao_social", f"#{fid}"))
+    nome_forn = str(forn.get("nome_fantasia") or forn.get("razao_social") or f"#{fid}")
     lines = [
         "*Pedido de Compra*",
         f"Data: {datetime.date.today().strftime('%d/%m/%Y')}",
@@ -681,7 +681,7 @@ foot_cols = st.columns(len(forn_ids))
 
 for i, fid in enumerate(forn_ids):
     forn     = forn_map.get(fid, {})
-    nome     = str(forn.get("razao_social", f"#{fid}"))
+    nome     = str(forn.get("nome_fantasia") or forn.get("razao_social") or f"#{fid}")
     nome_c   = (nome[:22] + "…") if len(nome) > 22 else nome
     ped_min  = _safe_float(forn.get("pedido_minimo", 0))
     tot_geral = sum(totais[fid].values())
@@ -716,7 +716,7 @@ for i, fid in enumerate(forn_ids):
         pode_comprar = tot_geral > 0 and (not avisos or ignorar)
 
         if st.session_state.get(f"{sk}_compra_done_{fid}"):
-            nome_forn_r = str(forn_map.get(fid, {}).get("razao_social", f"#{fid}"))
+            nome_forn_r = str(forn_map.get(fid, {}).get("nome_fantasia") or forn_map.get(fid, {}).get("razao_social") or f"#{fid}")
             st.success(f"✅ Compra gerada para **{nome_forn_r}**!")
             nome_safe = re.sub(r"[^\w]", "_", nome_forn_r)[:30]
             cot_safe = re.sub(r"[^\w]", "_", nome_cot)[:20] if nome_cot else f"cot{cotacao_sel}"

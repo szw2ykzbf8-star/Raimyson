@@ -263,7 +263,7 @@ with col_f:
     st.markdown("**Fornecedor (Emitente)**")
     if fornecedor_id_existente is not None:
         frow = df_fornec[df_fornec["id"].apply(lambda x: int(float(x))) == fornecedor_id_existente].iloc[0]
-        st.success(f"✅ {frow['razao_social']}")
+        st.success(f"✅ {frow.get('nome_fantasia') or frow['razao_social']}")
         st.caption(f"CNPJ: {frow.get('cnpj', formatar_cnpj(cnpj_emit_digits))}")
     else:
         st.info(
@@ -363,7 +363,7 @@ col_inf1, col_inf2 = st.columns(2)
 col_inf1.info(f"**Unidade:** {unidade_detectada}")
 if fornecedor_id_existente is not None:
     frow = df_fornec[df_fornec["id"].apply(lambda x: int(float(x))) == fornecedor_id_existente].iloc[0]
-    col_inf2.info(f"**Fornecedor:** {frow['razao_social']}")
+    col_inf2.info(f"**Fornecedor:** {frow.get('nome_fantasia') or frow['razao_social']}")
 else:
     col_inf2.info(f"**Fornecedor:** {nfe['nome_emit'] or formatar_cnpj(cnpj_emit_digits)} *(será cadastrado)*")
 

@@ -173,7 +173,7 @@ else:
 
     for fid in forn_ids_list:
         forn = forn_map.get(fid, {})
-        nome_forn = str(forn.get("razao_social", f"#{fid}"))
+        nome_forn = str(forn.get("nome_fantasia") or forn.get("razao_social") or f"#{fid}")
         compras_forn = compras_pendentes[
             compras_pendentes["fornecedor_id"].apply(_safe_int) == fid
         ].sort_values("unidade")
