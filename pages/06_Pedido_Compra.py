@@ -276,7 +276,7 @@ else:
             todos_cids = [info["cid"] for info in compras_info]
             col_env, col_del = st.columns(2)
             with col_env:
-                if st.button("✅ Marcar tudo como enviado", key=f"env_{fid}", use_container_width=True):
+                if st.button("✅ Enviado", key=f"env_{fid}", use_container_width=True):
                     for cid_env in todos_cids:
                         idx = df_compras[df_compras["id"].apply(_safe_int) == cid_env].index
                         if len(idx):
