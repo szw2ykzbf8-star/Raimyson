@@ -27,7 +27,7 @@ st.markdown("---")
 
 
 # ── Gerador de fluxograma SVG vertical ───────────────────────────────────────
-def _svg_flow(steps, w=480):
+def _svg_flow(steps, w=560):
     """
     Gera HTML com SVG de fluxograma vertical.
     Retorna (html_str, altura_px).
@@ -36,23 +36,28 @@ def _svg_flow(steps, w=480):
       t    : "s" = oval início  |  "e" = oval fim
              "p" = retângulo processo  |  "d" = losango decisão
       text : texto da forma
-      yes  : (apenas "d") rótulo da seta de continuidade (padrão "Sim")
-      no   : (apenas "d") texto da ramificação lateral, use | para quebrar linhas
+      yes  : (apenas "d") rótulo da seta Sim (padrão "Sim")
+      no   : (apenas "d") texto da caixa lateral Não, use | para quebrar linhas
     """
     cx = w // 2
-    OW, OH = 180, 46   # oval
-    RW, RH = 280, 52   # retângulo processo
-    DW, DH = 220, 60   # losango (bounding box)
-    AR     = 30         # altura da seta
-    GAP    = 6          # espaço após seta
+    OW, OH  = 180, 46    # oval
+    RW, RH  = 280, 54    # retângulo processo
+    DW      = 240        # losango largura
+    DH_MIN  = 64         # losango altura mínima
+    NW      = 138        # caixa "Não" largura
+    NLH     = 15         # altura de linha dentro da caixa Não
+    NP      = 10         # padding vertical da caixa Não
+    AR      = 30         # comprimento da seta vertical
+    GAP     = 6
 
     CS = "#27AE60"   # verde   — início
     CE = "#C0392B"   # vermelho — fim
     CP = "#2980B9"   # azul    — processo
     CD = "#E67E22"   # laranja  — decisão
-    CA = "#444444"   # seta
+    CN = "#7F8C8D"   # cinza   — caixa Não
+    CA = "#444444"   # setas
 
-    def _txt(x, y, s, fs=12, col="#fff", mw=26):
+    def _wrap(s, mw):
         words = str(s).split()
         lines, cur = [], ""
         for ww in words:
@@ -60,10 +65,15 @@ def _svg_flow(steps, w=480):
             if len(test) <= mw:
                 cur = test
             else:
-                if cur: lines.append(cur)
+                if cur:
+                    lines.append(cur)
                 cur = ww
-        if cur: lines.append(cur)
-        if not lines: lines = [str(s)]
+        if cur:
+            lines.append(cur)
+        return lines or [str(s)]
+
+    def _txt(x, y, s, fs=12, col="#fff", mw=26):
+        lines = _wrap(s, mw)
         lh = fs + 4
         sy = y - (len(lines) - 1) * lh / 2
         out = [
@@ -103,6 +113,10 @@ def _svg_flow(steps, w=480):
             bot = y + RH
 
         elif t == "d":
+            # Altura dinâmica: garante que o texto caiba no losango
+            d_lines = _wrap(step["text"], mw=22)
+            DH = max(DH_MIN, len(d_lines) * 16 + 24)
+
             my  = y + DH // 2
             pts = f"{cx},{y} {cx+DW//2},{my} {cx},{y+DH} {cx-DW//2},{my}"
             parts.append(f'<polygon points="{pts}" fill="{CD}"/>')
@@ -111,19 +125,29 @@ def _svg_flow(steps, w=480):
 
             no_txt = step.get("no", "")
             if no_txt:
-                nx = cx + DW // 2
+                no_lines = [ln.strip() for ln in no_txt.split("|")]
+                NH  = len(no_lines) * NLH + NP * 2
+                NX  = cx + DW // 2 + 18
+                NY  = my - NH // 2
+
+                # seta tracejada do losango até a caixa
                 parts.append(
-                    f'<line x1="{nx}" y1="{my}" x2="{nx+24}" y2="{my}"'
-                    f' stroke="{CA}" stroke-width="1.5" stroke-dasharray="4,2"/>'
+                    f'<line x1="{cx+DW//2}" y1="{my}" x2="{NX}" y2="{my}"'
+                    f' stroke="{CA}" stroke-width="1.5" stroke-dasharray="4,2"'
+                    f' marker-end="url(#ah)"/>'
                 )
+                # caixa cinza
                 parts.append(
-                    f'<text x="{nx+28}" y="{my-7}" font-size="10"'
-                    f' fill="#666" font-family="Arial" font-weight="bold">Não</text>'
+                    f'<rect x="{NX}" y="{NY}" width="{NW}" height="{NH}"'
+                    f' rx="8" fill="{CN}"/>'
                 )
-                for li, ln in enumerate(no_txt.split("|")):
+                # texto dentro da caixa
+                for li, ln in enumerate(no_lines):
+                    ty = NY + NP + (li + 0.72) * NLH
                     parts.append(
-                        f'<text x="{nx+28}" y="{my+7+li*13}" font-size="10"'
-                        f' fill="#555" font-family="Arial">{ln.strip()}</text>'
+                        f'<text x="{NX + NW//2}" y="{ty}" text-anchor="middle"'
+                        f' font-size="10" fill="#fff" font-family="Arial,sans-serif"'
+                        f' font-weight="bold">{ln}</text>'
                     )
         else:
             bot = y
@@ -155,8 +179,8 @@ _FL_GERAL = [
     {"t":"p","text":"Digitador cria Solicitação de Compra"},
     {"t":"p","text":"Comprador bloqueia os pedidos e vincula à Cotação"},
     {"t":"p","text":"Criar Cotação e enviar links para os Fornecedores"},
-    {"t":"d","text":"Fornecedor respondeu?","yes":"Sim","no":"Não → aguardar|ou encerrar|antecipadamente"},
-    {"t":"p","text":"Encerrar a Cotação"},
+    {"t":"d","text":"Fornecedor respondeu?","yes":"Sim","no":"Não → aguardar|ou fechar prazo"},
+    {"t":"p","text":"Fechar prazo → status Em Compra"},
     {"t":"p","text":"Analisar Preços e selecionar Fornecedor por produto"},
     {"t":"p","text":"Gerar Pedido de Compra"},
     {"t":"p","text":"Baixar PDF e enviar ao Fornecedor"},
@@ -212,7 +236,7 @@ _FL_ORDEM = [
     {"t":"p","text":"Abrir o arquivo .html baixado no navegador"},
     {"t":"p","text":"Pressionar Ctrl+P → Salvar como PDF"},
     {"t":"p","text":"Enviar o PDF ao fornecedor"},
-    {"t":"p","text":"Clicar em Marcar tudo como enviado"},
+    {"t":"p","text":"Clicar em Enviado para cada fornecedor"},
     {"t":"e","text":"Fim"},
 ]
 
