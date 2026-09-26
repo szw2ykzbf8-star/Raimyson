@@ -50,6 +50,7 @@ df_pedidos      = ler_df("pedidos")
 df_itens        = ler_df("itens_pedido")
 df_hist_precos  = ler_df("historico_precos")
 df_unidades     = ler_df("unidades")
+df_compras      = ler_df("compras")
 
 # nome → nome_fantasia map for hotel units
 _unid_fantasia = {}
@@ -183,6 +184,17 @@ sk = f"analise_{cotacao_sel}"
 _compra_pending = st.session_state.pop(f"{sk}_compra_pending", None)
 if _compra_pending is not None:
     st.session_state[f"{sk}_compra_done_{_compra_pending}"] = True
+
+# Inicializar compra_done a partir do banco (persiste refreshes e cache clears)
+if not df_compras.empty:
+    _compras_cot = df_compras[
+        (df_compras["cotacao_id"].apply(_safe_int) == cotacao_sel) &
+        (df_compras["pedido_gerado"].astype(str).str.lower().isin(["false", "0", ""]))
+    ]
+    for _fid_db in _compras_cot["fornecedor_id"].apply(_safe_int).unique():
+        _key_db = f"{sk}_compra_done_{_fid_db}"
+        if _key_db not in st.session_state:
+            st.session_state[_key_db] = True
 
 if f"{sk}_init" not in st.session_state:
     for pid in prod_ids:
@@ -601,8 +613,19 @@ for i, fid in enumerate(forn_ids):
                 with col_conf:
                     if st.button("Confirmar", key=f"{sk}_pwdok_{fid}", use_container_width=True, type="primary"):
                         if _hash_senha(senha_conf) == st.session_state["usuario"]["senha_hash"]:
+                            # Marca compras como processadas para não re-triggar o flag após refresh
+                            _mask = (
+                                (df_compras["cotacao_id"].apply(_safe_int) == cotacao_sel) &
+                                (df_compras["fornecedor_id"].apply(_safe_int) == fid) &
+                                (df_compras["pedido_gerado"].astype(str).str.lower().isin(["false", "0", ""]))
+                            )
+                            for _idx in df_compras[_mask].index:
+                                df_compras.at[_idx, "pedido_gerado"] = "True"
+                            if _mask.any():
+                                escrever_df("compras", df_compras)
                             st.session_state.pop(f"{sk}_compra_done_{fid}", None)
                             st.session_state.pop(_unlock_key, None)
+                            st.cache_data.clear()
                             st.rerun()
                         else:
                             st.error("Senha incorreta.")
