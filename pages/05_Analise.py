@@ -613,16 +613,20 @@ for i, fid in enumerate(forn_ids):
                 with col_conf:
                     if st.button("Confirmar", key=f"{sk}_pwdok_{fid}", use_container_width=True, type="primary"):
                         if _hash_senha(senha_conf) == st.session_state["usuario"]["senha_hash"]:
-                            # Marca compras como processadas para não re-triggar o flag após refresh
+                            # Exclui compras anteriores deste fornecedor nesta cotação
+                            # para evitar duplicatas na Ordem de Compra
+                            _df_itens_compra = ler_df("itens_compra")
                             _mask = (
                                 (df_compras["cotacao_id"].apply(_safe_int) == cotacao_sel) &
                                 (df_compras["fornecedor_id"].apply(_safe_int) == fid) &
                                 (df_compras["pedido_gerado"].astype(str).str.lower().isin(["false", "0", ""]))
                             )
-                            for _idx in df_compras[_mask].index:
-                                df_compras.at[_idx, "pedido_gerado"] = "True"
-                            if _mask.any():
-                                escrever_df("compras", df_compras)
+                            _cids_excluir = df_compras[_mask]["id"].apply(_safe_int).tolist()
+                            if _cids_excluir:
+                                df_compras_upd = df_compras[~df_compras["id"].apply(_safe_int).isin(_cids_excluir)].reset_index(drop=True)
+                                df_itens_upd   = _df_itens_compra[~_df_itens_compra["compra_id"].apply(_safe_int).isin(_cids_excluir)].reset_index(drop=True)
+                                escrever_df("compras", df_compras_upd)
+                                escrever_df("itens_compra", df_itens_upd)
                             st.session_state.pop(f"{sk}_compra_done_{fid}", None)
                             st.session_state.pop(_unlock_key, None)
                             st.cache_data.clear()
