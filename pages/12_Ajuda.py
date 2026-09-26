@@ -661,17 +661,39 @@ if "📈 Relatórios" in ti:
         )
         with st.expander("📌 Relatórios disponíveis"):
             st.markdown("""
-- **Compras por Período** — total de compras realizadas em um intervalo de datas, agrupadas por fornecedor ou produto.
-- **Evolução de Preços** — histórico de preços de um produto específico ao longo do tempo, por fornecedor.
-- **Consumo por Produto** — quantidade total comprada de cada produto no período selecionado.
-- **Desempenho de Fornecedores** — quantas vezes cada fornecedor ganhou cotações e comparativo de preços.
-- **Orçamento vs. Gasto** — comparativo entre o orçamento definido por unidade/mês e o valor efetivamente gasto.
+O módulo está organizado em **6 abas principais**:
+
+**1. Compras por Período**
+Visão geral das compras em um intervalo de datas com filtro por unidade hoteleira. Exibe KPIs (total gasto, número de compras, ticket médio), evolução semanal em gráfico de área e volume por fornecedor.
+
+**2. Produtos**
+- *Evolução de Preços* — histórico de preços de um produto ao longo do tempo, por fornecedor (busca por nome).
+- *Curva ABC* — classifica produtos por participação no gasto total: A (≤80%), B (80–95%), C (95–100%).
+- *Ranking por Valor* — os N produtos com maior valor total comprado.
+- *Frequência de Compra* — produtos nunca comprados, sem compra há mais de 60 dias e top 30 mais frequentes.
+
+**3. Fornecedores**
+- *Desempenho* — cotações ganhas, valor total fornecido e preço médio por fornecedor.
+- *Análise de Economia* — economia potencial vs. o preço médio de mercado.
+- *Comparativo de Preços* — tabela pivô comparando preços de um produto entre fornecedores.
+
+**4. Hotéis**
+- *Gasto por Hotel* — distribuição de gastos entre as unidades (pizza + linha mensal).
+- *Orçamento vs. Gasto* — comparativo entre orçamento mensal definido e valor efetivamente gasto.
+
+**5. Recebimentos**
+KPIs de NF-e recebidas, status (conferido / pendente), divergências de quantidade e ordens ainda sem NF-e.
+
+**6. Exportação**
+Download das principais tabelas em formato **.xlsx** (Excel).
             """)
         with st.expander("⚠️ Pontos de atenção"):
             st.markdown("""
 - Os relatórios são gerados com base nas compras já realizadas e marcadas como enviadas.
 - Para que o relatório de **Orçamento vs. Gasto** funcione, é necessário cadastrar os orçamentos mensais em **Configurações → Orçamentos**.
 - O histórico de preços é registrado automaticamente a cada compra gerada.
+- O **Comparativo de Preços** exige ao menos 2 caracteres na busca para exibir resultados.
+- A **Curva ABC** e o **Ranking** consideram apenas itens com compra registrada.
             """)
 
 
