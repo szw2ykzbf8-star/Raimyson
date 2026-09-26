@@ -287,26 +287,27 @@ with tab_encerradas:
                         st.cache_data.clear()
                         st.rerun()
                 with btn_excluir:
-                    _del_key = f"del_cot_{cot_id}"
-                    if not st.session_state.get(_del_key):
-                        if st.button("🗑️ Excluir", key=f"exc_{cot_id}", use_container_width=True):
-                            st.session_state[_del_key] = True
-                            st.rerun()
-                    else:
-                        st.warning("Isso apagará a cotação e todas as respostas. Confirma?")
-                        c1, c2 = st.columns(2)
-                        with c1:
-                            if st.button("✅ Confirmar exclusão", key=f"exc_ok_{cot_id}", use_container_width=True, type="primary"):
-                                df_tokens_upd = df_tokens[df_tokens["cotacao_id"].apply(_safe_int) != cot_id].reset_index(drop=True)
-                                df_resp_upd   = df_respostas[df_respostas["cotacao_id"].apply(_safe_int) != cot_id].reset_index(drop=True)
-                                df_cot_upd    = df_cotacoes[df_cotacoes["id"].apply(_safe_int) != cot_id].reset_index(drop=True)
-                                escrever_df("cotacao_tokens", df_tokens_upd)
-                                escrever_df("respostas", df_resp_upd)
-                                escrever_df("cotacoes", df_cot_upd)
-                                st.session_state.pop(_del_key, None)
-                                st.cache_data.clear()
+                    if usuario.get("perfil") == "admin":
+                        _del_key = f"del_cot_{cot_id}"
+                        if not st.session_state.get(_del_key):
+                            if st.button("🗑️ Excluir", key=f"exc_{cot_id}", use_container_width=True):
+                                st.session_state[_del_key] = True
                                 st.rerun()
-                        with c2:
-                            if st.button("Cancelar", key=f"exc_no_{cot_id}", use_container_width=True):
-                                st.session_state.pop(_del_key, None)
-                                st.rerun()
+                        else:
+                            st.warning("Isso apagará a cotação e todas as respostas. Confirma?")
+                            c1, c2 = st.columns(2)
+                            with c1:
+                                if st.button("✅ Confirmar exclusão", key=f"exc_ok_{cot_id}", use_container_width=True, type="primary"):
+                                    df_tokens_upd = df_tokens[df_tokens["cotacao_id"].apply(_safe_int) != cot_id].reset_index(drop=True)
+                                    df_resp_upd   = df_respostas[df_respostas["cotacao_id"].apply(_safe_int) != cot_id].reset_index(drop=True)
+                                    df_cot_upd    = df_cotacoes[df_cotacoes["id"].apply(_safe_int) != cot_id].reset_index(drop=True)
+                                    escrever_df("cotacao_tokens", df_tokens_upd)
+                                    escrever_df("respostas", df_resp_upd)
+                                    escrever_df("cotacoes", df_cot_upd)
+                                    st.session_state.pop(_del_key, None)
+                                    st.cache_data.clear()
+                                    st.rerun()
+                            with c2:
+                                if st.button("Cancelar", key=f"exc_no_{cot_id}", use_container_width=True):
+                                    st.session_state.pop(_del_key, None)
+                                    st.rerun()
