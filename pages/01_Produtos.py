@@ -88,12 +88,18 @@ with tab_lista:
                         )
                         nova_ub = mapa_sigla.get(label_ub_edit, label_ub_edit)
                     with col_b:
-                        nova_qtd = st.number_input(
+                        _qtd_str = str(qtd).rstrip("0").rstrip(".") if qtd else "1"
+                        nova_qtd_txt = st.text_input(
                             "Qtd base por apresentação *",
-                            value=float(qtd) if qtd else 1.0,
-                            min_value=0.001, step=0.05, key=f"qtd_{i}",
-                            help="Qtd da unidade base contida na apresentação. Ex: Pacote 5kg → 5; Fardo c/6 pct de 5kg → 30; Garrafa 750ml → 0.75"
+                            value=_qtd_str, key=f"qtd_{i}",
+                            help="Qtd da unidade base contida na apresentação. Ex: 5 (pacote 5kg), 30 (fardo 6x5kg), 0.75 (garrafa 750ml), 269 (embalagem 269ml)"
                         )
+                        try:
+                            nova_qtd = float(nova_qtd_txt.replace(",", "."))
+                            if nova_qtd <= 0:
+                                raise ValueError
+                        except ValueError:
+                            nova_qtd = None
                     nova_obs = st.text_input("Observação", value=row.get("observacao", ""), key=f"obs_{i}")
                     cat_atual = str(row.get("categoria", "") or "")
                     _cat_opts = [""] + CATEGORIAS_PRODUTOS
@@ -112,6 +118,8 @@ with tab_lista:
                     if st.button("💾 Salvar", key=f"salvar_{i}", use_container_width=True):
                         if not nova_desc or not nova_apres:
                             st.error("Descrição e apresentação são obrigatórias.")
+                        elif nova_qtd is None:
+                            st.error("Qtd base inválida. Use número maior que zero (ex: 5, 0.75, 269).")
                         else:
                             df["codigo"] = df["codigo"].astype(object) if "codigo" in df.columns else ""
                             if "compra_direta" not in df.columns:
@@ -169,17 +177,19 @@ with tab_novo:
             )
             unidade_base = mapa_sigla.get(label_ub, label_ub)
         with col2:
-            qtd_base = st.number_input(
+            qtd_base_txt = st.text_input(
                 "Qtd da unidade base por apresentação *",
-                min_value=0.001, value=1.0, step=0.05,
-                help=(
-                    "Quantas unidades-base cabem na apresentação:\n"
-                    "• Pacote 5kg → 5\n"
-                    "• Fardo c/6 pct de 5kg → 30\n"
-                    "• Caixa 12un → 12\n"
-                    "• Garrafa 750ml → 0.75"
-                )
+                value="1",
+                help="Quantas unidades-base cabem na apresentação. Ex: 5 (pacote 5kg), 30 (fardo 6x5kg), 0.75 (garrafa 750ml), 269 (embalagem 269ml)"
             )
+            try:
+                qtd_base = float(qtd_base_txt.replace(",", "."))
+                if qtd_base <= 0:
+                    raise ValueError
+                _qtd_base_ok = True
+            except ValueError:
+                qtd_base = None
+                _qtd_base_ok = False
         observacao = st.text_input(
             "Observação",
             placeholder="Ex: Perecível. Preferir marca X.",
@@ -200,6 +210,8 @@ with tab_novo:
     if salvar:
         if not descricao.strip() or not apresentacao.strip():
             st.error("Descrição e apresentação são obrigatórias.")
+        elif not _qtd_base_ok:
+            st.error("Qtd base inválida. Use número maior que zero (ex: 5, 0.75, 269).")
         else:
             novo_id = int(df["id"].max()) + 1 if not df.empty else 1
             append_linha("produtos", [
