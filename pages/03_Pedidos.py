@@ -66,15 +66,61 @@ with tab_novo:
 
         _cats_presentes = [c for c in _ordem_cats if c in produtos_ativos["categoria"].values]
 
+        st.markdown("""
+        <style>
+        .cat-header {
+            background: linear-gradient(90deg,#e8edf5,transparent);
+            border-left: 4px solid #4a6fa5;
+            padding: 6px 14px;
+            border-radius: 4px;
+            margin: 24px 0 10px 0;
+            font-size: 17px;
+            font-weight: 700;
+            color: #1a2f4a;
+        }
+        .prod-row {
+            display: flex;
+            align-items: baseline;
+            width: 100%;
+            gap: 0;
+        }
+        .prod-nome {
+            white-space: nowrap;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        .prod-unidade {
+            white-space: nowrap;
+            font-size: 12px;
+            color: #888;
+            margin-left: 4px;
+        }
+        .prod-dots {
+            flex: 1;
+            border-bottom: 1.5px dotted #bbb;
+            margin: 0 8px 4px 8px;
+            min-width: 20px;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
         for cat in _cats_presentes:
             grupo = produtos_ativos[produtos_ativos["categoria"] == cat]
             if grupo.empty:
                 continue
-            st.markdown(f"#### {cat if cat else 'Sem categoria'}")
+            cat_label = cat if cat else "Sem categoria"
+            st.markdown(f'<div class="cat-header">📦 {cat_label}</div>', unsafe_allow_html=True)
             for _, prod in grupo.iterrows():
                 col1, col2 = st.columns([4, 1])
                 with col1:
-                    st.write(f"**{prod['descricao']}** — {prod['unidade_base']}")
+                    st.markdown(
+                        f'<div class="prod-row">'
+                        f'<span class="prod-nome">{prod["descricao"]}</span>'
+                        f'<span class="prod-unidade">— {prod["unidade_base"]}</span>'
+                        f'<span class="prod-dots"></span>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
                     if prod.get("observacao"):
                         st.caption(prod["observacao"])
                 with col2:
@@ -86,6 +132,7 @@ with tab_novo:
                     )
                     if qtd > 0:
                         itens_pedido[prod["id"]] = qtd
+            st.markdown("<div style='margin-bottom:8px'></div>", unsafe_allow_html=True)
 
         if st.button("Enviar Solicitação", type="primary"):
             if not itens_pedido:

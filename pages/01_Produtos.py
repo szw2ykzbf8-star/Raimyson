@@ -42,19 +42,31 @@ with tab_lista:
     if df.empty:
         st.info("Nenhum produto cadastrado ainda.")
     else:
-        col_f, col_i = st.columns([3, 1])
+        col_f, col_c, col_i = st.columns([3, 2, 1])
         with col_f:
             filtro = st.text_input("Filtrar por descrição ou código")
+        with col_c:
+            _cats_df = ["Todas"] + CATEGORIAS_PRODUTOS + ["Sem categoria"]
+            cat_filtro = st.selectbox("Categoria", _cats_df)
         with col_i:
             mostrar_inativos = st.checkbox("Mostrar inativos")
 
         exibir = df.copy()
+        if "categoria" not in exibir.columns:
+            exibir["categoria"] = ""
+        exibir["categoria"] = exibir["categoria"].fillna("").astype(str).str.strip()
         if filtro:
             mask_desc = exibir["descricao"].str.contains(filtro, case=False, na=False)
             mask_cod  = exibir["codigo"].astype(str).str.contains(filtro, case=False, na=False) if "codigo" in exibir.columns else False
             exibir = exibir[mask_desc | mask_cod]
         if not mostrar_inativos:
             exibir = exibir[exibir["ativo"].apply(is_ativo)]
+        if cat_filtro != "Todas":
+            _cat_val = "" if cat_filtro == "Sem categoria" else cat_filtro
+            exibir = exibir[exibir["categoria"] == _cat_val]
+
+        total = len(exibir)
+        st.caption(f"{total} produto(s) encontrado(s). Selecione uma categoria para navegar mais rápido.")
 
         for i, row in exibir.iterrows():
             apres  = row.get("apresentacao", "")
@@ -129,7 +141,7 @@ with tab_lista:
                             df.at[i, "descricao"]     = nova_desc
                             df.at[i, "apresentacao"]  = nova_apres
                             df.at[i, "unidade_base"]  = nova_ub
-                            df.at[i, "qtd_base_por_apresentacao"] = nova_qtd
+                            df.at[i, "qtd_base_por_apresentacao"] = str(nova_qtd)
                             df.at[i, "observacao"]    = nova_obs
                             df.at[i, "ativo"]         = str(novo_ativo)
                             df.at[i, "compra_direta"] = str(novo_cd)
