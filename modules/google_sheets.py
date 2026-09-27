@@ -188,10 +188,20 @@ if os.environ.get("DATABASE_URL"):
         append_linha,
         get_sheet,
         atualizar_celula,
+        atualizar_linha,
     )
 else:
-    ler_df          = _gs_ler_df
-    escrever_df     = _gs_escrever_df
-    append_linha    = _gs_append_linha
-    get_sheet       = _gs_get_sheet
+    ler_df           = _gs_ler_df
+    escrever_df      = _gs_escrever_df
+    append_linha     = _gs_append_linha
+    get_sheet        = _gs_get_sheet
     atualizar_celula = _gs_atualizar_celula
+
+    def atualizar_linha(nome_chave: str, id_valor: str, campos: dict):
+        # Google Sheets fallback: rewrite full sheet (acceptable for GS mode)
+        df = _gs_ler_df(nome_chave)
+        mask = df["id"].astype(str) == str(id_valor)
+        for col, val in campos.items():
+            if col in df.columns:
+                df.loc[mask, col] = str(val) if val is not None else ""
+        _gs_escrever_df(nome_chave, df)

@@ -3,7 +3,7 @@ import pandas as pd
 import datetime
 import io
 from modules.auth import requer_permissao
-from modules.google_sheets import ler_df, escrever_df, append_linha
+from modules.google_sheets import ler_df, escrever_df, append_linha, atualizar_linha
 from config import CATEGORIAS_PRODUTOS
 
 usuario = requer_permissao("produtos")
@@ -46,7 +46,7 @@ with tab_lista:
         with col_f:
             filtro = st.text_input("Filtrar por descrição ou código")
         with col_c:
-            _cats_df = ["Todas"] + CATEGORIAS_PRODUTOS + ["Sem categoria"]
+            _cats_df = ["— selecione —"] + CATEGORIAS_PRODUTOS + ["Sem categoria"]
             cat_filtro = st.selectbox("Categoria", _cats_df)
         with col_i:
             mostrar_inativos = st.checkbox("Mostrar inativos")
@@ -61,12 +61,16 @@ with tab_lista:
             exibir = exibir[mask_desc | mask_cod]
         if not mostrar_inativos:
             exibir = exibir[exibir["ativo"].apply(is_ativo)]
-        if cat_filtro != "Todas":
+        if cat_filtro == "— selecione —" and not filtro:
+            st.info("Selecione uma categoria ou pesquise pelo nome/código para ver os produtos.")
+            exibir = exibir.iloc[0:0]  # empty
+        elif cat_filtro not in ("— selecione —",):
             _cat_val = "" if cat_filtro == "Sem categoria" else cat_filtro
             exibir = exibir[exibir["categoria"] == _cat_val]
 
         total = len(exibir)
-        st.caption(f"{total} produto(s) encontrado(s). Selecione uma categoria para navegar mais rápido.")
+        if total > 0:
+            st.caption(f"{total} produto(s)")
 
         for i, row in exibir.iterrows():
             apres  = row.get("apresentacao", "")
@@ -133,23 +137,17 @@ with tab_lista:
                         elif nova_qtd is None:
                             st.error("Qtd base inválida. Use número maior que zero (ex: 5, 0.75, 269).")
                         else:
-                            df["codigo"] = df["codigo"].astype(object) if "codigo" in df.columns else ""
-                            if "compra_direta" not in df.columns:
-                                df["compra_direta"] = "False"
-                            df["compra_direta"] = df["compra_direta"].astype(object)
-                            df.at[i, "codigo"]        = novo_cod.strip()
-                            df.at[i, "descricao"]     = nova_desc
-                            df.at[i, "apresentacao"]  = nova_apres
-                            df.at[i, "unidade_base"]  = nova_ub
-                            df.at[i, "qtd_base_por_apresentacao"] = str(nova_qtd)
-                            df.at[i, "observacao"]    = nova_obs
-                            df.at[i, "ativo"]         = str(novo_ativo)
-                            df.at[i, "compra_direta"] = str(novo_cd)
-                            if "categoria" not in df.columns:
-                                df["categoria"] = ""
-                            df["categoria"] = df["categoria"].astype(object)
-                            df.at[i, "categoria"] = nova_cat
-                            escrever_df("produtos", df)
+                            atualizar_linha("produtos", row["id"], {
+                                "codigo":                    novo_cod.strip(),
+                                "descricao":                 nova_desc,
+                                "apresentacao":              nova_apres,
+                                "unidade_base":              nova_ub,
+                                "qtd_base_por_apresentacao": str(nova_qtd),
+                                "observacao":                nova_obs,
+                                "ativo":                     str(novo_ativo),
+                                "compra_direta":             str(novo_cd),
+                                "categoria":                 nova_cat,
+                            })
                             st.success("Produto atualizado!")
                             st.cache_data.clear()
                             st.rerun()

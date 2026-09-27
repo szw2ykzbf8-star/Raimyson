@@ -115,6 +115,19 @@ def atualizar_celula(nome_chave: str, row: int, col: int, valor):
     pass  # row/col addressing not used in PostgreSQL mode
 
 
+def atualizar_linha(nome_chave: str, id_valor: str, campos: dict):
+    """UPDATE single row by id — much faster than escrever_df for single edits."""
+    engine = get_engine()
+    set_clause = ", ".join(f'"{c}" = :v{i}' for i, c in enumerate(campos))
+    params = {f"v{i}": str(v) if v is not None else "" for i, v in enumerate(campos.values())}
+    params["_id"] = str(id_valor)
+    with engine.begin() as conn:
+        conn.execute(
+            text(f'UPDATE "{nome_chave}" SET {set_clause} WHERE "id" = :_id'),
+            params,
+        )
+
+
 class TableProxy:
     def __init__(self, nome_chave: str):
         self.nome_chave = nome_chave
