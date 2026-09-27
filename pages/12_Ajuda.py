@@ -325,7 +325,7 @@ with ti["🗺️ Visão Geral"]:
         st.markdown("**Administrador**")
         st.markdown(
             "Tudo que o comprador acessa, mais o módulo de **Configurações** — onde é possível "
-            "gerenciar unidades hoteleiras, unidades de medida, usuários, orçamentos e realizar "
+            "gerenciar unidades hoteleiras, unidades de medida, categorias de produtos, usuários e realizar "
             "backup dos dados. Também é o único perfil que pode **excluir cotações**."
         )
 
@@ -376,7 +376,8 @@ if "📋 Solicitações" in ti:
 
         with st.expander("⚠️ Pontos de atenção"):
             st.markdown("""
-- Não é possível editar uma solicitação depois que ela foi vinculada a uma cotação. Se houver algum erro, entre em contato com o comprador responsável.
+- É possível **editar** uma solicitação ainda aberta clicando em **✏️ Editar** na aba Solicitações Abertas. O botão aparece apenas para quem criou a solicitação ou para o perfil Administrador.
+- Após a solicitação ser **bloqueada (consolidada)** pelo comprador ela não pode mais ser alterada. Se houver algum erro, entre em contato com o comprador responsável.
 - Os produtos exibidos são apenas os que estão com cadastro **ativo**. Se um produto não aparecer na lista, verifique se ele está ativo no módulo de Produtos.
             """)
 
@@ -765,7 +766,6 @@ Visão geral das compras em um intervalo de datas com filtro por unidade hotelei
 
 **4. Hotéis**
 - *Gasto por Hotel* — distribuição de gastos entre as unidades (pizza + linha mensal).
-- *Orçamento vs. Gasto* — comparativo entre orçamento mensal definido e valor efetivamente gasto.
 
 **5. Recebimentos**
 KPIs de NF-e recebidas, status (conferido / pendente), divergências de quantidade e ordens ainda sem NF-e.
@@ -776,7 +776,6 @@ Download das principais tabelas em formato **.xlsx** (Excel).
         with st.expander("⚠️ Pontos de atenção"):
             st.markdown("""
 - Os relatórios são gerados com base nas compras já realizadas e marcadas como enviadas.
-- Para que o relatório de **Orçamento vs. Gasto** funcione, é necessário cadastrar os orçamentos mensais em **Configurações → Orçamentos**.
 - O histórico de preços é registrado automaticamente a cada compra gerada.
 - O **Comparativo de Preços** exige ao menos 2 caracteres na busca para exibir resultados.
 - A **Curva ABC** e o **Ranking** consideram apenas itens com compra registrada.
@@ -791,7 +790,7 @@ if "⚙️ Configurações" in ti:
         st.subheader("Configurações")
         st.markdown(
             "Área exclusiva do perfil **Administrador**. Reúne o gerenciamento de unidades "
-            "hoteleiras, unidades de medida, usuários, orçamentos e backup dos dados."
+            "hoteleiras, unidades de medida, categorias de produtos, usuários e backup dos dados."
         )
 
         with st.expander("📌 Unidades Hoteleiras"):
@@ -824,12 +823,13 @@ Gerenciamento de quem acessa o sistema.
 - **Unidades de acesso:** define a quais unidades hoteleiras o usuário tem acesso (útil para digitadores que atuam em unidades específicas).
             """)
 
-        with st.expander("📌 Orçamentos"):
+        with st.expander("📌 Categorias"):
             st.markdown("""
-Define o valor de orçamento mensal por unidade hoteleira.
+Gerencia as categorias usadas para organizar os produtos nas solicitações.
 
-- Informado em reais (R$) por unidade e por mês/ano.
-- Utilizado no relatório **Orçamento vs. Gasto** para mostrar se as compras estão dentro do previsto.
+- Adicione, renomeie ou exclua categorias conforme a necessidade.
+- As categorias aparecem em ordem alfabética nas solicitações e no cadastro de produtos.
+- Produtos sem categoria são exibidos ao final, em grupo **Sem categoria**.
             """)
 
         with st.expander("📌 Backup / Exportar"):
