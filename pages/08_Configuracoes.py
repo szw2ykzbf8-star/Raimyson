@@ -3,7 +3,7 @@ import pandas as pd
 import datetime
 import io
 from modules.auth import requer_permissao, hash_senha, validar_senha
-from modules.google_sheets import ler_df, escrever_df, append_linha
+from modules.google_sheets import ler_df, escrever_df, append_linha, atualizar_linha
 
 usuario = requer_permissao("configuracoes")
 
@@ -48,8 +48,8 @@ def _perm_stored_to_keys(stored, perfil):
 def _perm_keys_to_stored(keys):
     return ",".join(k for k in keys if k in PAGINAS_PERMISSOES)
 
-tab_unidades, tab_unidades_medida, tab_usuarios, tab_orcamento, tab_backup = st.tabs([
-    "Unidades Hoteleiras", "Un. de Medida", "Usuários", "Orçamentos", "Backup / Exportar"
+tab_unidades, tab_unidades_medida, tab_categorias, tab_usuarios, tab_orcamento, tab_backup = st.tabs([
+    "Unidades Hoteleiras", "Un. de Medida", "Categorias", "Usuários", "Orçamentos", "Backup / Exportar"
 ])
 
 
@@ -248,6 +248,67 @@ with tab_unidades_medida:
                 st.session_state["um_form_v"] += 1
                 st.cache_data.clear()
                 st.rerun()
+
+
+# ── TAB: CATEGORIAS ─────────────────────────────────────────────────────────
+with tab_categorias:
+    st.subheader("Categorias de Produtos")
+    df_cats = ler_df("categorias")
+
+    def _next_cat_id(df):
+        if df.empty or "id" not in df.columns:
+            return 1
+        try:
+            return int(df["id"].apply(lambda v: int(float(v)) if str(v).strip() not in ("", "nan") else 0).max()) + 1
+        except Exception:
+            return 1
+
+    if not df_cats.empty:
+        cats_sorted = df_cats.sort_values("nome", key=lambda x: x.str.lower(), ignore_index=True)
+        for _, crow in cats_sorted.iterrows():
+            with st.expander(crow["nome"]):
+                col_e, col_d = st.columns([3, 1])
+                with col_e:
+                    novo_nome_cat = st.text_input("Nome", value=crow["nome"], key=f"cat_nome_{crow['id']}")
+                    if st.button("💾 Salvar", key=f"cat_salvar_{crow['id']}", use_container_width=True):
+                        nome_limpo = novo_nome_cat.strip()
+                        if not nome_limpo:
+                            st.error("Nome não pode ser vazio.")
+                        else:
+                            atualizar_linha("categorias", crow["id"], {"nome": nome_limpo})
+                            st.success("Categoria atualizada!")
+                            st.cache_data.clear()
+                            st.rerun()
+                with col_d:
+                    st.markdown("&nbsp;")
+                    if st.button("🗑️ Excluir", key=f"cat_del_{crow['id']}", use_container_width=True):
+                        df_cats_novo = df_cats[df_cats["id"].astype(str) != str(crow["id"])]
+                        escrever_df("categorias", df_cats_novo)
+                        st.success(f"Categoria '{crow['nome']}' excluída.")
+                        st.cache_data.clear()
+                        st.rerun()
+
+    st.markdown("---")
+    st.markdown("**Adicionar nova categoria**")
+    if "cat_form_v" not in st.session_state:
+        st.session_state["cat_form_v"] = 0
+
+    with st.form(f"nova_categoria_{st.session_state['cat_form_v']}"):
+        nome_cat = st.text_input("Nome da categoria *", placeholder="Ex: Laticínios")
+        if st.form_submit_button("➕ Adicionar", use_container_width=True):
+            nome_limpo = nome_cat.strip()
+            if not nome_limpo:
+                st.error("Nome é obrigatório.")
+            else:
+                nomes_existentes = df_cats["nome"].str.strip().str.lower().tolist() if not df_cats.empty else []
+                if nome_limpo.lower() in nomes_existentes:
+                    st.error(f"Categoria '{nome_limpo}' já existe.")
+                else:
+                    append_linha("categorias", [_next_cat_id(df_cats), nome_limpo])
+                    st.success(f"Categoria '{nome_limpo}' adicionada!")
+                    st.session_state["cat_form_v"] += 1
+                    st.cache_data.clear()
+                    st.rerun()
 
 
 # ── TAB: USUÁRIOS ────────────────────────────────────────────────────────────
