@@ -211,7 +211,6 @@ with tab_import:
     _siglas_disponiveis = list(mapa_sigla.values()) or ["kg", "lt", "un", "mt"]
     _modelo = pd.DataFrame([
         {
-            "codigo":                     "001",
             "descricao":                  "Arroz",
             "apresentacao":               "Pacote 5kg",
             "unidade_base":               "kg",
@@ -219,7 +218,6 @@ with tab_import:
             "observacao":                 "",
         },
         {
-            "codigo":                     "002",
             "descricao":                  "Detergente",
             "apresentacao":               "Frasco 500ml",
             "unidade_base":               "lt",
@@ -238,7 +236,7 @@ with tab_import:
     )
     st.caption(
         f"Unidades válidas para `unidade_base`: **{', '.join(_siglas_disponiveis)}**  "
-        "— use exatamente a sigla cadastrada. O campo `codigo` é opcional."
+        "— use exatamente a sigla cadastrada."
     )
 
     # ── Upload ────────────────────────────────────────────────────────────
