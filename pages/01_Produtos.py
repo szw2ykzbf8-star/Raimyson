@@ -91,8 +91,8 @@ with tab_lista:
                         nova_qtd = st.number_input(
                             "Qtd base por apresentação *",
                             value=float(qtd) if qtd else 1.0,
-                            min_value=0.001, step=0.5, key=f"qtd_{i}",
-                            help="Qtd da unidade base contida na apresentação. Ex: Pacote 5kg → 5; Fardo c/6 pct de 5kg → 30"
+                            min_value=0.001, step=0.05, key=f"qtd_{i}",
+                            help="Qtd da unidade base contida na apresentação. Ex: Pacote 5kg → 5; Fardo c/6 pct de 5kg → 30; Garrafa 750ml → 0.75"
                         )
                     nova_obs = st.text_input("Observação", value=row.get("observacao", ""), key=f"obs_{i}")
                     cat_atual = str(row.get("categoria", "") or "")
@@ -171,12 +171,13 @@ with tab_novo:
         with col2:
             qtd_base = st.number_input(
                 "Qtd da unidade base por apresentação *",
-                min_value=0.001, value=1.0, step=0.5,
+                min_value=0.001, value=1.0, step=0.05,
                 help=(
                     "Quantas unidades-base cabem na apresentação:\n"
                     "• Pacote 5kg → 5\n"
                     "• Fardo c/6 pct de 5kg → 30\n"
-                    "• Caixa 12un → 12"
+                    "• Caixa 12un → 12\n"
+                    "• Garrafa 750ml → 0.75"
                 )
             )
         observacao = st.text_input(
