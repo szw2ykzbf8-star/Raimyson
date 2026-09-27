@@ -3,6 +3,7 @@ import pandas as pd
 import datetime
 import urllib.parse
 import re
+import io
 from modules.auth import requer_permissao
 from modules.google_sheets import ler_df, escrever_df, get_sheet
 
@@ -624,6 +625,145 @@ def _html_pedido_forn(fid):
     return _CSS_PDF + "<body>" + "".join(secoes) + total_geral_html + "</body>"
 
 
+def _pdf_pedido_forn(fid) -> bytes:
+    """Gera PDF do pedido para um fornecedor usando reportlab."""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.units import cm
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+    )
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_RIGHT
+
+    forn = forn_map.get(fid, {})
+    forn_min = _safe_float(forn.get("pedido_minimo", 0))
+    forn_min_str = f"R$ {forn_min:.2f}" if forn_min > 0 else "—"
+    prods_sel = [pid for pid in prod_ids if _get_sel(pid) == fid]
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        leftMargin=1.8*cm, rightMargin=1.8*cm,
+        topMargin=1.5*cm, bottomMargin=1.5*cm,
+    )
+    styles = getSampleStyleSheet()
+    s_title  = ParagraphStyle("pt",  parent=styles["Heading2"], fontSize=13, spaceAfter=2)
+    s_small  = ParagraphStyle("ps",  parent=styles["Normal"],   fontSize=8,  leading=11)
+    s_status = ParagraphStyle("pst", parent=styles["Normal"],   fontSize=9,  textColor=colors.red, spaceAfter=8)
+    s_total  = ParagraphStyle("pto", parent=styles["Normal"],   fontSize=11, fontName="Helvetica-Bold")
+    s_gtotal = ParagraphStyle("pg",  parent=styles["Normal"],   fontSize=12, fontName="Helvetica-Bold", alignment=TA_RIGHT)
+
+    col_headers = ["Código", "Produto", "Gram. Sol.", "Marca", "Obs", "Gram. Inf.", "Preço Un.", "Qtde.", "Total"]
+    col_widths  = [1.5*cm, 4.8*cm, 2.2*cm, 2.2*cm, 2.5*cm, 2.2*cm, 1.8*cm, 1.3*cm, 1.8*cm]
+
+    story = []
+    grand_total = 0.0
+    idx = 1
+
+    for unid in unidades_cot:
+        itens_det = []
+        for pid in prods_sel:
+            qty = _get_qtd(pid, unid)
+            if qty <= 0:
+                continue
+            rd   = resp_dict.get((pid, fid), {})
+            prod = prod_map.get(pid, {})
+            _qtd_emb  = rd.get("qtd_emb", 1.0)
+            _gram_inf = str(rd.get("tipo", ""))
+            if _qtd_emb and float(_qtd_emb) > 1:
+                _gram_inf = f"{_gram_inf} x{float(_qtd_emb):g}"
+            itens_det.append({
+                "codigo":   str(prod.get("codigo", "") or "—"),
+                "descricao": str(prod.get("descricao", f"Produto {pid}")),
+                "gram_sol": str(prod.get("apresentacao", "") or ""),
+                "obs":      str(rd.get("obs", "")),
+                "marca":    str(rd.get("marca", "")),
+                "gram_inf": _gram_inf.strip(),
+                "preco":    rd.get("preco_norm", 0.0),
+                "qtd":      qty,
+            })
+        if not itens_det:
+            continue
+
+        unid_info = unid_map.get(str(unid), {"nome": unid, "nome_fantasia": unid})
+        total_sec = sum(_safe_float(i["preco"]) * _safe_float(i["qtd"]) for i in itens_det)
+        grand_total += total_sec
+
+        story.append(Paragraph(
+            f"Pedido nº {idx} | Cotação: {nome_cot_label} | Data: {datetime.date.today().strftime('%d/%m/%Y')}",
+            s_title,
+        ))
+        story.append(Paragraph("Status: Pedido realizado - aguardando fornecedor", s_status))
+
+        comp_text = (
+            f"<b>Razão Social:</b> {str(unid_info.get('nome','') or '')}<br/>"
+            f"<b>Nome Fantasia:</b> {str(unid_info.get('nome_fantasia','') or '')}<br/>"
+            f"<b>CNPJ:</b> {str(unid_info.get('cnpj','') or '')}<br/>"
+            f"<b>Endereço:</b> {_addr_u(unid_info)}"
+        )
+        forn_text = (
+            f"<b>Razão Social:</b> {str(forn.get('razao_social','') or '')}<br/>"
+            f"<b>Nome Fantasia:</b> {str(forn.get('nome_fantasia','') or '')}<br/>"
+            f"<b>CNPJ:</b> {str(forn.get('cnpj','') or '')}<br/>"
+            f"<b>Telefone:</b> {str(forn.get('telefone','') or '')}<br/>"
+            f"<b>Pedido mínimo:</b> {forn_min_str}"
+        )
+        info_t = Table(
+            [[Paragraph(f"<b>Comprador</b><br/>{comp_text}", s_small),
+              Paragraph(f"<b>Fornecedor</b><br/>{forn_text}", s_small)]],
+            colWidths=[9*cm, 9*cm],
+        )
+        info_t.setStyle(TableStyle([
+            ("BOX",        (0,0), (-1,-1), 0.5, colors.grey),
+            ("INNERGRID",  (0,0), (-1,-1), 0.5, colors.grey),
+            ("VALIGN",     (0,0), (-1,-1), "TOP"),
+            ("TOPPADDING", (0,0), (-1,-1), 4),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+            ("LEFTPADDING",   (0,0), (-1,-1), 6),
+        ]))
+        story.append(info_t)
+        story.append(Spacer(1, 6))
+
+        rows = [col_headers]
+        for it in itens_det:
+            p = _safe_float(it["preco"])
+            q = _safe_float(it["qtd"])
+            obs = it["obs"] if it["obs"] else "—"
+            rows.append([
+                it["codigo"],
+                Paragraph(it["descricao"], s_small),
+                it["gram_sol"],
+                it["marca"],
+                Paragraph(obs, s_small),
+                it["gram_inf"],
+                f"R$ {p:.2f}",
+                f"{q:g}",
+                f"R$ {p*q:.2f}",
+            ])
+        items_t = Table(rows, colWidths=col_widths, repeatRows=1)
+        items_t.setStyle(TableStyle([
+            ("BACKGROUND",    (0,0), (-1,0), colors.Color(0.95, 0.95, 0.95)),
+            ("FONTNAME",      (0,0), (-1,0), "Helvetica-Bold"),
+            ("FONTSIZE",      (0,0), (-1,-1), 8),
+            ("BOX",           (0,0), (-1,-1), 0.5, colors.grey),
+            ("INNERGRID",     (0,0), (-1,-1), 0.3, colors.lightgrey),
+            ("VALIGN",        (0,0), (-1,-1), "TOP"),
+            ("TOPPADDING",    (0,0), (-1,-1), 3),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+        ]))
+        story.append(items_t)
+        story.append(Paragraph(f"Total do Pedido: R$ {total_sec:.2f}", s_total))
+        story.append(HRFlowable(width="100%", thickness=1, color=colors.lightgrey, spaceAfter=8))
+        story.append(Spacer(1, 4))
+        idx += 1
+
+    story.append(Paragraph(f"Total Geral do Fornecedor: R$ {grand_total:.2f}", s_gtotal))
+    doc.build(story)
+    buf.seek(0)
+    return buf.read()
+
+
 def _wa_link_forn(fid):
     forn = forn_map.get(fid, {})
     tel_raw = str(forn.get("whatsapp", "") or forn.get("telefone", "") or "")
@@ -720,14 +860,29 @@ for i, fid in enumerate(forn_ids):
             st.success(f"✅ Compra gerada para **{nome_forn_r}**!")
             nome_safe = re.sub(r"[^\w]", "_", nome_forn_r)[:30]
             cot_safe = re.sub(r"[^\w]", "_", nome_cot)[:20] if nome_cot else f"cot{cotacao_sel}"
-            st.download_button(
-                "⬇️ Gerar PDF",
-                data=_html_pedido_forn(fid).encode("utf-8"),
-                file_name=f"{nome_safe}_{cot_safe}_{datetime.date.today()}.html",
-                mime="text/html",
-                use_container_width=True,
-                key=f"{sk}_pdf_{fid}",
-            )
+            base_name = f"{nome_safe}_{cot_safe}_{datetime.date.today()}"
+            _col_pdf, _col_html = st.columns(2)
+            with _col_pdf:
+                try:
+                    st.download_button(
+                        "📄 Baixar PDF",
+                        data=_pdf_pedido_forn(fid),
+                        file_name=f"{base_name}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                        key=f"{sk}_pdf_{fid}",
+                    )
+                except Exception as _e:
+                    st.caption(f"PDF indisponível: {_e}")
+            with _col_html:
+                st.download_button(
+                    "⬇️ HTML (imprimir)",
+                    data=_html_pedido_forn(fid).encode("utf-8"),
+                    file_name=f"{base_name}.html",
+                    mime="text/html",
+                    use_container_width=True,
+                    key=f"{sk}_html_{fid}",
+                )
             _unlock_key = f"{sk}_unlock_{fid}"
             if not st.session_state.get(_unlock_key):
                 if st.button("🔓 Liberar para nova compra", key=f"{sk}_ok_{fid}", use_container_width=True):
