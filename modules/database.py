@@ -126,14 +126,17 @@ class TableProxy:
         n = len(linhas[0])
         cols = COLUMNS[self.nome_chave][:n]
         col_str = ", ".join(f'"{c}"' for c in cols)
-        placeholders = ", ".join(f":p{i}" for i in range(n))
-        stmt = text(f'INSERT INTO "{self.nome_chave}" ({col_str}) VALUES ({placeholders})')
-        rows_data = [
-            {f"p{i}": str(v) if v is not None else "" for i, v in enumerate(row)}
-            for row in linhas
-        ]
+        # Build single multi-row INSERT to avoid N round-trips via executemany
+        params = {}
+        value_groups = []
+        for row_i, row in enumerate(linhas):
+            placeholders = ", ".join(f":r{row_i}c{col_i}" for col_i in range(n))
+            value_groups.append(f"({placeholders})")
+            for col_i, v in enumerate(row):
+                params[f"r{row_i}c{col_i}"] = str(v) if v is not None else ""
+        sql = f'INSERT INTO "{self.nome_chave}" ({col_str}) VALUES {", ".join(value_groups)}'
         with engine.begin() as conn:
-            conn.execute(stmt, rows_data)
+            conn.execute(text(sql), params)
 
 
 def get_sheet(nome_chave: str) -> TableProxy:
