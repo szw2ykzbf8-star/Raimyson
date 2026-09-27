@@ -7,6 +7,9 @@ usuario = requer_login()
 st.title("Dashboard")
 st.markdown(f"Bem-vindo, **{usuario.get('nome', '')}**!")
 
+perfil = usuario.get("perfil", "")
+unidades_acesso = usuario.get("unidades_acesso", "")
+
 col1, col2, col3, col4 = st.columns(4)
 
 try:
@@ -17,9 +20,15 @@ except Exception:
 
 try:
     df_pedidos = ler_df("pedidos")
-    pendentes = len(df_pedidos[df_pedidos["status"] == "aberto"]) if not df_pedidos.empty else 0
+    if not df_pedidos.empty:
+        pendentes = len(df_pedidos[df_pedidos["status"] == "aberto"])
+        bloqueados = len(df_pedidos[df_pedidos["status"] == "bloqueado"])
+    else:
+        pendentes = 0
+        bloqueados = 0
 except Exception:
     pendentes = "—"
+    bloqueados = "—"
 
 try:
     df_forn = ler_df("fornecedores")
@@ -36,11 +45,32 @@ except Exception:
 with col1:
     st.metric("Cotações abertas", abertas)
 with col2:
-    st.metric("Pedidos pendentes", pendentes)
+    st.metric("Solicitações abertas", pendentes)
 with col3:
-    st.metric("Fornecedores ativos", forn_ativos)
+    st.metric("Solicitações bloqueadas", bloqueados)
 with col4:
+    st.metric("Fornecedores ativos", forn_ativos)
+
+col5, col6 = st.columns([1, 3])
+with col5:
     st.metric("Produtos ativos", prod_ativos)
+
+# ── Notificação: Solicitações aguardando consolidação (admin/comprador) ──────
+if perfil in ("admin", "comprador") and isinstance(pendentes, int) and pendentes > 0:
+    try:
+        pedidos_abertos = df_pedidos[df_pedidos["status"] == "aberto"].copy()
+        if unidades_acesso != "todos":
+            unidades_disp = [u.strip() for u in str(unidades_acesso).split(",")]
+            pedidos_abertos = pedidos_abertos[pedidos_abertos["unidade"].isin(unidades_disp)]
+        if not pedidos_abertos.empty:
+            n_ped = len(pedidos_abertos)
+            n_unid = pedidos_abertos["unidade"].nunique()
+            st.warning(
+                f"📋 **{n_ped} solicitação(ões) aberta(s)** aguardando consolidação em "
+                f"{n_unid} unidade(s). Acesse **Solicitações** para revisar e bloquear."
+            )
+    except Exception:
+        pass
 
 # ── Alerta: Compras Diretas pendentes ────────────────────────────────────────
 try:

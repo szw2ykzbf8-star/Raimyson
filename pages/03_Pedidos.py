@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import datetime
 from modules.auth import requer_permissao
-from modules.google_sheets import ler_df, escrever_df, append_linha, ler_categorias
+from modules.google_sheets import ler_df, escrever_df, append_linha, ler_categorias, atualizar_linha
 
 usuario = requer_permissao("pedidos")
 
@@ -83,7 +83,7 @@ CSS = """
 st.markdown(CSS, unsafe_allow_html=True)
 
 
-def _renderizar_form_produtos(sufixo: str, qtds_pre: dict) -> dict:
+def _renderizar_form_produtos(sufixo: str, qtds_pre: dict, mostrar_salvar: bool = False) -> dict:
     """Renderiza o formulário de produtos com quantidades pré-preenchidas.
     Retorna dict {produto_id: quantidade} com os itens preenchidos."""
     itens = {}
@@ -118,6 +118,22 @@ def _renderizar_form_produtos(sufixo: str, qtds_pre: dict) -> dict:
                     )
                     if qtd > 0:
                         itens[prod["id"]] = qtd
+
+            if mostrar_salvar:
+                cat_key = cat.replace(" ", "_") if cat else "sem_cat"
+                if st.button(
+                    f"💾 Salvar rascunho — {cat_label}",
+                    key=f"salvar_rascunho_{cat_key}_{sufixo}",
+                    use_container_width=True,
+                ):
+                    for _, p in grupo.iterrows():
+                        pk = str(p["id"])
+                        v = st.session_state.get(f"qtd_{pk}_{sufixo}", 0.0)
+                        if v and float(v) > 0:
+                            st.session_state["rascunho_pedido"][pk] = float(v)
+                        else:
+                            st.session_state["rascunho_pedido"].pop(pk, None)
+                    st.toast(f"Rascunho da categoria '{cat_label}' salvo!", icon="💾")
     return itens
 
 
@@ -126,6 +142,12 @@ if "pedido_form_v" not in st.session_state:
     st.session_state["pedido_form_v"] = 0
 if "editando_pedido" not in st.session_state:
     st.session_state["editando_pedido"] = None
+if "rascunho_pedido" not in st.session_state:
+    st.session_state["rascunho_pedido"] = {}
+if "confirmar_bloquear" not in st.session_state:
+    st.session_state["confirmar_bloquear"] = None
+if "confirmar_cancelar" not in st.session_state:
+    st.session_state["confirmar_cancelar"] = None
 
 tab_novo, tab_abertos = st.tabs(["Nova Solicitação", "Solicitações Abertas"])
 
@@ -136,9 +158,10 @@ with tab_novo:
     if produtos_ativos.empty:
         st.warning("Nenhum produto ativo cadastrado.")
     else:
-        st.markdown("Preencha a quantidade desejada. Deixe em branco os produtos que não precisa.")
+        st.markdown("Preencha a quantidade desejada. Use **Salvar rascunho** por categoria para não perder o progresso.")
         fv = st.session_state["pedido_form_v"]
-        itens_pedido = _renderizar_form_produtos(sufixo=f"novo_{fv}", qtds_pre={})
+        rascunho = st.session_state["rascunho_pedido"]
+        itens_pedido = _renderizar_form_produtos(sufixo=f"novo_{fv}", qtds_pre=rascunho, mostrar_salvar=True)
 
         if st.button("Enviar Solicitação", type="primary"):
             if not itens_pedido:
@@ -155,6 +178,7 @@ with tab_novo:
                         append_linha("itens_pedido", [item_id, novo_id, prod_id, qtd])
                         item_id += 1
                     st.session_state["pedido_form_v"] += 1
+                    st.session_state["rascunho_pedido"] = {}
                     st.cache_data.clear()
                     st.success(f"Solicitação #{novo_id} enviada para {unidade}!")
                     st.rerun()
@@ -177,9 +201,12 @@ with tab_abertos:
                 ped_id     = _safe_int(ped["id"])
                 criado_por = str(ped.get("criado_por", "") or "")
                 data_label = str(ped.get("data_criacao", ""))[:10] or "—"
+                editado_por = str(ped.get("editado_por", "") or "")
+                data_edicao = str(ped.get("data_edicao", "") or "")
 
                 pode_editar   = perfil == "admin" or criado_por == usuario["nome"]
                 pode_bloquear = perfil in ["admin", "comprador"]
+                pode_cancelar = perfil == "admin" or criado_por == usuario["nome"]
 
                 with st.expander(f"#{ped_id} — {ped['unidade']} — {data_label} — por {criado_por}"):
                     itens = (
@@ -220,6 +247,10 @@ with tab_abertos:
                                         for prod_id, qtd in novos_itens.items():
                                             append_linha("itens_pedido", [item_id, ped_id, prod_id, qtd])
                                             item_id += 1
+                                        atualizar_linha("pedidos", ped["id"], {
+                                            "editado_por": usuario["nome"],
+                                            "data_edicao": datetime.datetime.now().isoformat(),
+                                        })
                                         st.session_state["editando_pedido"] = None
                                         st.cache_data.clear()
                                         st.success("Solicitação atualizada!")
@@ -240,24 +271,72 @@ with tab_abertos:
                             )[["descricao", "unidade_base", "quantidade"]]
                             st.dataframe(itens_display, use_container_width=True, hide_index=True)
 
-                        n_botoes = sum([pode_editar, pode_bloquear])
+                        if editado_por:
+                            st.caption(f"✏️ Última edição por **{editado_por}** em {data_edicao[:10] if data_edicao else '—'}")
+
+                        n_botoes = sum([pode_editar, pode_bloquear, pode_cancelar])
                         if n_botoes:
                             cols = st.columns(n_botoes)
                             ci = 0
+
                             if pode_editar:
                                 with cols[ci]:
                                     if st.button("✏️ Editar", key=f"editar_{ped_id}", use_container_width=True):
                                         st.session_state["editando_pedido"] = ped_id
+                                        st.session_state["confirmar_bloquear"] = None
+                                        st.session_state["confirmar_cancelar"] = None
                                         st.rerun()
                                 ci += 1
+
                             if pode_bloquear:
                                 with cols[ci]:
-                                    if st.button("🔒 Bloquear (consolidar)", key=f"bloquear_{ped_id}", use_container_width=True):
-                                        from modules.google_sheets import atualizar_linha
-                                        atualizar_linha("pedidos", ped["id"], {
-                                            "status": "bloqueado",
-                                            "data_bloqueio": datetime.datetime.now().isoformat(),
-                                        })
-                                        st.success("Pedido bloqueado!")
-                                        st.cache_data.clear()
-                                        st.rerun()
+                                    if st.session_state["confirmar_bloquear"] == ped_id:
+                                        st.warning("Confirmar bloqueio desta solicitação?")
+                                        cb1, cb2 = st.columns(2)
+                                        with cb1:
+                                            if st.button("✅ Confirmar", key=f"conf_bloquear_{ped_id}", type="primary", use_container_width=True):
+                                                atualizar_linha("pedidos", ped["id"], {
+                                                    "status": "bloqueado",
+                                                    "data_bloqueio": datetime.datetime.now().isoformat(),
+                                                })
+                                                st.session_state["confirmar_bloquear"] = None
+                                                st.success("Pedido bloqueado!")
+                                                st.cache_data.clear()
+                                                st.rerun()
+                                        with cb2:
+                                            if st.button("✖ Voltar", key=f"canc_bloquear_{ped_id}", use_container_width=True):
+                                                st.session_state["confirmar_bloquear"] = None
+                                                st.rerun()
+                                    else:
+                                        if st.button("🔒 Bloquear (consolidar)", key=f"bloquear_{ped_id}", use_container_width=True):
+                                            st.session_state["confirmar_bloquear"] = ped_id
+                                            st.session_state["confirmar_cancelar"] = None
+                                            st.rerun()
+                                ci += 1
+
+                            if pode_cancelar:
+                                with cols[ci]:
+                                    if st.session_state["confirmar_cancelar"] == ped_id:
+                                        st.warning("Confirmar cancelamento desta solicitação?")
+                                        cc1, cc2 = st.columns(2)
+                                        with cc1:
+                                            if st.button("✅ Confirmar", key=f"conf_cancelar_{ped_id}", type="primary", use_container_width=True):
+                                                atualizar_linha("pedidos", ped["id"], {
+                                                    "status": "cancelado",
+                                                    "editado_por": usuario["nome"],
+                                                    "data_edicao": datetime.datetime.now().isoformat(),
+                                                })
+                                                st.session_state["confirmar_cancelar"] = None
+                                                st.success("Solicitação cancelada.")
+                                                st.cache_data.clear()
+                                                st.rerun()
+                                        with cc2:
+                                            if st.button("✖ Voltar", key=f"canc_cancelar_{ped_id}", use_container_width=True):
+                                                st.session_state["confirmar_cancelar"] = None
+                                                st.rerun()
+                                    else:
+                                        if st.button("❌ Cancelar Solicitação", key=f"cancelar_{ped_id}", use_container_width=True):
+                                            st.session_state["confirmar_cancelar"] = ped_id
+                                            st.session_state["confirmar_bloquear"] = None
+                                            st.rerun()
+                                ci += 1

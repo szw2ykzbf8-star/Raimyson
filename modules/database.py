@@ -9,7 +9,7 @@ COLUMNS = {
     "fornecedores":      ["id", "razao_social", "cnpj", "nome_contato", "telefone", "ativo", "data_cadastro", "nome_fantasia", "cep", "logradouro", "numero", "complemento", "bairro", "cidade", "estado", "pedido_minimo"],
     "unidades":          ["id", "nome", "nome_fantasia", "cnpj", "cep", "logradouro", "numero", "complemento", "bairro", "cidade", "estado", "ativo"],
     "usuarios":          ["id", "nome", "login", "senha_hash", "perfil", "unidades_acesso", "ativo", "trocar_senha", "permissoes"],
-    "pedidos":           ["id", "unidade", "status", "criado_por", "data_criacao", "data_bloqueio", "cotacao_id"],
+    "pedidos":           ["id", "unidade", "status", "criado_por", "data_criacao", "data_bloqueio", "cotacao_id", "editado_por", "data_edicao"],
     "itens_pedido":      ["id", "pedido_id", "produto_id", "quantidade"],
     "cotacoes":          ["id", "data_criacao", "prazo_limite", "status", "criado_por", "nome"],
     "respostas":         ["id", "cotacao_id", "fornecedor_id", "produto_id", "preco", "tipo_embalagem", "qtd_por_embalagem", "observacao", "marca", "data_resposta"],
@@ -56,6 +56,8 @@ def _criar_tabelas(engine):
         conn.execute(text("ALTER TABLE \"respostas\" ADD COLUMN IF NOT EXISTS \"marca\" TEXT DEFAULT ''"))
         conn.execute(text("ALTER TABLE \"produtos\" ADD COLUMN IF NOT EXISTS \"compra_direta\" TEXT DEFAULT 'False'"))
         conn.execute(text("ALTER TABLE \"produtos\" ADD COLUMN IF NOT EXISTS \"categoria\" TEXT DEFAULT ''"))
+        conn.execute(text("ALTER TABLE \"pedidos\" ADD COLUMN IF NOT EXISTS \"editado_por\" TEXT DEFAULT ''"))
+        conn.execute(text("ALTER TABLE \"pedidos\" ADD COLUMN IF NOT EXISTS \"data_edicao\" TEXT DEFAULT ''"))
 
     # Seed unidades_medida when empty
     with engine.begin() as conn:

@@ -233,9 +233,7 @@ _FL_ORDEM = [
     {"t":"p","text":"Acessar Ordem de Compra no menu"},
     {"t":"d","text":"Aba Pedidos Regulares ou Compra Direta?","yes":"Pedidos Regulares","no":"Compra Direta →|ver aba Compra Direta"},
     {"t":"p","text":"Expandir o fornecedor desejado"},
-    {"t":"p","text":"Clicar em Baixar pedido (imprimir / salvar PDF)"},
-    {"t":"p","text":"Abrir o arquivo .html baixado no navegador"},
-    {"t":"p","text":"Pressionar Ctrl+P → Salvar como PDF"},
+    {"t":"p","text":"Clicar em 📄 Baixar PDF"},
     {"t":"p","text":"Enviar o PDF ao fornecedor"},
     {"t":"p","text":"Clicar em Enviado para cada fornecedor"},
     {"t":"e","text":"Fim"},
@@ -359,8 +357,9 @@ if "📋 Solicitações" in ti:
 1. Acesse **Solicitações de Compra** no menu lateral.
 2. Clique na aba **Nova Solicitação**.
 3. Selecione a **Unidade Hoteleira** responsável pelo pedido.
-4. Informe a **quantidade desejada** de cada produto. Produtos que não são necessários devem permanecer com quantidade zero.
-5. Clique em **Enviar Solicitação**.
+4. Informe a **quantidade desejada** de cada produto por categoria. Produtos que não são necessários devem permanecer com quantidade zero.
+5. Use o botão **💾 Salvar rascunho** ao final de cada categoria para guardar o progresso sem enviar — útil para preencher com calma e sem perder o que já foi digitado.
+6. Clique em **Enviar Solicitação** quando terminar de preencher tudo.
 
 > A solicitação ficará com status **Aberta** até ser vinculada a uma cotação pelo comprador.
             """)
@@ -378,6 +377,10 @@ if "📋 Solicitações" in ti:
             st.markdown("""
 - É possível **editar** uma solicitação ainda aberta clicando em **✏️ Editar** na aba Solicitações Abertas. O botão aparece apenas para quem criou a solicitação ou para o perfil Administrador.
 - Após a solicitação ser **bloqueada (consolidada)** pelo comprador ela não pode mais ser alterada. Se houver algum erro, entre em contato com o comprador responsável.
+- O botão **🔒 Bloquear (consolidar)** pede uma **confirmação** antes de executar — clique em "Confirmar" para concluir ou "Voltar" para cancelar.
+- É possível **cancelar** uma solicitação aberta usando o botão **❌ Cancelar Solicitação** — disponível para o criador da solicitação ou para o perfil Administrador. O cancelamento também exige confirmação.
+- Cada edição registra automaticamente quem editou e quando — essa informação aparece abaixo da lista de itens da solicitação.
+- O botão **💾 Salvar rascunho** por categoria (aba Nova Solicitação) guarda as quantidades na sessão atual. O rascunho é limpo automaticamente após o envio bem-sucedido.
 - Os produtos exibidos são apenas os que estão com cadastro **ativo**. Se um produto não aparecer na lista, verifique se ele está ativo no módulo de Produtos.
             """)
 
@@ -497,8 +500,8 @@ if "📊 Análise de Preços" in ti:
             st.markdown("""
 1. Com os produtos selecionados e quantidades ajustadas, clique em **🛒 Comprar** no painel do fornecedor.
 2. O sistema gera os pedidos e exibe a mensagem de confirmação.
-3. O botão **⬇️ Gerar PDF** fica disponível — baixe o arquivo, abra no navegador e use **Ctrl+P → Salvar como PDF**.
-4. Envie o PDF ao fornecedor pelo meio de sua preferência (e-mail, WhatsApp, etc.).
+3. Acesse **Ordem de Compra** no menu lateral — o pedido já fica disponível para download.
+4. Clique em **📄 Baixar PDF** e envie ao fornecedor pelo meio de sua preferência (e-mail, WhatsApp, etc.).
             """)
 
         with st.expander("📌 Como liberar para uma nova compra"):
@@ -538,14 +541,13 @@ if "🛒 Ordem de Compra" in ti:
         components.html(_h, height=_ht, scrolling=False)
 
         st.markdown("---")
-        with st.expander("📌 Como baixar e imprimir o pedido"):
+        with st.expander("📌 Como baixar o pedido em PDF"):
             st.markdown("""
 1. Acesse **Ordem de Compra** no menu lateral.
 2. Clique no expander do fornecedor desejado para expandir o pedido.
-3. Clique em **⬇️ Baixar pedido (imprimir / salvar PDF)**.
-4. Abra o arquivo `.html` baixado em qualquer navegador.
-5. Use o atalho **Ctrl+P** (ou Cmd+P no Mac) e selecione **Salvar como PDF**.
-6. O PDF contém os dados de todas as unidades hoteleiras que compraram deste fornecedor nesta cotação.
+3. Clique em **📄 Baixar PDF** para baixar o arquivo PDF diretamente — pronto para enviar ao fornecedor.
+   - Alternativamente, use **⬇️ Baixar HTML (imprimir)**, abra no navegador e use **Ctrl+P → Salvar como PDF**.
+4. O PDF contém os dados de todas as unidades hoteleiras que compraram deste fornecedor nesta cotação.
             """)
 
         with st.expander("📌 Como marcar o pedido como enviado"):

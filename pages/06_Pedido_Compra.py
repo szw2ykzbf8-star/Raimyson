@@ -2,6 +2,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 import datetime
+import io
 from modules.auth import requer_permissao
 from modules.google_sheets import ler_df, escrever_df
 
@@ -84,7 +85,7 @@ def _tentar_encerrar_cotacao(cot_id_chk, df_compras_all, df_cd_all):
             escrever_df("cotacoes", df_cot_upd)
 
 
-# ── Gerador de HTML ───────────────────────────────────────────────────────────
+# ── Gerador de HTML (preview inline) ─────────────────────────────────────────
 _CSS = """<style>
 body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:20px}
 h2{font-size:15px;margin:0 0 4px}
@@ -189,6 +190,134 @@ def _secao(compra, forn, unid_info, itens_det, nome_cot=""):
 </div>"""
 
 
+# ── Gerador de PDF com reportlab ──────────────────────────────────────────────
+def _gerar_pdf(secoes_data: list, nome_fornecedor: str, total_geral: float) -> bytes:
+    """Gera PDF usando reportlab. Retorna bytes do PDF."""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.units import cm
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+    )
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        leftMargin=1.8*cm, rightMargin=1.8*cm,
+        topMargin=1.5*cm, bottomMargin=1.5*cm,
+    )
+
+    styles = getSampleStyleSheet()
+    s_title  = ParagraphStyle("ptitle",  parent=styles["Heading2"], fontSize=13, spaceAfter=2)
+    s_h3     = ParagraphStyle("ph3",     parent=styles["Heading3"], fontSize=10, spaceBefore=10, spaceAfter=4)
+    s_normal = ParagraphStyle("pnormal", parent=styles["Normal"],   fontSize=9,  leading=13)
+    s_small  = ParagraphStyle("psmall",  parent=styles["Normal"],   fontSize=8,  leading=11)
+    s_status = ParagraphStyle("pstatus", parent=styles["Normal"],   fontSize=9,  textColor=colors.red, spaceAfter=8)
+    s_total  = ParagraphStyle("ptotal",  parent=styles["Normal"],   fontSize=11, fontName="Helvetica-Bold")
+    s_gtotal = ParagraphStyle("pgtotal", parent=styles["Normal"],   fontSize=12, fontName="Helvetica-Bold", alignment=TA_RIGHT)
+
+    col_headers = ["Código", "Produto", "Gram. Sol.", "Marca", "Obs", "Gram. Inf.", "Preço Un.", "Qtde.", "Total"]
+    col_widths  = [1.5*cm, 4.8*cm, 2.2*cm, 2.2*cm, 2.5*cm, 2.2*cm, 1.8*cm, 1.3*cm, 1.8*cm]
+
+    story = []
+
+    for sec in secoes_data:
+        compra   = sec["compra"]
+        forn     = sec["forn"]
+        unid     = sec["unid"]
+        itens    = sec["itens"]
+        nome_cot = sec.get("nome_cot", "")
+
+        cid = _safe_int(compra["id"])
+        data_str = str(compra.get("data_compra", ""))
+        try:
+            data_fmt = datetime.datetime.fromisoformat(data_str).strftime("%d/%m/%Y")
+        except Exception:
+            data_fmt = datetime.date.today().strftime("%d/%m/%Y")
+
+        cot_display = nome_cot if nome_cot else (f"Cotação #{_safe_int(compra.get('cotacao_id',0))}" if _safe_int(compra.get('cotacao_id',0)) else "")
+        cot_suffix  = f" | Cotação: {cot_display}" if cot_display else ""
+
+        story.append(Paragraph(f"Pedido nº {cid}{cot_suffix} | Data: {data_fmt}", s_title))
+        story.append(Paragraph("Status: Pedido realizado - aguardando fornecedor", s_status))
+
+        # Comprador / Fornecedor side-by-side table
+        comp_text = (
+            f"<b>Razão Social:</b> {str(unid.get('nome','') or '')}<br/>"
+            f"<b>Nome Fantasia:</b> {str(unid.get('nome_fantasia','') or '')}<br/>"
+            f"<b>CNPJ:</b> {str(unid.get('cnpj','') or '')}<br/>"
+            f"<b>Endereço:</b> {_addr(unid)}"
+        )
+        forn_min = _safe_float(forn.get("pedido_minimo", 0))
+        forn_min_str = f"R$ {forn_min:.2f}" if forn_min > 0 else "—"
+        forn_text = (
+            f"<b>Razão Social:</b> {str(forn.get('razao_social','') or '')}<br/>"
+            f"<b>Nome Fantasia:</b> {str(forn.get('nome_fantasia','') or '')}<br/>"
+            f"<b>CNPJ:</b> {str(forn.get('cnpj','') or '')}<br/>"
+            f"<b>Telefone:</b> {str(forn.get('telefone','') or '')}<br/>"
+            f"<b>Pedido mínimo:</b> {forn_min_str}"
+        )
+        info_table = Table(
+            [[Paragraph(f"<b>Comprador</b><br/>{comp_text}", s_small),
+              Paragraph(f"<b>Fornecedor</b><br/>{forn_text}", s_small)]],
+            colWidths=[9*cm, 9*cm],
+        )
+        info_table.setStyle(TableStyle([
+            ("BOX",        (0,0), (-1,-1), 0.5, colors.grey),
+            ("INNERGRID",  (0,0), (-1,-1), 0.5, colors.grey),
+            ("VALIGN",     (0,0), (-1,-1), "TOP"),
+            ("TOPPADDING", (0,0), (-1,-1), 4),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+            ("LEFTPADDING",   (0,0), (-1,-1), 6),
+        ]))
+        story.append(info_table)
+        story.append(Spacer(1, 6))
+
+        # Items table
+        total_sec = sum(_safe_float(i["preco_unitario"]) * _safe_float(i["quantidade"]) for i in itens)
+        rows = [col_headers]
+        for it in itens:
+            p = _safe_float(it.get("preco_unitario", 0))
+            q = _safe_float(it.get("quantidade", 0))
+            obs = str(it.get("obs_fornecedor", "") or "") or "—"
+            rows.append([
+                it.get("codigo", "—"),
+                Paragraph(it.get("descricao", "—"), s_small),
+                it.get("gram_sol", ""),
+                it.get("marca", ""),
+                Paragraph(obs, s_small),
+                it.get("gram_inf", ""),
+                f"R$ {p:.2f}",
+                f"{q:g}",
+                f"R$ {p*q:.2f}",
+            ])
+
+        items_t = Table(rows, colWidths=col_widths, repeatRows=1)
+        items_t.setStyle(TableStyle([
+            ("BACKGROUND",    (0,0), (-1,0), colors.Color(0.95, 0.95, 0.95)),
+            ("FONTNAME",      (0,0), (-1,0), "Helvetica-Bold"),
+            ("FONTSIZE",      (0,0), (-1,-1), 8),
+            ("BOX",           (0,0), (-1,-1), 0.5, colors.grey),
+            ("INNERGRID",     (0,0), (-1,-1), 0.3, colors.lightgrey),
+            ("VALIGN",        (0,0), (-1,-1), "TOP"),
+            ("TOPPADDING",    (0,0), (-1,-1), 3),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+        ]))
+        story.append(items_t)
+        story.append(Paragraph(f"Total do Pedido: R$ {total_sec:.2f}", s_total))
+        story.append(HRFlowable(width="100%", thickness=1, color=colors.lightgrey, spaceAfter=8))
+        story.append(Spacer(1, 4))
+
+    story.append(Paragraph(f"Total Geral do Fornecedor: R$ {total_geral:.2f}", s_gtotal))
+
+    doc.build(story)
+    buf.seek(0)
+    return buf.read()
+
+
 # ── UI principal ──────────────────────────────────────────────────────────────
 tab_regular, tab_direta = st.tabs(["📦 Pedidos Regulares", "🛒 Compra Direta"])
 
@@ -211,6 +340,7 @@ with tab_regular:
             with st.expander(f"**{nome_forn}** — {n_hoteis} hotel(is) — R$ {total_forn:.2f}"):
 
                 secoes_html = []
+                secoes_pdf  = []
                 compras_info = []
                 total_itens  = 0
 
@@ -260,6 +390,13 @@ with tab_regular:
                     nome_cot_compra = cot_map.get(cot_id, "")
                     total_itens += len(itens_det)
                     secoes_html.append(_secao(compra, forn, unid_info, itens_det, nome_cot_compra))
+                    secoes_pdf.append({
+                        "compra":   compra,
+                        "forn":     forn,
+                        "unid":     unid_info,
+                        "itens":    itens_det,
+                        "nome_cot": nome_cot_compra,
+                    })
                     compras_info.append({
                         "cid":      cid,
                         "label":    str(unid_info.get("nome_fantasia", unid_nome) or unid_nome),
@@ -267,7 +404,6 @@ with tab_regular:
                         "nome_cot": nome_cot_compra,
                     })
 
-                # Download (abrir no browser e Ctrl+P → Salvar PDF)
                 total_geral = sum(info["valor"] for info in compras_info)
                 total_geral_html = (
                     f"<div style='margin-top:24px;padding:12px 0;border-top:2px solid #333;text-align:right'>"
@@ -278,13 +414,27 @@ with tab_regular:
                 import re as _re
                 nome_safe = _re.sub(r"[^\w]", "_", nome_forn)[:30]
                 cot_safe  = _re.sub(r"[^\w]", "_", _nome_cot_grp)[:20] if _nome_cot_grp else ""
-                fname     = f"{nome_safe}_{cot_safe}_{datetime.date.today()}.html" if cot_safe else f"{nome_safe}_{datetime.date.today()}.html"
-                col_dl, _ = st.columns([2, 4])
+                base_name = f"{nome_safe}_{cot_safe}_{datetime.date.today()}" if cot_safe else f"{nome_safe}_{datetime.date.today()}"
+
+                col_pdf, col_dl, _ = st.columns([2, 2, 2])
+                with col_pdf:
+                    try:
+                        pdf_bytes = _gerar_pdf(secoes_pdf, nome_forn, total_geral)
+                        st.download_button(
+                            "📄 Baixar PDF",
+                            data=pdf_bytes,
+                            file_name=f"{base_name}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True,
+                            key=f"pdf_{fid}",
+                        )
+                    except Exception as e:
+                        st.caption(f"PDF indisponível: {e}")
                 with col_dl:
                     st.download_button(
-                        "⬇️ Baixar pedido (imprimir / salvar PDF)",
+                        "⬇️ Baixar HTML (imprimir)",
                         data=html_completo.encode("utf-8"),
-                        file_name=fname,
+                        file_name=f"{base_name}.html",
                         mime="text/html",
                         use_container_width=True,
                         key=f"dl_{fid}",
