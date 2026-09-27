@@ -5,6 +5,7 @@ from sqlalchemy import create_engine, text
 
 COLUMNS = {
     "produtos":          ["id", "descricao", "apresentacao", "unidade_base", "qtd_base_por_apresentacao", "observacao", "ativo", "data_cadastro", "codigo", "compra_direta", "categoria"],
+    "categorias":        ["id", "nome"],
     "fornecedores":      ["id", "razao_social", "cnpj", "nome_contato", "telefone", "ativo", "data_cadastro", "nome_fantasia", "cep", "logradouro", "numero", "complemento", "bairro", "cidade", "estado", "pedido_minimo"],
     "unidades":          ["id", "nome", "nome_fantasia", "cnpj", "cep", "logradouro", "numero", "complemento", "bairro", "cidade", "estado", "ativo"],
     "usuarios":          ["id", "nome", "login", "senha_hash", "perfil", "unidades_acesso", "ativo", "trocar_senha", "permissoes"],
@@ -65,6 +66,17 @@ def _criar_tabelas(engine):
                 placeholders = ", ".join(f":p{i}" for i in range(len(row)))
                 params = {f"p{i}": v for i, v in enumerate(row)}
                 conn.execute(text(f'INSERT INTO "unidades_medida" ({cols_str}) VALUES ({placeholders})'), params)
+
+    # Seed categorias when empty
+    with engine.begin() as conn:
+        r = conn.execute(text('SELECT COUNT(*) FROM "categorias"'))
+        if r.scalar() == 0:
+            from config import CATEGORIAS_PRODUTOS as _CATS
+            for idx, nome in enumerate(_CATS, start=1):
+                conn.execute(
+                    text('INSERT INTO "categorias" ("id", "nome") VALUES (:id, :nome)'),
+                    {"id": str(idx), "nome": nome},
+                )
 
 
 @st.cache_data(ttl=120)

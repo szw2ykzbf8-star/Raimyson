@@ -2,8 +2,7 @@ import streamlit as st
 import pandas as pd
 import datetime
 from modules.auth import requer_permissao
-from modules.google_sheets import ler_df, escrever_df, append_linha
-from config import CATEGORIAS_PRODUTOS
+from modules.google_sheets import ler_df, escrever_df, append_linha, ler_categorias
 
 usuario = requer_permissao("pedidos")
 
@@ -55,8 +54,7 @@ with tab_novo:
         fv = st.session_state["pedido_form_v"]
         itens_pedido = {}
 
-        # Agrupar por categoria
-        _ordem_cats = CATEGORIAS_PRODUTOS + [""]
+        # Agrupar por categoria em ordem alfabética
         if "categoria" in produtos_ativos.columns:
             produtos_ativos = produtos_ativos.copy()
             produtos_ativos["categoria"] = produtos_ativos["categoria"].fillna("").astype(str).str.strip()
@@ -64,6 +62,11 @@ with tab_novo:
             produtos_ativos = produtos_ativos.copy()
             produtos_ativos["categoria"] = ""
 
+        produtos_ativos = produtos_ativos.sort_values(
+            "descricao", key=lambda x: x.str.lower(), ignore_index=True
+        )
+
+        _ordem_cats = ler_categorias() + [""]
         _cats_presentes = [c for c in _ordem_cats if c in produtos_ativos["categoria"].values]
 
         st.markdown("""

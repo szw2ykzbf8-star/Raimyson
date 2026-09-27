@@ -3,8 +3,7 @@ import pandas as pd
 import datetime
 import io
 from modules.auth import requer_permissao
-from modules.google_sheets import ler_df, escrever_df, append_linha, atualizar_linha
-from config import CATEGORIAS_PRODUTOS
+from modules.google_sheets import ler_df, escrever_df, append_linha, atualizar_linha, ler_categorias
 
 usuario = requer_permissao("produtos")
 
@@ -46,7 +45,8 @@ with tab_lista:
         with col_f:
             filtro = st.text_input("Filtrar por descrição ou código")
         with col_c:
-            _cats_df = ["— selecione —"] + CATEGORIAS_PRODUTOS + ["Sem categoria"]
+            _cats_lista = ler_categorias()
+            _cats_df = ["— selecione —"] + _cats_lista + ["Sem categoria"]
             cat_filtro = st.selectbox("Categoria", _cats_df)
         with col_i:
             mostrar_inativos = st.checkbox("Mostrar inativos")
@@ -67,6 +67,8 @@ with tab_lista:
         elif cat_filtro not in ("— selecione —",):
             _cat_val = "" if cat_filtro == "Sem categoria" else cat_filtro
             exibir = exibir[exibir["categoria"] == _cat_val]
+
+        exibir = exibir.sort_values("descricao", key=lambda x: x.str.lower(), ignore_index=False)
 
         total = len(exibir)
         if total > 0:
@@ -118,7 +120,7 @@ with tab_lista:
                             nova_qtd = None
                     nova_obs = st.text_input("Observação", value=row.get("observacao", ""), key=f"obs_{i}")
                     cat_atual = str(row.get("categoria", "") or "")
-                    _cat_opts = [""] + CATEGORIAS_PRODUTOS
+                    _cat_opts = [""] + ler_categorias()
                     _cat_idx  = _cat_opts.index(cat_atual) if cat_atual in _cat_opts else 0
                     nova_cat  = st.selectbox("Categoria", _cat_opts, index=_cat_idx, key=f"cat_{i}")
                 with col2:
@@ -207,7 +209,7 @@ with tab_novo:
         )
         categoria = st.selectbox(
             "Categoria",
-            [""] + CATEGORIAS_PRODUTOS,
+            [""] + ler_categorias(),
             help="Categoria do produto para organização das solicitações"
         )
         compra_direta = st.checkbox(
@@ -287,7 +289,7 @@ with tab_import:
     )
     st.caption(
         f"Unidades válidas para `unidade_base`: **{', '.join(_siglas_disponiveis)}**  \n"
-        f"Categorias válidas: **{', '.join(CATEGORIAS_PRODUTOS)}**  \n"
+        f"Categorias válidas: **{', '.join(ler_categorias())}**  \n"
         "`compra_direta`: **TRUE** ou **FALSE**"
     )
 

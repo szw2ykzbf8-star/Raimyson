@@ -181,6 +181,18 @@ def migrar_sheets_para_pg() -> dict:
 
 # ── Routing: use PostgreSQL when DATABASE_URL is set ─────────────────────────
 
+def ler_categorias() -> list:
+    """Return sorted list of category names from DB (or config fallback)."""
+    try:
+        df_cats = ler_df("categorias")
+        if not df_cats.empty and "nome" in df_cats.columns:
+            return sorted(df_cats["nome"].dropna().astype(str).str.strip().tolist(), key=str.lower)
+    except Exception:
+        pass
+    from config import CATEGORIAS_PRODUTOS
+    return sorted(CATEGORIAS_PRODUTOS, key=str.lower)
+
+
 if os.environ.get("DATABASE_URL"):
     from modules.database import (
         ler_df,

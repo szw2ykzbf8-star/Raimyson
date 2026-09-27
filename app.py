@@ -94,6 +94,7 @@ _PAGINAS_CONFIG = {
     "relatorios":   ("pages/07_Relatorios.py",   "Relatórios",        "📈"),
     "configuracoes":("pages/08_Configuracoes.py","Configurações",     "⚙️"),
     "admin_sistema":("pages/13_Admin.py",        "Administração",      "🔧"),
+    "categorias":   ("pages/14_Categorias.py",   "Categorias",         "🏷️"),
 }
 _PERFIL_PADRAO = {
     "admin":     ["pedidos","cotacoes","analise","ordem","recebimento","compra_avulsa","produtos","fornecedores","relatorios","configuracoes","admin_sistema"],
@@ -147,6 +148,7 @@ if "configuracoes" in permissoes or "admin_sistema" in permissoes:
     sistema = []
     if "configuracoes" in permissoes:
         sistema.append(_pg("configuracoes"))
+        sistema.append(_pg("categorias"))
     if "admin_sistema" in permissoes:
         sistema.append(_pg("admin_sistema"))
     nav["Sistema"] = sistema
