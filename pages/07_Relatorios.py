@@ -40,7 +40,6 @@ df_fornecedores = ler_df("fornecedores")
 df_compras      = ler_df("compras")
 df_itens_compra = ler_df("itens_compra")
 df_pedidos      = ler_df("pedidos")
-df_orcamentos   = ler_df("orcamentos")
 df_unidades     = ler_df("unidades")
 df_respostas    = ler_df("respostas")
 df_cotacoes     = ler_df("cotacoes")
@@ -612,117 +611,46 @@ with tab3:
 # TAB 4 — HOTÉIS
 # =============================================================================
 with tab4:
-    sub_gasto_h, sub_orc = st.tabs([
-        "📊 Gasto por Hotel",
-        "🎯 Orçamento vs Gasto",
-    ])
+    st.subheader("Gasto por Hotel / Unidade")
+    col_ini_h, col_fim_h = st.columns(2)
+    with col_ini_h:
+        ini_h = st.date_input("De", value=datetime.date.today().replace(day=1),
+                               format="DD/MM/YYYY", key="h_ini")
+    with col_fim_h:
+        fim_h = st.date_input("Até", value=datetime.date.today(),
+                               format="DD/MM/YYYY", key="h_fim")
 
-    with sub_gasto_h:
-        st.subheader("Gasto por Hotel / Unidade")
-        col_ini_h, col_fim_h = st.columns(2)
-        with col_ini_h:
-            ini_h = st.date_input("De", value=datetime.date.today().replace(day=1),
-                                   format="DD/MM/YYYY", key="h_ini")
-        with col_fim_h:
-            fim_h = st.date_input("Até", value=datetime.date.today(),
-                                   format="DD/MM/YYYY", key="h_fim")
+    ch = df_c[
+        (df_c["data_compra"].dt.date >= ini_h) &
+        (df_c["data_compra"].dt.date <= fim_h)
+    ].copy()
 
-        ch = df_c[
-            (df_c["data_compra"].dt.date >= ini_h) &
-            (df_c["data_compra"].dt.date <= fim_h)
-        ].copy()
+    if ch.empty:
+        st.info("Nenhuma compra no período.")
+    else:
+        por_hotel = (ch.groupby("unidade_label")["valor_total"].sum()
+                       .reset_index().sort_values("valor_total", ascending=False))
+        fig_pie = px.pie(por_hotel, names="unidade_label", values="valor_total",
+                         title="Distribuição do Gasto por Hotel",
+                         color_discrete_sequence=px.colors.qualitative.Set2)
+        st.plotly_chart(fig_pie, use_container_width=True)
 
-        if ch.empty:
-            st.info("Nenhuma compra no período.")
-        else:
-            por_hotel = (ch.groupby("unidade_label")["valor_total"].sum()
-                           .reset_index().sort_values("valor_total", ascending=False))
-            fig_pie = px.pie(por_hotel, names="unidade_label", values="valor_total",
-                             title="Distribuição do Gasto por Hotel",
-                             color_discrete_sequence=px.colors.qualitative.Set2)
-            st.plotly_chart(fig_pie, use_container_width=True)
+        ch2 = ch.copy()
+        ch2["mes"] = ch2["data_compra"].dt.to_period("M").dt.to_timestamp()
+        ev_h = ch2.groupby(["mes", "unidade_label"])["valor_total"].sum().reset_index()
+        if len(ev_h["mes"].unique()) > 1:
+            fig_ev_h = px.line(ev_h, x="mes", y="valor_total", color="unidade_label",
+                               markers=True, title="Evolução Mensal por Hotel",
+                               labels={"mes": "Mês", "valor_total": "R$",
+                                       "unidade_label": "Hotel"})
+            st.plotly_chart(fig_ev_h, use_container_width=True)
 
-            ch2 = ch.copy()
-            ch2["mes"] = ch2["data_compra"].dt.to_period("M").dt.to_timestamp()
-            ev_h = ch2.groupby(["mes", "unidade_label"])["valor_total"].sum().reset_index()
-            if len(ev_h["mes"].unique()) > 1:
-                fig_ev_h = px.line(ev_h, x="mes", y="valor_total", color="unidade_label",
-                                   markers=True, title="Evolução Mensal por Hotel",
-                                   labels={"mes": "Mês", "valor_total": "R$",
-                                           "unidade_label": "Hotel"})
-                st.plotly_chart(fig_ev_h, use_container_width=True)
+        st.dataframe(
+            por_hotel.rename(columns={"unidade_label": "Hotel", "valor_total": "R$ Total"})
+                     .assign(**{"R$ Total": lambda d: d["R$ Total"].map("R$ {:,.2f}".format)}),
+            hide_index=True, use_container_width=True,
+        )
 
-            st.dataframe(
-                por_hotel.rename(columns={"unidade_label": "Hotel", "valor_total": "R$ Total"})
-                         .assign(**{"R$ Total": lambda d: d["R$ Total"].map("R$ {:,.2f}".format)}),
-                hide_index=True, use_container_width=True,
-            )
-
-    with sub_orc:
-        st.subheader("Orçamento vs Gasto por Unidade")
-        if df_orcamentos.empty:
-            st.info("Configure os orçamentos na página de Configurações.")
-        else:
-            hoje_orc = datetime.date.today()
-            c1_orc, c2_orc = st.columns(2)
-            with c1_orc:
-                mes_sel = st.selectbox(
-                    "Mês", range(1, 13), index=hoje_orc.month - 1, key="orc_mes",
-                    format_func=lambda m: [
-                        "Jan","Fev","Mar","Abr","Mai","Jun",
-                        "Jul","Ago","Set","Out","Nov","Dez"
-                    ][m - 1],
-                )
-            with c2_orc:
-                ano_sel = st.number_input("Ano", value=hoje_orc.year,
-                                          min_value=2020, max_value=2099, key="orc_ano")
-
-            df_orc_m = df_orcamentos.copy()
-            df_orc_m["mes"] = df_orc_m["mes"].apply(_safe_int)
-            df_orc_m["ano"] = df_orc_m["ano"].apply(_safe_int)
-            orc_mes = df_orc_m[(df_orc_m["mes"] == mes_sel) & (df_orc_m["ano"] == ano_sel)]
-
-            cm = df_c[
-                (df_c["data_compra"].dt.month == mes_sel) &
-                (df_c["data_compra"].dt.year == ano_sel)
-            ].copy()
-
-            if orc_mes.empty:
-                st.info("Nenhum orçamento cadastrado para este período.")
-            else:
-                dados_orc = []
-                for _, orc in orc_mes.iterrows():
-                    unid_orc = str(orc.get("unidade", "") or "")
-                    cm_unid  = cm[cm["unidade"].astype(str) == unid_orc]
-                    gasto    = _safe_float(cm_unid["valor_total"].sum())
-                    orcado   = _safe_float(orc.get("valor", 0))
-                    saldo    = orcado - gasto
-                    dados_orc.append({
-                        "Hotel":       _unid_label(unid_orc) or unid_orc,
-                        "Orçamento":   orcado,
-                        "Gasto":       gasto,
-                        "Saldo":       saldo,
-                        "% Utilizado": (gasto / orcado * 100) if orcado > 0 else 0.0,
-                    })
-
-                df_ov = pd.DataFrame(dados_orc)
-                fig_orc = go.Figure()
-                fig_orc.add_bar(x=df_ov["Hotel"], y=df_ov["Orçamento"],
-                                name="Orçamento", marker_color="#2980B9")
-                fig_orc.add_bar(x=df_ov["Hotel"], y=df_ov["Gasto"],
-                                name="Gasto", marker_color="#E74C3C")
-                fig_orc.update_layout(barmode="group", title="Orçamento vs Gasto por Hotel")
-                st.plotly_chart(fig_orc, use_container_width=True)
-
-                st.dataframe(
-                    df_ov.assign(**{
-                        "Orçamento":   lambda d: d["Orçamento"].map("R$ {:,.2f}".format),
-                        "Gasto":       lambda d: d["Gasto"].map("R$ {:,.2f}".format),
-                        "Saldo":       lambda d: d["Saldo"].map("R$ {:,.2f}".format),
-                        "% Utilizado": lambda d: d["% Utilizado"].map("{:.1f}%".format),
-                    }),
-                    hide_index=True, use_container_width=True,
-                )
 
 # =============================================================================
 # TAB 5 — RECEBIMENTOS

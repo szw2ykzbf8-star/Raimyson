@@ -48,8 +48,8 @@ def _perm_stored_to_keys(stored, perfil):
 def _perm_keys_to_stored(keys):
     return ",".join(k for k in keys if k in PAGINAS_PERMISSOES)
 
-tab_unidades, tab_unidades_medida, tab_categorias, tab_usuarios, tab_orcamento, tab_backup = st.tabs([
-    "Unidades Hoteleiras", "Un. de Medida", "Categorias", "Usuários", "Orçamentos", "Backup / Exportar"
+tab_unidades, tab_unidades_medida, tab_categorias, tab_usuarios, tab_backup = st.tabs([
+    "Unidades Hoteleiras", "Un. de Medida", "Categorias", "Usuários", "Backup / Exportar"
 ])
 
 
@@ -481,60 +481,6 @@ with tab_usuarios:
                 st.session_state["usr_form_v"] += 1
                 st.cache_data.clear()
                 st.rerun()
-
-
-# ── TAB: ORÇAMENTOS ──────────────────────────────────────────────────────────
-with tab_orcamento:
-    st.subheader("Orçamentos Mensais por Unidade")
-    df_orcamentos = ler_df("orcamentos")
-    df_unidades = ler_df("unidades")
-
-    mes_atual = datetime.date.today().month
-    ano_atual = datetime.date.today().year
-
-    col1, col2 = st.columns(2)
-    with col1:
-        mes_sel = st.selectbox(
-            "Mês", range(1, 13), index=mes_atual - 1,
-            format_func=lambda m: ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][m-1],
-        )
-    with col2:
-        ano_sel = st.number_input("Ano", value=ano_atual, min_value=2020, max_value=2099)
-
-    unidades_nomes = df_unidades["nome"].tolist() if not df_unidades.empty else []
-    _cols_orc = ["id", "unidade", "mes", "ano", "valor"]
-    orc_periodo = (
-        df_orcamentos[(df_orcamentos["mes"] == mes_sel) & (df_orcamentos["ano"] == ano_sel)]
-        if not df_orcamentos.empty else pd.DataFrame(columns=_cols_orc)
-    )
-
-    st.markdown(f"**Orçamentos para {mes_sel:02d}/{ano_sel}**")
-    novos_valores = {}
-    for unid in unidades_nomes:
-        orc_atual = orc_periodo[orc_periodo["unidade"] == unid]
-        valor_atual = float(orc_atual.iloc[0]["valor"]) if not orc_atual.empty else 0.0
-        novos_valores[unid] = st.number_input(f"{unid}", value=valor_atual, min_value=0.0, step=100.0, format="%.2f")
-
-    if st.button("Salvar Orçamentos"):
-        novo_id = int(df_orcamentos["id"].max()) + 1 if not df_orcamentos.empty else 1
-        for unid, valor in novos_valores.items():
-            existente = (
-                df_orcamentos[
-                    (df_orcamentos["unidade"] == unid) &
-                    (df_orcamentos["mes"] == mes_sel) &
-                    (df_orcamentos["ano"] == ano_sel)
-                ] if not df_orcamentos.empty else pd.DataFrame()
-            )
-            if existente.empty:
-                append_linha("orcamentos", [novo_id, unid, mes_sel, ano_sel, valor])
-                novo_id += 1
-            else:
-                idx = existente.index[0]
-                df_orcamentos.at[idx, "valor"] = valor
-                escrever_df("orcamentos", df_orcamentos)
-        st.success("Orçamentos salvos!")
-        st.cache_data.clear()
-        st.rerun()
 
 
 # ── TAB: BACKUP ──────────────────────────────────────────────────────────────
