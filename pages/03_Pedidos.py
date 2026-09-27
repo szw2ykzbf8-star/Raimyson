@@ -71,16 +71,6 @@ with tab_novo:
 
         st.markdown("""
         <style>
-        .cat-header {
-            background: linear-gradient(90deg,#e8edf5,transparent);
-            border-left: 4px solid #4a6fa5;
-            padding: 6px 14px;
-            border-radius: 4px;
-            margin: 24px 0 10px 0;
-            font-size: 17px;
-            font-weight: 700;
-            color: #1a2f4a;
-        }
         .prod-row {
             display: flex;
             align-items: baseline;
@@ -112,30 +102,29 @@ with tab_novo:
             if grupo.empty:
                 continue
             cat_label = cat if cat else "Sem categoria"
-            st.markdown(f'<div class="cat-header">📦 {cat_label}</div>', unsafe_allow_html=True)
-            for _, prod in grupo.iterrows():
-                col1, col2 = st.columns([4, 1])
-                with col1:
-                    st.markdown(
-                        f'<div class="prod-row">'
-                        f'<span class="prod-nome">{prod["descricao"]}</span>'
-                        f'<span class="prod-unidade">— {prod["unidade_base"]}</span>'
-                        f'<span class="prod-dots"></span>'
-                        f'</div>',
-                        unsafe_allow_html=True,
-                    )
-                    if prod.get("observacao"):
-                        st.caption(prod["observacao"])
-                with col2:
-                    qtd = st.number_input(
-                        "Qtd",
-                        min_value=0.0, step=0.5,
-                        key=f"qtd_{prod['id']}_{fv}",
-                        label_visibility="collapsed",
-                    )
-                    if qtd > 0:
-                        itens_pedido[prod["id"]] = qtd
-            st.markdown("<div style='margin-bottom:8px'></div>", unsafe_allow_html=True)
+            with st.expander(f"📦 {cat_label}", expanded=True):
+                for _, prod in grupo.iterrows():
+                    col1, col2 = st.columns([4, 1])
+                    with col1:
+                        st.markdown(
+                            f'<div class="prod-row">'
+                            f'<span class="prod-nome">{prod["descricao"]}</span>'
+                            f'<span class="prod-unidade">— {prod["unidade_base"]}</span>'
+                            f'<span class="prod-dots"></span>'
+                            f'</div>',
+                            unsafe_allow_html=True,
+                        )
+                        if prod.get("observacao"):
+                            st.caption(prod["observacao"])
+                    with col2:
+                        qtd = st.number_input(
+                            "Qtd",
+                            min_value=0.0, step=0.5,
+                            key=f"qtd_{prod['id']}_{fv}",
+                            label_visibility="collapsed",
+                        )
+                        if qtd > 0:
+                            itens_pedido[prod["id"]] = qtd
 
         if st.button("Enviar Solicitação", type="primary"):
             if not itens_pedido:
