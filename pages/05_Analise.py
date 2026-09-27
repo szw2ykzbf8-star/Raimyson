@@ -876,7 +876,7 @@ for i, fid in enumerate(forn_ids):
                     st.caption(f"PDF indisponível: {_e}")
             with _col_html:
                 st.download_button(
-                    "⬇️ HTML (imprimir)",
+                    "⬇️ Baixar PDF (HTML)",
                     data=_html_pedido_forn(fid).encode("utf-8"),
                     file_name=f"{base_name}.html",
                     mime="text/html",

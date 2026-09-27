@@ -233,7 +233,7 @@ _FL_ORDEM = [
     {"t":"p","text":"Acessar Ordem de Compra no menu"},
     {"t":"d","text":"Aba Pedidos Regulares ou Compra Direta?","yes":"Pedidos Regulares","no":"Compra Direta →|ver aba Compra Direta"},
     {"t":"p","text":"Expandir o fornecedor desejado"},
-    {"t":"p","text":"Clicar em 📄 Baixar PDF"},
+    {"t":"p","text":"Clicar em 📄 Baixar PDF (ou ⬇️ Baixar PDF (HTML))"},
     {"t":"p","text":"Enviar o PDF ao fornecedor"},
     {"t":"p","text":"Clicar em Enviado para cada fornecedor"},
     {"t":"e","text":"Fim"},
@@ -500,8 +500,10 @@ if "📊 Análise de Preços" in ti:
             st.markdown("""
 1. Com os produtos selecionados e quantidades ajustadas, clique em **🛒 Comprar** no painel do fornecedor.
 2. O sistema gera os pedidos e exibe a mensagem de confirmação.
-3. Acesse **Ordem de Compra** no menu lateral — o pedido já fica disponível para download.
-4. Clique em **📄 Baixar PDF** e envie ao fornecedor pelo meio de sua preferência (e-mail, WhatsApp, etc.).
+3. Dois botões de download aparecem imediatamente:
+   - **📄 Baixar PDF** — gera o PDF direto, pronto para enviar.
+   - **⬇️ Baixar PDF (HTML)** — baixa um arquivo `.html`; abra no navegador e use **Ctrl+P → Salvar como PDF**.
+4. O mesmo pedido também fica disponível em **Ordem de Compra** caso precise baixar novamente depois.
             """)
 
         with st.expander("📌 Como liberar para uma nova compra"):
@@ -545,8 +547,9 @@ if "🛒 Ordem de Compra" in ti:
             st.markdown("""
 1. Acesse **Ordem de Compra** no menu lateral.
 2. Clique no expander do fornecedor desejado para expandir o pedido.
-3. Clique em **📄 Baixar PDF** para baixar o arquivo PDF diretamente — pronto para enviar ao fornecedor.
-   - Alternativamente, use **⬇️ Baixar HTML (imprimir)**, abra no navegador e use **Ctrl+P → Salvar como PDF**.
+3. Dois botões de download estão disponíveis:
+   - **📄 Baixar PDF** — PDF gerado diretamente, pronto para enviar ao fornecedor.
+   - **⬇️ Baixar PDF (HTML)** — baixa um arquivo `.html`; abra no navegador e use **Ctrl+P → Salvar como PDF**.
 4. O PDF contém os dados de todas as unidades hoteleiras que compraram deste fornecedor nesta cotação.
             """)
 

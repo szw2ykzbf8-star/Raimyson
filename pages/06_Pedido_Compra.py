@@ -432,7 +432,7 @@ with tab_regular:
                         st.caption(f"PDF indisponível: {e}")
                 with col_dl:
                     st.download_button(
-                        "⬇️ Baixar HTML (imprimir)",
+                        "⬇️ Baixar PDF (HTML)",
                         data=html_completo.encode("utf-8"),
                         file_name=f"{base_name}.html",
                         mime="text/html",
