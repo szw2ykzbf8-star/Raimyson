@@ -4,6 +4,7 @@ import datetime
 import io
 from modules.auth import requer_permissao
 from modules.google_sheets import ler_df, escrever_df, append_linha
+from config import CATEGORIAS_PRODUTOS
 
 usuario = requer_permissao("produtos")
 
@@ -94,6 +95,10 @@ with tab_lista:
                             help="Qtd da unidade base contida na apresentação. Ex: Pacote 5kg → 5; Fardo c/6 pct de 5kg → 30"
                         )
                     nova_obs = st.text_input("Observação", value=row.get("observacao", ""), key=f"obs_{i}")
+                    cat_atual = str(row.get("categoria", "") or "")
+                    _cat_opts = [""] + CATEGORIAS_PRODUTOS
+                    _cat_idx  = _cat_opts.index(cat_atual) if cat_atual in _cat_opts else 0
+                    nova_cat  = st.selectbox("Categoria", _cat_opts, index=_cat_idx, key=f"cat_{i}")
                 with col2:
                     st.markdown("&nbsp;", unsafe_allow_html=True)
                     novo_ativo = st.checkbox("Ativo", value=is_ativo(row["ativo"]), key=f"ativo_{i}")
@@ -120,6 +125,10 @@ with tab_lista:
                             df.at[i, "observacao"]    = nova_obs
                             df.at[i, "ativo"]         = str(novo_ativo)
                             df.at[i, "compra_direta"] = str(novo_cd)
+                            if "categoria" not in df.columns:
+                                df["categoria"] = ""
+                            df["categoria"] = df["categoria"].astype(object)
+                            df.at[i, "categoria"] = nova_cat
                             escrever_df("produtos", df)
                             st.success("Produto atualizado!")
                             st.cache_data.clear()
@@ -175,6 +184,11 @@ with tab_novo:
             placeholder="Ex: Perecível. Preferir marca X.",
             help="Informação extra visível apenas internamente"
         )
+        categoria = st.selectbox(
+            "Categoria",
+            [""] + CATEGORIAS_PRODUTOS,
+            help="Categoria do produto para organização das solicitações"
+        )
         compra_direta = st.checkbox(
             "Compra Direta (não cotacionar)",
             value=False,
@@ -198,6 +212,7 @@ with tab_novo:
                 datetime.date.today().isoformat(),
                 codigo.strip(),
                 str(compra_direta),
+                categoria,
             ])
             st.success(f"Produto '{descricao}' cadastrado com sucesso!")
             st.session_state["prod_form_v"] += 1
@@ -216,13 +231,26 @@ with tab_import:
             "unidade_base":               "kg",
             "qtd_base_por_apresentacao":  5,
             "observacao":                 "",
+            "categoria":                  "Mercearia",
+            "compra_direta":              "FALSE",
         },
         {
-            "descricao":                  "Detergente",
-            "apresentacao":               "Frasco 500ml",
+            "descricao":                  "Picanha",
+            "apresentacao":               "kg",
+            "unidade_base":               "kg",
+            "qtd_base_por_apresentacao":  1,
+            "observacao":                 "",
+            "categoria":                  "Carnes",
+            "compra_direta":              "FALSE",
+        },
+        {
+            "descricao":                  "Água com gás",
+            "apresentacao":               "Garrafa 500ml",
             "unidade_base":               "lt",
             "qtd_base_por_apresentacao":  0.5,
-            "observacao":                 "Neutro",
+            "observacao":                 "",
+            "categoria":                  "Frigobar",
+            "compra_direta":              "TRUE",
         },
     ])
     _buf_modelo = io.BytesIO()
@@ -235,8 +263,9 @@ with tab_import:
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
     st.caption(
-        f"Unidades válidas para `unidade_base`: **{', '.join(_siglas_disponiveis)}**  "
-        "— use exatamente a sigla cadastrada."
+        f"Unidades válidas para `unidade_base`: **{', '.join(_siglas_disponiveis)}**  \n"
+        f"Categorias válidas: **{', '.join(CATEGORIAS_PRODUTOS)}**  \n"
+        "`compra_direta`: **TRUE** ou **FALSE**"
     )
 
     # ── Upload ────────────────────────────────────────────────────────────
@@ -264,6 +293,8 @@ with tab_import:
             df_imp["codigo"] = ""
         if "compra_direta" not in df_imp.columns:
             df_imp["compra_direta"] = "False"
+        if "categoria" not in df_imp.columns:
+            df_imp["categoria"] = ""
 
         # Normaliza
         df_imp = df_imp.dropna(subset=["descricao"]).copy()
@@ -272,6 +303,7 @@ with tab_import:
         df_imp["apresentacao"] = df_imp["apresentacao"].fillna("").str.strip()
         df_imp["unidade_base"] = df_imp["unidade_base"].fillna("").str.strip()
         df_imp["observacao"]  = df_imp["observacao"].fillna("").str.strip()
+        df_imp["categoria"]   = df_imp["categoria"].fillna("").str.strip()
         df_imp["qtd_base_por_apresentacao"] = pd.to_numeric(
             df_imp["qtd_base_por_apresentacao"], errors="coerce"
         )
@@ -340,6 +372,7 @@ with tab_import:
                         hoje,
                         r["codigo"],
                         str(r.get("compra_direta", "False")).strip() or "False",
+                        str(r.get("categoria", "")).strip(),
                     ])
                     proximo_id += 1
 

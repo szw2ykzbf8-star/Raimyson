@@ -40,4 +40,11 @@ UNIDADES = ["Gold", "Roma", "Cancun", "Miami"]
 # Tipos de embalagem para cotação
 TIPOS_EMBALAGEM = ["Unidade/Pacote avulso", "Kg", "Litro", "Fardo/Caixa"]
 
+# Categorias de produtos
+CATEGORIAS_PRODUTOS = [
+    "Carnes", "Cigarros", "Descartáveis", "Destilados", "Frigobar",
+    "Frios e Congelados", "Hortifruti", "Limpeza", "Mercearia",
+    "Sachês", "Sexshop", "Uniforme", "Vinhos",
+]
+
 SERVICE_ACCOUNT_EMAIL = "compras-h-hoteis@h-hoteis-compras.iam.gserviceaccount.com"

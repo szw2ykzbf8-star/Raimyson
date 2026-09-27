@@ -3,6 +3,7 @@ import pandas as pd
 import datetime
 from modules.auth import requer_permissao
 from modules.google_sheets import ler_df, escrever_df, append_linha
+from config import CATEGORIAS_PRODUTOS
 
 usuario = requer_permissao("pedidos")
 
@@ -53,21 +54,38 @@ with tab_novo:
         st.markdown("Preencha a quantidade desejada. Deixe em branco os produtos que não precisa.")
         fv = st.session_state["pedido_form_v"]
         itens_pedido = {}
-        for _, prod in produtos_ativos.iterrows():
-            col1, col2 = st.columns([4, 1])
-            with col1:
-                st.write(f"**{prod['descricao']}** — {prod['unidade_base']}")
-                if prod.get("observacao"):
-                    st.caption(prod["observacao"])
-            with col2:
-                qtd = st.number_input(
-                    "Qtd",
-                    min_value=0.0, step=0.5,
-                    key=f"qtd_{prod['id']}_{fv}",
-                    label_visibility="collapsed",
-                )
-                if qtd > 0:
-                    itens_pedido[prod["id"]] = qtd
+
+        # Agrupar por categoria
+        _ordem_cats = CATEGORIAS_PRODUTOS + [""]
+        if "categoria" in produtos_ativos.columns:
+            produtos_ativos = produtos_ativos.copy()
+            produtos_ativos["categoria"] = produtos_ativos["categoria"].fillna("").astype(str).str.strip()
+        else:
+            produtos_ativos = produtos_ativos.copy()
+            produtos_ativos["categoria"] = ""
+
+        _cats_presentes = [c for c in _ordem_cats if c in produtos_ativos["categoria"].values]
+
+        for cat in _cats_presentes:
+            grupo = produtos_ativos[produtos_ativos["categoria"] == cat]
+            if grupo.empty:
+                continue
+            st.markdown(f"#### {cat if cat else 'Sem categoria'}")
+            for _, prod in grupo.iterrows():
+                col1, col2 = st.columns([4, 1])
+                with col1:
+                    st.write(f"**{prod['descricao']}** — {prod['unidade_base']}")
+                    if prod.get("observacao"):
+                        st.caption(prod["observacao"])
+                with col2:
+                    qtd = st.number_input(
+                        "Qtd",
+                        min_value=0.0, step=0.5,
+                        key=f"qtd_{prod['id']}_{fv}",
+                        label_visibility="collapsed",
+                    )
+                    if qtd > 0:
+                        itens_pedido[prod["id"]] = qtd
 
         if st.button("Enviar Solicitação", type="primary"):
             if not itens_pedido:
