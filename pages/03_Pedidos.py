@@ -380,21 +380,44 @@ with tab_importar:
             cell.border = borda_thin
             cell.fill = fill_azul if col_idx > len(header_fixo) else fill_cinza
 
-        # Produtos: exclui inativos (já filtrado em produtos_ativos) e compra direta
-        prods_template = produtos_ativos
-        if "compra_direta" in prods_template.columns:
-            prods_template = prods_template[
-                ~prods_template["compra_direta"].astype(str).str.upper().isin(["TRUE", "1", "SIM"])
-            ]
+        # Estilos de linha de categoria
+        fill_cat    = PatternFill("solid", fgColor="F2F2F2")
+        bold_italic = Font(bold=True, italic=True, size=10)
 
-        for _, prod in prods_template.iterrows():
-            row_data = [
-                str(prod.get("codigo", "") or ""),
-                str(prod.get("descricao", "") or ""),
-                str(prod.get("apresentacao", "") or ""),
-                str(prod.get("unidade_base", "") or ""),
-            ] + [""] * len(unidades_disponiveis)
-            ws.append(row_data)
+        # Agrupa por categoria (somente produtos ativos — inativos já excluídos)
+        col_cat = "categoria" if "categoria" in produtos_ativos.columns else None
+        if col_cat:
+            categorias_ordem = produtos_ativos[col_cat].fillna("Sem categoria").unique().tolist()
+        else:
+            categorias_ordem = ["Produtos"]
+
+        for cat in categorias_ordem:
+            if col_cat:
+                grupo = produtos_ativos[produtos_ativos[col_cat].fillna("Sem categoria") == cat]
+            else:
+                grupo = produtos_ativos
+
+            if grupo.empty:
+                continue
+
+            # Linha de título da categoria
+            ws.append([cat] + [""] * (len(header) - 1))
+            row_cat = ws.max_row
+            for col_idx in range(1, len(header) + 1):
+                cell = ws.cell(row=row_cat, column=col_idx)
+                cell.fill = fill_cat
+                cell.font = bold_italic
+                cell.border = borda_thin
+
+            # Produtos da categoria
+            for _, prod in grupo.iterrows():
+                row_data = [
+                    str(prod.get("codigo", "") or ""),
+                    str(prod.get("descricao", "") or ""),
+                    str(prod.get("apresentacao", "") or ""),
+                    str(prod.get("unidade_base", "") or ""),
+                ] + [""] * len(unidades_disponiveis)
+                ws.append(row_data)
 
         # Larguras de coluna
         ws.column_dimensions["A"].width = 10
@@ -404,7 +427,7 @@ with tab_importar:
         for i in range(len(unidades_disponiveis)):
             ws.column_dimensions[get_column_letter(5 + i)].width = 16
 
-        # Travar colunas A-D (proteção visual via freeze)
+        # Travar cabeçalho e colunas fixas
         ws.freeze_panes = "E2"
 
         buf = io.BytesIO()
