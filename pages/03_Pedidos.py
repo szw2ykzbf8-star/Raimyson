@@ -487,7 +487,7 @@ with tab_importar:
             for _, row in df_upload.iterrows():
                 descricao = str(row.get("descricao", "") or "").strip()
                 codigo    = str(row.get("codigo", "") or "").strip()
-                if not descricao:
+                if not descricao or descricao.lower() == "nan":
                     continue
 
                 prod_id = (
