@@ -300,6 +300,47 @@ with tab_abertas:
                                     st.cache_data.clear()
                                     st.rerun()
 
+                    # Registrar compras_diretas se ainda não foram populadas para esta cotação
+                    cd_cot_aberta = (
+                        df_compras_dir[df_compras_dir["cotacao_id"].apply(_safe_int) == cot_id]
+                        if not df_compras_dir.empty else pd.DataFrame()
+                    )
+                    if cd_cot_aberta.empty and not df_produtos.empty and not df_itens.empty:
+                        ped_cot = df_pedidos[df_pedidos["cotacao_id"].apply(_safe_int) == cot_id] if not df_pedidos.empty else pd.DataFrame()
+                        prod_cd_ids = {
+                            _safe_int(r["id"])
+                            for _, r in df_produtos.iterrows()
+                            if str(r.get("compra_direta", "False")).strip().lower() in ("true", "1")
+                        }
+                        tem_cd = False
+                        if not ped_cot.empty and prod_cd_ids:
+                            for _, ped in ped_cot.iterrows():
+                                itens_p = df_itens[df_itens["pedido_id"].apply(_safe_int) == _safe_int(ped["id"])]
+                                if any(_safe_int(i["produto_id"]) in prod_cd_ids for _, i in itens_p.iterrows()):
+                                    tem_cd = True
+                                    break
+                        if tem_cd:
+                            if st.button("🛒 Registrar itens de Compra Direta", key=f"reg_cd_{cot_id}", use_container_width=True):
+                                cd_agg = {}
+                                for _, ped in ped_cot.iterrows():
+                                    unid_ped = str(ped.get("unidade", ""))
+                                    itens_ped = df_itens[df_itens["pedido_id"].apply(_safe_int) == _safe_int(ped["id"])]
+                                    for _, item in itens_ped.iterrows():
+                                        pid = _safe_int(item["produto_id"])
+                                        if pid in prod_cd_ids:
+                                            key_cd = (pid, unid_ped)
+                                            cd_agg[key_cd] = cd_agg.get(key_cd, 0) + _safe_float(item.get("quantidade", 0))
+                                if cd_agg:
+                                    df_cd_fresh = ler_df("compras_diretas")
+                                    if df_cd_fresh.empty:
+                                        df_cd_fresh = pd.DataFrame(columns=["id", "cotacao_id", "produto_id", "unidade", "quantidade", "comprado"])
+                                    next_cd = int(df_cd_fresh["id"].apply(_safe_int).max()) + 1 if not df_cd_fresh.empty else 1
+                                    novas = [[next_cd + i, cot_id, pid, unid, qtd, "False"] for i, ((pid, unid), qtd) in enumerate(cd_agg.items())]
+                                    get_sheet("compras_diretas").append_rows(novas)
+                                    st.cache_data.clear()
+                                    st.success(f"✅ {len(novas)} item(ns) de Compra Direta registrados. Acesse Ordem de Compra → aba Compra Direta.")
+                                    st.rerun()
+
                     st.markdown("---")
 
                     # Alterar prazo
