@@ -451,10 +451,21 @@ with tab_importar:
     st.markdown("---")
     st.markdown("**Fazer upload da planilha preenchida:**")
 
+    if "import_ok" in st.session_state and st.session_state["import_ok"]:
+        st.success(st.session_state["import_ok"])
+        if st.button("📥 Importar outra planilha", use_container_width=True):
+            del st.session_state["import_ok"]
+            st.session_state["upload_v"] = st.session_state.get("upload_v", 0) + 1
+            st.rerun()
+        st.stop()
+
+    if "upload_v" not in st.session_state:
+        st.session_state["upload_v"] = 0
+
     arq = st.file_uploader(
         "Selecione o arquivo Excel (.xlsx)",
         type=["xlsx"],
-        key="upload_planilha",
+        key=f"upload_planilha_{st.session_state['upload_v']}",
     )
 
     if arq:
@@ -559,10 +570,11 @@ with tab_importar:
                             novo_id += 1
 
                         st.cache_data.clear()
-                        st.success(
-                            f"✅ {len(criados)} solicitação(ões) criadas: "
+                        st.session_state["import_ok"] = (
+                            f"✅ {len(criados)} solicitação(ões) criadas com sucesso: "
                             + ", ".join(criados)
                         )
+                        st.session_state["upload_v"] = st.session_state.get("upload_v", 0) + 1
                         st.rerun()
                     except Exception as e:
                         st.error(f"Erro ao criar solicitações: {e}")
