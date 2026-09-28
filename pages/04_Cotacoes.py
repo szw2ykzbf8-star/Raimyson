@@ -1,4 +1,6 @@
+import json
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import datetime
 from zoneinfo import ZoneInfo
@@ -33,6 +35,30 @@ def _safe_float(v, default=0.0):
         return float(v) if str(v).strip() not in ("", "nan") else default
     except Exception:
         return default
+
+
+def _wa_btn(nome_forn: str, link: str, key: str):
+    msg = (
+        f"*Prezado(a) {nome_forn},*\n\n"
+        "*Gostaríamos de solicitar sua cotação de preços para o Grupo H Hotéis.*\n\n"
+        "*Acesse o link abaixo para preencher os valores:*\n"
+        f"*{link}*\n\n"
+        "*Dúvidas? Entre em contato conosco.*\n\n"
+        "*Atenciosamente,*\n"
+        "*Grupo H Hotéis*"
+    )
+    msg_js = json.dumps(msg)
+    components.html(
+        f"""<button onclick="navigator.clipboard.writeText({msg_js}).then(()=>{{
+                this.textContent='✅ Copiado!';
+                setTimeout(()=>this.textContent='📲 Copiar msg',2000)
+            }}).catch(()=>alert('Copie manualmente.'))"
+            style="background:#25D366;color:#fff;border:none;padding:6px 10px;
+                   border-radius:6px;cursor:pointer;font-size:13px;width:100%">
+            📲 Copiar msg
+        </button>""",
+        height=42,
+    )
 
 
 tab_nova, tab_abertas, tab_encerradas = st.tabs(["Nova Cotação", "Em Andamento", "Encerradas"])
@@ -124,6 +150,38 @@ with tab_nova:
                             df_pedidos.at[idx, "cotacao_id"] = str(novo_id)
                     escrever_df("pedidos", df_pedidos)
 
+                # Popular compras_diretas imediatamente (não depende de cotação)
+                if not df_produtos.empty and not df_itens.empty:
+                    prod_cd = {
+                        _safe_int(r["id"]): r
+                        for _, r in df_produtos.iterrows()
+                        if str(r.get("compra_direta", "False")).strip().lower() in ("true", "1")
+                    }
+                    if prod_cd:
+                        cd_agg = {}
+                        for _, ped in pedidos_bloqueados.iterrows():
+                            unid_ped = str(ped.get("unidade", ""))
+                            ped_id = _safe_int(ped["id"])
+                            itens_ped = df_itens[df_itens["pedido_id"].apply(_safe_int) == ped_id]
+                            for _, item in itens_ped.iterrows():
+                                pid = _safe_int(item["produto_id"])
+                                if pid in prod_cd:
+                                    key = (pid, unid_ped)
+                                    cd_agg[key] = cd_agg.get(key, 0) + _safe_float(item.get("quantidade", 0))
+                        if cd_agg:
+                            df_cd_cur = ler_df("compras_diretas")
+                            if df_cd_cur.empty:
+                                df_cd_cur = pd.DataFrame(columns=["id", "cotacao_id", "produto_id", "unidade", "quantidade", "comprado"])
+                            else:
+                                df_cd_cur = df_cd_cur[df_cd_cur["cotacao_id"].apply(_safe_int) != novo_id].reset_index(drop=True)
+                                escrever_df("compras_diretas", df_cd_cur)
+                            next_cd_id = int(df_cd_cur["id"].apply(_safe_int).max()) + 1 if not df_cd_cur.empty else 1
+                            novas_cd = []
+                            for (pid, unid), qtd in cd_agg.items():
+                                novas_cd.append([next_cd_id, novo_id, pid, unid, qtd, "False"])
+                                next_cd_id += 1
+                            get_sheet("compras_diretas").append_rows(novas_cd)
+
                 st.session_state["cotacao_criada"] = {"id": novo_id, "links": links, "nome": nome_cot}
                 st.cache_data.clear()
                 st.rerun()
@@ -135,7 +193,10 @@ with tab_nova:
         st.success(f"✅ Cotação **{label_cot}** criada! Envie os links abaixo para cada fornecedor:")
         for nome, link in info["links"].items():
             st.markdown(f"**{nome}**")
-            st.code(link, language=None)
+            _col_link, _col_wa = st.columns([5, 2])
+            _col_link.code(link, language=None)
+            with _col_wa:
+                _wa_btn(nome, link, f"new_{nome}")
 
 
 # ── Em Andamento ──────────────────────────────────────────────────────────────
@@ -217,9 +278,11 @@ with tab_abertas:
                             respondeu = fid in forn_responderam
                             icone = "✅" if respondeu else "⏳"
                             link = f"{BASE_URL}/?token={tok}"
-                            col_icon, col_link, col_btn = st.columns([3, 5, 2])
+                            col_icon, col_link, col_wa, col_btn = st.columns([3, 4, 2, 2])
                             col_icon.markdown(f"{icone} **{nome_f}**")
                             col_link.code(link, language=None)
+                            with col_wa:
+                                _wa_btn(nome_f, link, f"and_{cot_id}_{fid}")
                             if respondeu:
                                 if col_btn.button(
                                     "🔓 Liberar", key=f"liberar_{cot_id}_{fid}",
