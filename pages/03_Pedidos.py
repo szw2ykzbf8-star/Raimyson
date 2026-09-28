@@ -380,8 +380,14 @@ with tab_importar:
             cell.border = borda_thin
             cell.fill = fill_azul if col_idx > len(header_fixo) else fill_cinza
 
-        # Produtos (ordenados por categoria → descrição, igual ao formulário)
-        for _, prod in produtos_ativos.iterrows():
+        # Produtos: exclui inativos (já filtrado em produtos_ativos) e compra direta
+        prods_template = produtos_ativos
+        if "compra_direta" in prods_template.columns:
+            prods_template = prods_template[
+                ~prods_template["compra_direta"].astype(str).str.upper().isin(["TRUE", "1", "SIM"])
+            ]
+
+        for _, prod in prods_template.iterrows():
             row_data = [
                 str(prod.get("codigo", "") or ""),
                 str(prod.get("descricao", "") or ""),
