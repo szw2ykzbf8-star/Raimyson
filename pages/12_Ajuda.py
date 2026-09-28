@@ -364,6 +364,20 @@ if "📋 Solicitações" in ti:
 > A solicitação ficará com status **Aberta** até ser vinculada a uma cotação pelo comprador.
             """)
 
+        with st.expander("📌 Como importar solicitações por planilha Excel"):
+            st.markdown("""
+Útil para preencher os pedidos de todos os estabelecimentos de uma vez, fora do sistema, e importar com um clique.
+
+1. Acesse **Solicitações de Compra** → aba **📥 Importar Planilha**.
+2. Clique em **⬇️ Baixar modelo Excel** para obter a planilha com todos os produtos ativos e uma coluna por estabelecimento.
+3. Preencha as quantidades na planilha (deixe em branco o que não precisa).
+4. Salve o arquivo e faça o upload na mesma tela.
+5. O sistema exibe uma **prévia** por estabelecimento — confira e clique em **✅ Confirmar e criar solicitações**.
+6. Uma solicitação separada é criada para cada estabelecimento que tiver ao menos um produto com quantidade.
+
+> Produtos da planilha que não existirem no cadastro do sistema são ignorados e listados em aviso.
+            """)
+
         with st.expander("📌 Como visualizar solicitações em andamento"):
             st.markdown("""
 1. Acesse **Solicitações de Compra** no menu lateral.

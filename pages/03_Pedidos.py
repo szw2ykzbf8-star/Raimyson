@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import datetime
+import io
 from modules.auth import requer_permissao
 from modules.google_sheets import ler_df, escrever_df, append_linha, ler_categorias, atualizar_linha
 
@@ -149,7 +150,7 @@ if "confirmar_bloquear" not in st.session_state:
 if "confirmar_cancelar" not in st.session_state:
     st.session_state["confirmar_cancelar"] = None
 
-tab_novo, tab_abertos = st.tabs(["Nova Solicitação", "Solicitações Abertas"])
+tab_novo, tab_abertos, tab_importar = st.tabs(["Nova Solicitação", "Solicitações Abertas", "📥 Importar Planilha"])
 
 # ── TAB: NOVA SOLICITAÇÃO ────────────────────────────────────────────────────
 with tab_novo:
@@ -340,3 +341,199 @@ with tab_abertos:
                                             st.session_state["confirmar_bloquear"] = None
                                             st.rerun()
                                 ci += 1
+
+# ── TAB: IMPORTAR PLANILHA ────────────────────────────────────────────────────
+with tab_importar:
+    st.markdown(
+        "Baixe o modelo, preencha as quantidades por estabelecimento e faça o upload "
+        "para criar todas as solicitações de uma vez."
+    )
+
+    # ── Gerador de template ───────────────────────────────────────────────────
+    def _gerar_template_xlsx() -> bytes:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Solicitação"
+
+        header_fixo = ["codigo", "descricao", "apresentacao", "unidade_base"]
+        header = header_fixo + unidades_disponiveis
+        ws.append(header)
+
+        # Estilo cabeçalho fixo
+        fill_cinza  = PatternFill("solid", fgColor="D9D9D9")
+        fill_azul   = PatternFill("solid", fgColor="BDD7EE")
+        bold        = Font(bold=True)
+        centro      = Alignment(horizontal="center", vertical="center")
+        borda_thin  = Border(
+            left=Side(style="thin"), right=Side(style="thin"),
+            top=Side(style="thin"),  bottom=Side(style="thin"),
+        )
+
+        for col_idx, _ in enumerate(header, start=1):
+            cell = ws.cell(row=1, column=col_idx)
+            cell.font = bold
+            cell.alignment = centro
+            cell.border = borda_thin
+            cell.fill = fill_azul if col_idx > len(header_fixo) else fill_cinza
+
+        # Produtos (ordenados por categoria → descrição, igual ao formulário)
+        for _, prod in produtos_ativos.iterrows():
+            row_data = [
+                str(prod.get("codigo", "") or ""),
+                str(prod.get("descricao", "") or ""),
+                str(prod.get("apresentacao", "") or ""),
+                str(prod.get("unidade_base", "") or ""),
+            ] + [""] * len(unidades_disponiveis)
+            ws.append(row_data)
+
+        # Larguras de coluna
+        ws.column_dimensions["A"].width = 10
+        ws.column_dimensions["B"].width = 38
+        ws.column_dimensions["C"].width = 18
+        ws.column_dimensions["D"].width = 12
+        for i in range(len(unidades_disponiveis)):
+            ws.column_dimensions[get_column_letter(5 + i)].width = 16
+
+        # Travar colunas A-D (proteção visual via freeze)
+        ws.freeze_panes = "E2"
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        return buf.read()
+
+    col_dl_t, _ = st.columns([2, 4])
+    with col_dl_t:
+        if not produtos_ativos.empty:
+            st.download_button(
+                "⬇️ Baixar modelo Excel",
+                data=_gerar_template_xlsx(),
+                file_name=f"modelo_solicitacao_{datetime.date.today()}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+        else:
+            st.warning("Nenhum produto ativo para gerar o modelo.")
+
+    st.markdown("---")
+    st.markdown("**Fazer upload da planilha preenchida:**")
+
+    arq = st.file_uploader(
+        "Selecione o arquivo Excel (.xlsx)",
+        type=["xlsx"],
+        key="upload_planilha",
+    )
+
+    if arq:
+        try:
+            df_upload = pd.read_excel(arq, dtype=str)
+        except Exception as e:
+            st.error(f"Erro ao ler o arquivo: {e}")
+            st.stop()
+
+        # Identificar colunas de unidades (tudo após as 4 colunas fixas)
+        colunas_fixas = ["codigo", "descricao", "apresentacao", "unidade_base"]
+        colunas_unid_excel = [c for c in df_upload.columns if c not in colunas_fixas]
+
+        if not colunas_unid_excel:
+            st.error("A planilha não contém colunas de unidades. Verifique se usou o modelo correto.")
+        else:
+            # Mapear descricao → produto_id (normalizado)
+            mapa_prod = {}
+            if not produtos_ativos.empty:
+                for _, p in produtos_ativos.iterrows():
+                    chave = str(p["descricao"]).strip().lower()
+                    mapa_prod[chave] = p["id"]
+                    if str(p.get("codigo", "") or "").strip():
+                        mapa_prod[str(p["codigo"]).strip().lower()] = p["id"]
+
+            # Coletar itens por unidade
+            itens_por_unidade = {u: {} for u in colunas_unid_excel}
+            nao_encontrados = set()
+
+            for _, row in df_upload.iterrows():
+                descricao = str(row.get("descricao", "") or "").strip()
+                codigo    = str(row.get("codigo", "") or "").strip()
+                if not descricao:
+                    continue
+
+                prod_id = (
+                    mapa_prod.get(codigo.lower()) or
+                    mapa_prod.get(descricao.lower())
+                )
+
+                if prod_id is None:
+                    nao_encontrados.add(descricao)
+                    continue
+
+                for unid in colunas_unid_excel:
+                    val = str(row.get(unid, "") or "").strip().replace(",", ".")
+                    if val and val not in ("", "nan", "None"):
+                        try:
+                            qtd = float(val)
+                            if qtd > 0:
+                                itens_por_unidade[unid][prod_id] = qtd
+                        except ValueError:
+                            pass
+
+            if nao_encontrados:
+                st.warning(
+                    f"⚠️ {len(nao_encontrados)} produto(s) da planilha não foram encontrados no cadastro "
+                    f"e serão ignorados: {', '.join(sorted(nao_encontrados)[:10])}"
+                    + (" ..." if len(nao_encontrados) > 10 else "")
+                )
+
+            # Filtrar apenas unidades com itens
+            unidades_com_itens = {u: v for u, v in itens_por_unidade.items() if v}
+
+            if not unidades_com_itens:
+                st.info("Nenhuma quantidade encontrada na planilha. Preencha as colunas dos estabelecimentos e faça o upload novamente.")
+            else:
+                st.markdown(f"**Prévia — {len(unidades_com_itens)} solicitação(ões) a criar:**")
+
+                # Mapa produto_id → descricao para exibição
+                prod_desc_map = {}
+                if not df_produtos.empty:
+                    for _, p in df_produtos.iterrows():
+                        prod_desc_map[p["id"]] = str(p.get("descricao", p["id"]))
+
+                for unid, itens in unidades_com_itens.items():
+                    with st.expander(f"**{unid}** — {len(itens)} produto(s)", expanded=False):
+                        rows_prev = [
+                            {"Produto": prod_desc_map.get(pid, str(pid)), "Quantidade": qtd}
+                            for pid, qtd in itens.items()
+                        ]
+                        st.dataframe(pd.DataFrame(rows_prev), use_container_width=True, hide_index=True)
+
+                st.markdown("---")
+                if st.button("✅ Confirmar e criar solicitações", type="primary", use_container_width=True):
+                    try:
+                        df_pedidos_reload = ler_df("pedidos")
+                        df_itens_reload   = ler_df("itens_pedido")
+                        novo_id  = _next_id(df_pedidos_reload)
+                        item_id  = _next_id(df_itens_reload)
+                        criados  = []
+
+                        for unid, itens in unidades_com_itens.items():
+                            append_linha("pedidos", [
+                                novo_id, unid, "aberto",
+                                usuario["nome"], datetime.datetime.now().isoformat(), "", "",
+                            ])
+                            for prod_id, qtd in itens.items():
+                                append_linha("itens_pedido", [item_id, novo_id, prod_id, qtd])
+                                item_id += 1
+                            criados.append(f"#{novo_id} — {unid}")
+                            novo_id += 1
+
+                        st.cache_data.clear()
+                        st.success(
+                            f"✅ {len(criados)} solicitação(ões) criadas: "
+                            + ", ".join(criados)
+                        )
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao criar solicitações: {e}")
