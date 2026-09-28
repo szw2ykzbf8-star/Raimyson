@@ -99,6 +99,14 @@ def login_page():
                     st.error("Usuário ou senha inválidos.")
             except Exception as e:
                 st.error(f"Erro de conexão com Google Sheets: {e}")
+        st.markdown(
+            "<div style='text-align:center;font-size:0.62em;color:#aaa;margin-top:24px;line-height:1.6'>"
+            "Desenvolvido por <b>Raimyson Felix</b><br>"
+            "para <b>Grupo H Hotéis</b><br>"
+            "© 2026 · Todos os direitos reservados"
+            "</div>",
+            unsafe_allow_html=True,
+        )
 
 
 _PERFIL_PADRAO_PERM = {
