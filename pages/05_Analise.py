@@ -806,183 +806,182 @@ totais = _calc_totais()
 if not forn_ids:
     st.stop()
 
-# Horizontal scroll when many suppliers
-st.markdown(
-    "<style>"
-    "[data-testid='stHorizontalBlock'].forn-footer "
-    "{ overflow-x: auto !important; flex-wrap: nowrap !important; }"
-    "[data-testid='stHorizontalBlock'].forn-footer > [data-testid='stColumn'] "
-    "{ min-width: 160px !important; }"
-    "</style>",
-    unsafe_allow_html=True,
-)
-
-foot_cols = st.columns(len(forn_ids))
-
-for i, fid in enumerate(forn_ids):
-    forn     = forn_map.get(fid, {})
-    nome     = str(forn.get("nome_fantasia") or forn.get("razao_social") or f"#{fid}")
-    nome_c   = (nome[:22] + "…") if len(nome) > 22 else nome
-    ped_min  = _safe_float(forn.get("pedido_minimo", 0))
+for fid in forn_ids:
+    forn      = forn_map.get(fid, {})
+    nome      = str(forn.get("nome_fantasia") or forn.get("razao_social") or f"#{fid}")
+    ped_min   = _safe_float(forn.get("pedido_minimo", 0))
     tot_geral = sum(totais[fid].values())
+    compra_feita = bool(st.session_state.get(f"{sk}_compra_done_{fid}"))
 
-    with foot_cols[i]:
-        st.markdown(f"**{nome_c}**")
+    # ── Cabeçalho do fornecedor
+    icon_f = "✅" if compra_feita else ("🛒" if tot_geral > 0 else "⬜")
+    h1, h2, h3 = st.columns([5, 2, 2])
+    h1.markdown(f"### {icon_f} {nome}")
+    h2.metric("Total", f"R$ {tot_geral:.2f}" if tot_geral > 0 else "—")
+    if ped_min > 0:
+        h3.caption(f"Pedido mín.: R$ {ped_min:.0f}")
 
-        if tot_geral == 0:
-            st.caption("Nenhum item selecionado")
-        else:
-            st.markdown(f"**R$ {tot_geral:.2f}**")
+    # Avisos de pedido mínimo
+    avisos = []
+    if ped_min > 0:
+        for unid in unidades_cot:
+            t = totais[fid][unid]
+            if 0 < t < ped_min:
+                avisos.append((unid, ped_min - t))
 
-        # Por-unit minimum check
-        avisos = []
-        if ped_min > 0:
-            for unid in unidades_cot:
-                t = totais[fid][unid]
-                if 0 < t < ped_min:
-                    avisos.append((unid, ped_min - t))
+    if avisos:
+        with st.expander(f"⚠️ {len(avisos)} aviso(s) de mínimo"):
+            for u, falt in avisos:
+                st.caption(f"⚠️ {_unid_label(u)}: faltam R$ {falt:.2f}")
+        ignorar = st.checkbox("Ignorar pedido mínimo", key=f"{sk}_ign_{fid}")
+    else:
+        if tot_geral > 0 and ped_min > 0:
+            st.caption("✅ Mín. atingido")
+        ignorar = True
 
-        if avisos:
-            n_avisos = len(avisos)
-            with st.expander(f"⚠️ {n_avisos} aviso(s) de mínimo"):
-                for u, f in avisos:
-                    st.caption(f"⚠️ {_unid_label(u)}: faltam R$ {f:.2f}")
-            ignorar = st.checkbox("Ignorar pedido mínimo", key=f"{sk}_ign_{fid}")
-        else:
-            if tot_geral > 0 and ped_min > 0:
-                st.caption("✅ Mín. atingido")
-            ignorar = True
+    pode_comprar = tot_geral > 0 and (not avisos or ignorar)
 
-        pode_comprar = tot_geral > 0 and (not avisos or ignorar)
-
-        if st.session_state.get(f"{sk}_compra_done_{fid}"):
-            nome_forn_r = str(forn_map.get(fid, {}).get("nome_fantasia") or forn_map.get(fid, {}).get("razao_social") or f"#{fid}")
-            st.success(f"✅ Compra gerada para **{nome_forn_r}**!")
-            nome_safe = re.sub(r"[^\w]", "_", nome_forn_r)[:30]
-            cot_safe = re.sub(r"[^\w]", "_", nome_cot)[:20] if nome_cot else f"cot{cotacao_sel}"
-            base_name = f"{nome_safe}_{cot_safe}_{datetime.date.today()}"
-            _col_pdf, _col_html = st.columns(2)
-            with _col_pdf:
-                try:
-                    st.download_button(
-                        "📄 Baixar PDF",
-                        data=_pdf_pedido_forn(fid),
-                        file_name=f"{base_name}.pdf",
-                        mime="application/pdf",
-                        use_container_width=True,
-                        key=f"{sk}_pdf_{fid}",
-                    )
-                except Exception as _e:
-                    st.caption(f"PDF indisponível: {_e}")
-            with _col_html:
+    if compra_feita:
+        nome_forn_r = str(forn_map.get(fid, {}).get("nome_fantasia") or forn_map.get(fid, {}).get("razao_social") or f"#{fid}")
+        st.success(f"✅ Compra gerada para **{nome_forn_r}**!")
+        nome_safe = re.sub(r"[^\w]", "_", nome_forn_r)[:30]
+        cot_safe = re.sub(r"[^\w]", "_", nome_cot)[:20] if nome_cot else f"cot{cotacao_sel}"
+        base_name = f"{nome_safe}_{cot_safe}_{datetime.date.today()}"
+        _col_pdf, _col_html = st.columns(2)
+        with _col_pdf:
+            try:
                 st.download_button(
-                    "⬇️ Baixar PDF (HTML)",
-                    data=_html_pedido_forn(fid).encode("utf-8"),
-                    file_name=f"{base_name}.html",
-                    mime="text/html",
+                    "📄 Baixar PDF",
+                    data=_pdf_pedido_forn(fid),
+                    file_name=f"{base_name}.pdf",
+                    mime="application/pdf",
                     use_container_width=True,
-                    key=f"{sk}_html_{fid}",
+                    key=f"{sk}_pdf_{fid}",
                 )
-            _unlock_key = f"{sk}_unlock_{fid}"
-            if not st.session_state.get(_unlock_key):
-                if st.button("🔓 Liberar para nova compra", key=f"{sk}_ok_{fid}", use_container_width=True):
-                    st.session_state[_unlock_key] = True
-                    st.rerun()
-            else:
-                st.warning("Digite sua senha para confirmar a liberação:")
-                from modules.auth import hash_senha as _hash_senha
-                senha_conf = st.text_input("Senha", type="password", key=f"{sk}_pwd_{fid}", label_visibility="collapsed")
-                col_conf, col_cancel = st.columns(2)
-                with col_conf:
-                    if st.button("Confirmar", key=f"{sk}_pwdok_{fid}", use_container_width=True, type="primary"):
-                        if _hash_senha(senha_conf) == st.session_state["usuario"]["senha_hash"]:
-                            # Exclui compras anteriores deste fornecedor nesta cotação
-                            # para evitar duplicatas na Ordem de Compra
-                            _df_itens_compra = ler_df("itens_compra")
-                            _mask = (
-                                (df_compras["cotacao_id"].apply(_safe_int) == cotacao_sel) &
-                                (df_compras["fornecedor_id"].apply(_safe_int) == fid) &
-                                (df_compras["pedido_gerado"].astype(str).str.lower().isin(["false", "0", ""]))
-                            )
-                            _cids_excluir = df_compras[_mask]["id"].apply(_safe_int).tolist()
-                            if _cids_excluir:
-                                df_compras_upd = df_compras[~df_compras["id"].apply(_safe_int).isin(_cids_excluir)].reset_index(drop=True)
-                                df_itens_upd   = _df_itens_compra[~_df_itens_compra["compra_id"].apply(_safe_int).isin(_cids_excluir)].reset_index(drop=True)
-                                escrever_df("compras", df_compras_upd)
-                                escrever_df("itens_compra", df_itens_upd)
-                            st.session_state.pop(f"{sk}_compra_done_{fid}", None)
-                            st.session_state.pop(_unlock_key, None)
-                            st.cache_data.clear()
-                            st.rerun()
-                        else:
-                            st.error("Senha incorreta.")
-                with col_cancel:
-                    if st.button("Cancelar", key=f"{sk}_pwdcanc_{fid}", use_container_width=True):
-                        st.session_state.pop(_unlock_key, None)
-                        st.rerun()
+            except Exception as _e:
+                st.caption(f"PDF indisponível: {_e}")
+        with _col_html:
+            st.download_button(
+                "⬇️ Baixar PDF (HTML)",
+                data=_html_pedido_forn(fid).encode("utf-8"),
+                file_name=f"{base_name}.html",
+                mime="text/html",
+                use_container_width=True,
+                key=f"{sk}_html_{fid}",
+            )
+        _unlock_key = f"{sk}_unlock_{fid}"
+        if not st.session_state.get(_unlock_key):
+            if st.button("🔓 Liberar para nova compra", key=f"{sk}_ok_{fid}", use_container_width=True):
+                st.session_state[_unlock_key] = True
+                st.rerun()
         else:
-            if tot_geral == 0:
-                st.caption("⚠️ Selecione produtos na grade acima.")
-            elif avisos and not ignorar:
-                st.caption("⚠️ Marque Ignorar para prosseguir.")
-
-            if st.button("🛒 Comprar", key=f"{sk}_cpr_{fid}",
-                         use_container_width=True, type="primary"):
-                if tot_geral == 0:
-                    st.toast("Nenhum produto selecionado para este fornecedor. Use os botões 'Selecionar' na grade ou 'Selecionar melhores preços'.", icon="⚠️")
-                elif not pode_comprar:
-                    st.toast("Marque ✅ Ignorar para prosseguir mesmo sem atingir o pedido mínimo.", icon="⚠️")
-                else:
-                    st.session_state[f"{sk}_comprar_fid"] = fid
-
-        # Ajuste de quantidades — sempre disponível
-        compra_feita = bool(st.session_state.get(f"{sk}_compra_done_{fid}"))
-        with st.expander("📦 Ajustar qtd."):
-            prods_fid = [pid for pid in prod_ids if _get_sel(pid) == fid]
-            if not prods_fid:
-                st.caption("Nenhum produto selecionado para este fornecedor.")
-            else:
-                if compra_feita:
-                    st.caption("🔒 Compra já gerada — quantidades bloqueadas.")
-
-                for pid in prods_fid:
-                    prod   = prod_map.get(pid, {})
-                    nome_p = str(prod.get("descricao", f"#{pid}"))
-                    ub_p   = str(prod.get("unidade_base", ""))
-                    st.markdown(f"**{nome_p}** *— {ub_p}*" if ub_p else f"**{nome_p}**")
-                    for unid in unidades_cot:
-                        qkey = f"{sk}_qtd_{pid}_{unid}"
-                        if qkey not in st.session_state:
-                            st.session_state[qkey] = _qtd_orig(pid, unid)
-                        st.number_input(
-                            _unid_label(unid),
-                            min_value=0.0, step=0.5,
-                            key=qkey,
-                            disabled=compra_feita,
+            st.warning("Digite sua senha para confirmar a liberação:")
+            from modules.auth import hash_senha as _hash_senha
+            senha_conf = st.text_input("Senha", type="password", key=f"{sk}_pwd_{fid}", label_visibility="collapsed")
+            col_conf, col_cancel = st.columns(2)
+            with col_conf:
+                if st.button("Confirmar", key=f"{sk}_pwdok_{fid}", use_container_width=True, type="primary"):
+                    if _hash_senha(senha_conf) == st.session_state["usuario"]["senha_hash"]:
+                        _df_itens_compra = ler_df("itens_compra")
+                        _mask = (
+                            (df_compras["cotacao_id"].apply(_safe_int) == cotacao_sel) &
+                            (df_compras["fornecedor_id"].apply(_safe_int) == fid) &
+                            (df_compras["pedido_gerado"].astype(str).str.lower().isin(["false", "0", ""]))
                         )
-                    st.markdown("<hr style='margin:4px 0'>", unsafe_allow_html=True)
-
-                # Subtotais por unidade
-                st.markdown("**Subtotais:**")
-                tot_now = _calc_totais()
-                for unid in unidades_cot:
-                    t  = tot_now[fid][unid]
-                    ok = ped_min == 0 or t == 0 or t >= ped_min
-                    color = "#15803d" if ok else "#b45309"
-                    st.markdown(
-                        f"{_unid_label(unid)}: <span style='color:{color}'><b>R$ {t:.2f}</b></span>",
-                        unsafe_allow_html=True,
-                    )
-
-                if st.button("💾 Salvar quantidades", key=f"{sk}_save_{fid}",
-                             use_container_width=True, disabled=compra_feita):
-                    ok2, err2 = _salvar_quantidades()
-                    if ok2:
-                        st.toast("✅ Quantidades salvas!", icon="💾")
+                        _cids_excluir = df_compras[_mask]["id"].apply(_safe_int).tolist()
+                        if _cids_excluir:
+                            df_compras_upd = df_compras[~df_compras["id"].apply(_safe_int).isin(_cids_excluir)].reset_index(drop=True)
+                            df_itens_upd   = _df_itens_compra[~_df_itens_compra["compra_id"].apply(_safe_int).isin(_cids_excluir)].reset_index(drop=True)
+                            escrever_df("compras", df_compras_upd)
+                            escrever_df("itens_compra", df_itens_upd)
+                        st.session_state.pop(f"{sk}_compra_done_{fid}", None)
+                        st.session_state.pop(_unlock_key, None)
                         st.cache_data.clear()
                         st.rerun()
                     else:
-                        st.toast(f"Erro ao salvar: {err2}", icon="❌")
+                        st.error("Senha incorreta.")
+            with col_cancel:
+                if st.button("Cancelar", key=f"{sk}_pwdcanc_{fid}", use_container_width=True):
+                    st.session_state.pop(_unlock_key, None)
+                    st.rerun()
+    else:
+        if tot_geral == 0:
+            st.caption("⚠️ Selecione produtos na grade acima.")
+        elif avisos and not ignorar:
+            st.caption("⚠️ Marque Ignorar para prosseguir.")
+
+        if st.button("🛒 Comprar", key=f"{sk}_cpr_{fid}",
+                     use_container_width=True, type="primary"):
+            if tot_geral == 0:
+                st.toast("Nenhum produto selecionado para este fornecedor. Use os botões 'Selecionar' na grade ou 'Selecionar melhores preços'.", icon="⚠️")
+            elif not pode_comprar:
+                st.toast("Marque ✅ Ignorar para prosseguir mesmo sem atingir o pedido mínimo.", icon="⚠️")
+            else:
+                st.session_state[f"{sk}_comprar_fid"] = fid
+
+    # ── Ajustar quantidades (tabela horizontal: produto + coluna por hotel)
+    with st.expander("📦 Ajustar qtd."):
+        prods_fid = [pid for pid in prod_ids if _get_sel(pid) == fid]
+        if not prods_fid:
+            st.caption("Nenhum produto selecionado para este fornecedor.")
+        else:
+            if compra_feita:
+                st.caption("🔒 Compra já gerada — quantidades bloqueadas.")
+
+            n_unid = len(unidades_cot)
+            col_w  = [3.5] + [1.2] * n_unid
+
+            # Cabeçalho da tabela
+            hdr_r = st.columns(col_w)
+            hdr_r[0].markdown("**Produto**")
+            for j, unid in enumerate(unidades_cot):
+                hdr_r[j + 1].markdown(f"**{_unid_label(unid)}**")
+            st.markdown("<hr style='margin:4px 0'>", unsafe_allow_html=True)
+
+            # Linhas de produto com inputs
+            for pid in prods_fid:
+                prod   = prod_map.get(pid, {})
+                nome_p = str(prod.get("descricao", f"#{pid}"))
+                ub_p   = str(prod.get("unidade_base", ""))
+                row_r  = st.columns(col_w)
+                row_r[0].markdown(f"**{nome_p}**" + (f"  \n*{ub_p}*" if ub_p else ""))
+                for j, unid in enumerate(unidades_cot):
+                    qkey = f"{sk}_qtd_{pid}_{unid}"
+                    if qkey not in st.session_state:
+                        st.session_state[qkey] = _qtd_orig(pid, unid)
+                    row_r[j + 1].number_input(
+                        "qtd",
+                        min_value=0.0, step=0.5,
+                        key=qkey,
+                        disabled=compra_feita,
+                        label_visibility="collapsed",
+                    )
+            st.markdown("<hr style='margin:4px 0'>", unsafe_allow_html=True)
+
+            # Linha de subtotais
+            sub_r = st.columns(col_w)
+            sub_r[0].markdown("**Subtotal**")
+            tot_now = _calc_totais()
+            for j, unid in enumerate(unidades_cot):
+                t  = tot_now[fid][unid]
+                ok = ped_min == 0 or t == 0 or t >= ped_min
+                color = "#15803d" if ok else "#b45309"
+                sub_r[j + 1].markdown(
+                    f"<span style='color:{color}'><b>R$ {t:.2f}</b></span>",
+                    unsafe_allow_html=True,
+                )
+
+            if st.button("💾 Salvar quantidades", key=f"{sk}_save_{fid}",
+                         use_container_width=True, disabled=compra_feita):
+                ok2, err2 = _salvar_quantidades()
+                if ok2:
+                    st.toast("✅ Quantidades salvas!", icon="💾")
+                    st.cache_data.clear()
+                    st.rerun()
+                else:
+                    st.toast(f"Erro ao salvar: {err2}", icon="❌")
+
+    st.markdown("---")
 
 # ── Process purchase ──────────────────────────────────────────────────────────
 comprar_fid = st.session_state.pop(f"{sk}_comprar_fid", None)
