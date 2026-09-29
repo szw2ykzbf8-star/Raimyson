@@ -799,7 +799,7 @@ def _wa_link_forn(fid):
 
 
 # ── FOOTER: resumo por fornecedor ─────────────────────────────────────────────
-st.markdown("## Resumo por Fornecedor")
+st.markdown("## Resumo por Fornecedor")  # layout v2
 
 totais = _calc_totais()
 
