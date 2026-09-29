@@ -369,11 +369,12 @@ if "📋 Solicitações" in ti:
 Útil para preencher os pedidos de todos os estabelecimentos de uma vez, fora do sistema, e importar com um clique.
 
 1. Acesse **Solicitações de Compra** → aba **📥 Importar Planilha**.
-2. Clique em **⬇️ Baixar modelo Excel** para obter a planilha com todos os produtos ativos e uma coluna por estabelecimento.
-3. Preencha as quantidades na planilha (deixe em branco o que não precisa).
+2. Clique em **⬇️ Baixar modelo Excel** para obter a planilha com todos os produtos ativos e uma coluna por estabelecimento. Os produtos são agrupados por **categoria** para facilitar o preenchimento.
+3. Preencha as quantidades na planilha (deixe em branco o que não precisa). **Não edite as linhas de cabeçalho de categoria** — elas são ignoradas automaticamente na importação.
 4. Salve o arquivo e faça o upload na mesma tela.
 5. O sistema exibe uma **prévia** por estabelecimento — confira e clique em **✅ Confirmar e criar solicitações**.
 6. Uma solicitação separada é criada para cada estabelecimento que tiver ao menos um produto com quantidade.
+7. Após a importação bem-sucedida, uma mensagem de confirmação é exibida. Clique em **📥 Importar outra planilha** para fazer um novo upload.
 
 > Produtos da planilha que não existirem no cadastro do sistema são ignorados e listados em aviso.
             """)
@@ -424,16 +425,19 @@ if "💰 Cotações" in ti:
 4. Defina a **data e hora limite** para os fornecedores responderem.
 5. Selecione os **fornecedores** que serão convidados.
 6. Clique em **Iniciar Cotação**.
-7. O sistema exibirá um link exclusivo para cada fornecedor — copie e envie manualmente (WhatsApp, e-mail, etc.).
+7. O sistema exibirá um link exclusivo para cada fornecedor:
+   - Copie o link diretamente para colar onde quiser.
+   - Use o botão **📲 Copiar msg** ao lado de cada link para copiar uma mensagem pré-formatada para WhatsApp com o link já incluído — é só colar no chat do fornecedor.
 
-> Após a criação, os pedidos das solicitações bloqueadas ficam vinculados à cotação e bloqueados para edição.
+> Após a criação, os pedidos das solicitações bloqueadas ficam vinculados à cotação. Itens de **Compra Direta** já ficam disponíveis imediatamente na aba Compra Direta de Ordem de Compra.
             """)
 
         with st.expander("📌 Como acompanhar as respostas"):
             st.markdown("""
 - Na aba **Em Andamento**, cada cotação aberta exibe quantos fornecedores já responderam.
-- Para cada fornecedor é mostrado um ícone ✅ (respondeu) ou ⏳ (pendente), além do link para reenvio.
+- Para cada fornecedor é mostrado um ícone ✅ (respondeu) ou ⏳ (pendente), além do link para reenvio e o botão **📲 Copiar msg** para reenviar a mensagem de WhatsApp.
 - Para permitir que um fornecedor **corrija** sua resposta, clique em **🔓 Liberar** — isso apaga a resposta atual e libera o preenchimento novamente.
+- Se a cotação foi criada antes da funcionalidade de Compra Direta, o botão **🛒 Registrar itens de Compra Direta** aparecerá dentro da cotação. Clique nele para registrar os itens de compra direta correspondentes aos pedidos dessa cotação.
             """)
 
         with st.expander("📌 Como alterar o prazo ou avançar o ciclo da cotação"):
@@ -491,8 +495,9 @@ if "📊 Análise de Preços" in ti:
         with st.expander("📌 Como ajustar quantidades por hotel"):
             st.markdown("""
 - Dentro do painel de cada fornecedor, clique em **📦 Ajustar qtd.** para abrir o painel de ajuste.
-- Cada linha mostra o produto e, ao lado, uma coluna por unidade hoteleira com a quantidade solicitada.
-- Altere as quantidades conforme necessário e clique em **💾 Salvar quantidades**.
+- Cada produto é exibido com seu nome e, logo abaixo, um campo de quantidade para cada unidade hoteleira. Altere os valores conforme necessário.
+- Ao final de cada produto, os **subtotais por unidade** são exibidos com indicação colorida: verde se atinge o pedido mínimo, amarelo se não atinge.
+- Clique em **💾 Salvar quantidades** para confirmar as alterações.
 
 > Após gerar a compra, as quantidades ficam bloqueadas. Para alterar, é necessário liberar a compra (veja abaixo).
             """)
@@ -624,7 +629,7 @@ if "🛒 Ordem de Compra" in ti:
 3. Marque a caixa **Compra Direta** no painel de edição e clique em **💾 Salvar**.
 4. Para novos produtos, marque a opção **Compra Direta (não cotacionar)** antes de cadastrar.
 
-> Produtos marcados como Compra Direta continuam aparecendo nas solicitações — a diferença é que, ao fechar o prazo de uma cotação, eles são separados automaticamente e listados na aba Compra Direta em vez de serem incluídos nos pedidos aos fornecedores.
+> Produtos marcados como Compra Direta continuam aparecendo nas solicitações — a diferença é que, ao **criar a cotação**, eles são registrados automaticamente na aba Compra Direta de Ordem de Compra para controle manual, sem aguardar o fechamento do prazo.
             """)
 
 
