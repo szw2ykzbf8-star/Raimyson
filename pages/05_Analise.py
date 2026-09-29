@@ -945,39 +945,32 @@ for i, fid in enumerate(forn_ids):
                 if compra_feita:
                     st.caption("🔒 Compra já gerada — quantidades bloqueadas.")
 
-                adj_h = st.columns([2] + [1] * len(unidades_cot))
-                adj_h[0].markdown("**Produto**")
-                for j, u in enumerate(unidades_cot):
-                    adj_h[j + 1].markdown(f"**{_unid_label(u)}**")
-
                 for pid in prods_fid:
                     prod   = prod_map.get(pid, {})
                     nome_p = str(prod.get("descricao", f"#{pid}"))
                     ub_p   = str(prod.get("unidade_base", ""))
-                    adj_r  = st.columns([2] + [1] * len(unidades_cot))
-                    adj_r[0].markdown(nome_p[:22])
-                    adj_r[0].caption(ub_p)
-                    for j, unid in enumerate(unidades_cot):
+                    st.markdown(f"**{nome_p}** *— {ub_p}*" if ub_p else f"**{nome_p}**")
+                    for unid in unidades_cot:
                         qkey = f"{sk}_qtd_{pid}_{unid}"
                         if qkey not in st.session_state:
                             st.session_state[qkey] = _qtd_orig(pid, unid)
-                        adj_r[j + 1].number_input(
-                            "", min_value=0.0, step=0.5,
-                            key=qkey, label_visibility="collapsed",
+                        st.number_input(
+                            _unid_label(unid),
+                            min_value=0.0, step=0.5,
+                            key=qkey,
                             disabled=compra_feita,
                         )
+                    st.markdown("<hr style='margin:4px 0'>", unsafe_allow_html=True)
 
                 # Subtotais por unidade
-                st.markdown("---")
-                sub_h = st.columns([2] + [1] * len(unidades_cot))
-                sub_h[0].markdown("**Subtotal**")
+                st.markdown("**Subtotais:**")
                 tot_now = _calc_totais()
-                for j, unid in enumerate(unidades_cot):
+                for unid in unidades_cot:
                     t  = tot_now[fid][unid]
                     ok = ped_min == 0 or t == 0 or t >= ped_min
                     color = "#15803d" if ok else "#b45309"
-                    sub_h[j + 1].markdown(
-                        f"<span style='color:{color}'><b>R$ {t:.2f}</b></span>",
+                    st.markdown(
+                        f"{_unid_label(unid)}: <span style='color:{color}'><b>R$ {t:.2f}</b></span>",
                         unsafe_allow_html=True,
                     )
 
