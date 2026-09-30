@@ -202,7 +202,7 @@ with tab_enc:
                 st.markdown("<hr style='margin:4px 0'>", unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TAB ATIVA
+# TAB ATIVA — selectbox
 # ─────────────────────────────────────────────────────────────────────────────
 cotacao_sel = None  # será definido dentro da tab ativa
 with tab_ativa:
@@ -222,294 +222,298 @@ with tab_ativa:
             "Cotação", options=cotacoes_com_resp["id"].tolist(), format_func=_label_cot,
         ))
 
-if cotacao_sel is None:
-    st.stop()
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB ATIVA — main analysis (second with block: content appended to same tab)
+# ─────────────────────────────────────────────────────────────────────────────
+with tab_ativa:
+    if cotacao_sel is None:
+        st.stop()
 
-# Nome da cotação selecionada (para PDF e nome de arquivo)
-_cot_row = cotacoes_com_resp[cotacoes_com_resp["id"].apply(_safe_int) == cotacao_sel]
-nome_cot = str(_cot_row.iloc[0].get("nome", "") or "").strip() if not _cot_row.empty else ""
-nome_cot_label = nome_cot if nome_cot else f"Cotação #{cotacao_sel}"
+    # Nome da cotação selecionada (para PDF e nome de arquivo)
+    _cot_row = cotacoes_com_resp[cotacoes_com_resp["id"].apply(_safe_int) == cotacao_sel]
+    nome_cot = str(_cot_row.iloc[0].get("nome", "") or "").strip() if not _cot_row.empty else ""
+    nome_cot_label = nome_cot if nome_cot else f"Cotação #{cotacao_sel}"
 
-# ── Build data for this cotação ───────────────────────────────────────────────
-respostas = (
-    df_respostas[df_respostas["cotacao_id"].apply(_safe_int) == cotacao_sel].copy()
-    if not df_respostas.empty else pd.DataFrame()
-)
-if respostas.empty:
-    st.warning("Nenhuma resposta de fornecedor para esta cotação.")
-    st.stop()
+    # ── Build data for this cotação ───────────────────────────────────────────────
+    respostas = (
+        df_respostas[df_respostas["cotacao_id"].apply(_safe_int) == cotacao_sel].copy()
+        if not df_respostas.empty else pd.DataFrame()
+    )
+    if respostas.empty:
+        st.warning("Nenhuma resposta de fornecedor para esta cotação.")
+        st.stop()
 
-forn_ids = sorted({_safe_int(r["fornecedor_id"]) for _, r in respostas.iterrows()})
-prod_ids = sorted({_safe_int(r["produto_id"]) for _, r in respostas.iterrows()})
+    forn_ids = sorted({_safe_int(r["fornecedor_id"]) for _, r in respostas.iterrows()})
+    prod_ids = sorted({_safe_int(r["produto_id"]) for _, r in respostas.iterrows()})
 
-# Responses: (prod_id, forn_id) → data
-resp_dict = {}
-for _, r in respostas.iterrows():
-    pid = _safe_int(r["produto_id"])
-    fid = _safe_int(r["fornecedor_id"])
-    pn  = _preco_norm(r["preco"], r.get("tipo_embalagem", ""), r.get("qtd_por_embalagem", 1))
-    resp_dict[(pid, fid)] = {
-        "preco":      _safe_float(r["preco"]),
-        "preco_norm": pn,
-        "tipo":       str(r.get("tipo_embalagem", "")),
-        "qtd_emb":    _safe_float(r.get("qtd_por_embalagem", 1), 1.0),
-        "obs":        str(r.get("observacao", "")),
-        "marca":      str(r.get("marca", "")),
-    }
+    # Responses: (prod_id, forn_id) → data
+    resp_dict = {}
+    for _, r in respostas.iterrows():
+        pid = _safe_int(r["produto_id"])
+        fid = _safe_int(r["fornecedor_id"])
+        pn  = _preco_norm(r["preco"], r.get("tipo_embalagem", ""), r.get("qtd_por_embalagem", 1))
+        resp_dict[(pid, fid)] = {
+            "preco":      _safe_float(r["preco"]),
+            "preco_norm": pn,
+            "tipo":       str(r.get("tipo_embalagem", "")),
+            "qtd_emb":    _safe_float(r.get("qtd_por_embalagem", 1), 1.0),
+            "obs":        str(r.get("observacao", "")),
+            "marca":      str(r.get("marca", "")),
+        }
 
-# Best price per product
-melhor_preco = {}
-for pid in prod_ids:
-    cands = [(fid, resp_dict[(pid, fid)]["preco_norm"])
-             for fid in forn_ids if (pid, fid) in resp_dict]
-    if cands:
-        melhor_preco[pid] = min(cands, key=lambda x: x[1])
+    # Best price per product
+    melhor_preco = {}
+    for pid in prod_ids:
+        cands = [(fid, resp_dict[(pid, fid)]["preco_norm"])
+                 for fid in forn_ids if (pid, fid) in resp_dict]
+        if cands:
+            melhor_preco[pid] = min(cands, key=lambda x: x[1])
 
-# Pedidos and units for this cotação
-peds_cot = (
-    df_pedidos[df_pedidos["cotacao_id"].apply(_safe_int) == cotacao_sel]
-    if not df_pedidos.empty and "cotacao_id" in df_pedidos.columns else pd.DataFrame()
-)
-unidades_cot = sorted(peds_cot["unidade"].unique().tolist()) if not peds_cot.empty else []
+    # Pedidos and units for this cotação
+    peds_cot = (
+        df_pedidos[df_pedidos["cotacao_id"].apply(_safe_int) == cotacao_sel]
+        if not df_pedidos.empty and "cotacao_id" in df_pedidos.columns else pd.DataFrame()
+    )
+    unidades_cot = sorted(peds_cot["unidade"].unique().tolist()) if not peds_cot.empty else []
 
-# Original quantities per product per unit (from itens_pedido)
-def _qtd_orig(pid, unid):
-    if df_itens.empty or peds_cot.empty:
-        return 0.0
-    total = 0.0
-    for _, ped in peds_cot[peds_cot["unidade"] == unid].iterrows():
-        ped_id = _safe_int(ped["id"])
-        item = df_itens[
-            (df_itens["pedido_id"].apply(_safe_int) == ped_id) &
-            (df_itens["produto_id"].apply(_safe_int) == pid)
+    # Original quantities per product per unit (from itens_pedido)
+    def _qtd_orig(pid, unid):
+        if df_itens.empty or peds_cot.empty:
+            return 0.0
+        total = 0.0
+        for _, ped in peds_cot[peds_cot["unidade"] == unid].iterrows():
+            ped_id = _safe_int(ped["id"])
+            item = df_itens[
+                (df_itens["pedido_id"].apply(_safe_int) == ped_id) &
+                (df_itens["produto_id"].apply(_safe_int) == pid)
+            ]
+            if not item.empty:
+                total += _safe_float(item.iloc[0]["quantidade"])
+        return total
+
+    # Historical prices (last 3 won purchases per product)
+    def _historico(pid):
+        if df_hist_precos.empty:
+            return []
+        hist = df_hist_precos[
+            (df_hist_precos["produto_id"].apply(_safe_int) == pid) &
+            (df_hist_precos["ganhou"].astype(str).str.lower().isin(["true", "1", "sim"]))
+        ].copy()
+        if hist.empty:
+            return []
+        hist = hist.sort_values("data", ascending=False).head(3)
+        result = []
+        for _, h in hist.iterrows():
+            fid  = _safe_int(h["fornecedor_id"])
+            nome = str(forn_map.get(fid, {}).get("nome_fantasia") or forn_map.get(fid, {}).get("razao_social") or f"#{fid}")
+            pn   = _safe_float(h.get("preco_normalizado", h.get("preco", 0)))
+            result.append({"data": str(h.get("data", ""))[:10], "preco": pn, "fornecedor": nome})
+        return result
+
+    # ── Session state ─────────────────────────────────────────────────────────────
+    sk = f"analise_{cotacao_sel}"
+
+    # Promover resultado pendente para estado exibível (após rerun)
+    _compra_pending = st.session_state.pop(f"{sk}_compra_pending", None)
+    if _compra_pending is not None:
+        st.session_state[f"{sk}_compra_done_{_compra_pending}"] = True
+
+    # Inicializar compra_done a partir do banco (persiste refreshes e cache clears)
+    if not df_compras.empty:
+        _compras_cot = df_compras[
+            (df_compras["cotacao_id"].apply(_safe_int) == cotacao_sel) &
+            (df_compras["pedido_gerado"].astype(str).str.lower().isin(["false", "0", ""]))
         ]
-        if not item.empty:
-            total += _safe_float(item.iloc[0]["quantidade"])
-    return total
+        for _fid_db in _compras_cot["fornecedor_id"].apply(_safe_int).unique():
+            _key_db = f"{sk}_compra_done_{_fid_db}"
+            if _key_db not in st.session_state:
+                st.session_state[_key_db] = True
 
-# Historical prices (last 3 won purchases per product)
-def _historico(pid):
-    if df_hist_precos.empty:
-        return []
-    hist = df_hist_precos[
-        (df_hist_precos["produto_id"].apply(_safe_int) == pid) &
-        (df_hist_precos["ganhou"].astype(str).str.lower().isin(["true", "1", "sim"]))
-    ].copy()
-    if hist.empty:
-        return []
-    hist = hist.sort_values("data", ascending=False).head(3)
-    result = []
-    for _, h in hist.iterrows():
-        fid  = _safe_int(h["fornecedor_id"])
-        nome = str(forn_map.get(fid, {}).get("nome_fantasia") or forn_map.get(fid, {}).get("razao_social") or f"#{fid}")
-        pn   = _safe_float(h.get("preco_normalizado", h.get("preco", 0)))
-        result.append({"data": str(h.get("data", ""))[:10], "preco": pn, "fornecedor": nome})
-    return result
-
-# ── Session state ─────────────────────────────────────────────────────────────
-sk = f"analise_{cotacao_sel}"
-
-# Promover resultado pendente para estado exibível (após rerun)
-_compra_pending = st.session_state.pop(f"{sk}_compra_pending", None)
-if _compra_pending is not None:
-    st.session_state[f"{sk}_compra_done_{_compra_pending}"] = True
-
-# Inicializar compra_done a partir do banco (persiste refreshes e cache clears)
-if not df_compras.empty:
-    _compras_cot = df_compras[
-        (df_compras["cotacao_id"].apply(_safe_int) == cotacao_sel) &
-        (df_compras["pedido_gerado"].astype(str).str.lower().isin(["false", "0", ""]))
-    ]
-    for _fid_db in _compras_cot["fornecedor_id"].apply(_safe_int).unique():
-        _key_db = f"{sk}_compra_done_{_fid_db}"
-        if _key_db not in st.session_state:
-            st.session_state[_key_db] = True
-
-if f"{sk}_init" not in st.session_state:
-    for pid in prod_ids:
-        skey = f"{sk}_sel_{pid}"
-        if skey not in st.session_state and pid in melhor_preco:
-            st.session_state[skey] = melhor_preco[pid][0]
-    for pid in prod_ids:
-        for unid in unidades_cot:
-            qkey = f"{sk}_qtd_{pid}_{unid}"
-            if qkey not in st.session_state:
-                st.session_state[qkey] = _qtd_orig(pid, unid)
-    st.session_state[f"{sk}_init"] = True
-
-def _get_sel(pid):
-    return st.session_state.get(f"{sk}_sel_{pid}")
-
-def _get_qtd(pid, unid):
-    return _safe_float(st.session_state.get(f"{sk}_qtd_{pid}_{unid}", _qtd_orig(pid, unid)))
-
-def _calc_totais():
-    totais = {fid: {u: 0.0 for u in unidades_cot} for fid in forn_ids}
-    for pid in prod_ids:
-        sel = _get_sel(pid)
-        if sel is None or (pid, sel) not in resp_dict:
-            continue
-        pn = resp_dict[(pid, sel)]["preco_norm"]
-        for unid in unidades_cot:
-            totais[sel][unid] += _get_qtd(pid, unid) * pn
-    return totais
-
-# ── Action buttons ────────────────────────────────────────────────────────────
-col_a, col_b, _ = st.columns([2, 2, 6])
-with col_a:
-    if st.button("⭐ Selecionar melhores preços", use_container_width=True):
+    if f"{sk}_init" not in st.session_state:
         for pid in prod_ids:
-            if pid in melhor_preco:
-                st.session_state[f"{sk}_sel_{pid}"] = melhor_preco[pid][0]
-        st.rerun()
-with col_b:
-    if st.button("🗑️ Limpar seleções", use_container_width=True):
+            skey = f"{sk}_sel_{pid}"
+            if skey not in st.session_state and pid in melhor_preco:
+                st.session_state[skey] = melhor_preco[pid][0]
         for pid in prod_ids:
-            st.session_state.pop(f"{sk}_sel_{pid}", None)
-        st.rerun()
+            for unid in unidades_cot:
+                qkey = f"{sk}_qtd_{pid}_{unid}"
+                if qkey not in st.session_state:
+                    st.session_state[qkey] = _qtd_orig(pid, unid)
+        st.session_state[f"{sk}_init"] = True
 
-st.markdown("---")
+    def _get_sel(pid):
+        return st.session_state.get(f"{sk}_sel_{pid}")
 
-# ── GRID ──────────────────────────────────────────────────────────────────────
-W_PROD, W_QTD, W_HIST, W_FORN = 2.5, 1.3, 1.5, 1.6
-col_widths = [W_PROD, W_QTD, W_HIST] + [W_FORN] * len(forn_ids)
+    def _get_qtd(pid, unid):
+        return _safe_float(st.session_state.get(f"{sk}_qtd_{pid}_{unid}", _qtd_orig(pid, unid)))
 
-# Header
-hdr = st.columns(col_widths)
-hdr[0].markdown("**Produto**")
-hdr[1].markdown("**Quantidade**")
-hdr[2].markdown("**Última Compra**")
-for i, fid in enumerate(forn_ids):
-    nome = str(forn_map.get(fid, {}).get("nome_fantasia") or forn_map.get(fid, {}).get("razao_social") or f"#{fid}")
-    nome_c   = (nome[:22] + "…") if len(nome) > 22 else nome
-    ped_min  = _safe_float(forn_map.get(fid, {}).get("pedido_minimo", 0))
-    min_txt  = f"*Mín: R$ {ped_min:.0f}*" if ped_min > 0 else ""
-    hdr[3 + i].markdown(f"**{nome_c}**  \n{min_txt}")
+    def _calc_totais():
+        totais = {fid: {u: 0.0 for u in unidades_cot} for fid in forn_ids}
+        for pid in prod_ids:
+            sel = _get_sel(pid)
+            if sel is None or (pid, sel) not in resp_dict:
+                continue
+            pn = resp_dict[(pid, sel)]["preco_norm"]
+            for unid in unidades_cot:
+                totais[sel][unid] += _get_qtd(pid, unid) * pn
+        return totais
 
-st.markdown("<hr style='margin:2px 0 8px'>", unsafe_allow_html=True)
+    # ── Action buttons ────────────────────────────────────────────────────────────
+    col_a, col_b, _ = st.columns([2, 2, 6])
+    with col_a:
+        if st.button("⭐ Selecionar melhores preços", use_container_width=True):
+            for pid in prod_ids:
+                if pid in melhor_preco:
+                    st.session_state[f"{sk}_sel_{pid}"] = melhor_preco[pid][0]
+            st.rerun()
+    with col_b:
+        if st.button("🗑️ Limpar seleções", use_container_width=True):
+            for pid in prod_ids:
+                st.session_state.pop(f"{sk}_sel_{pid}", None)
+            st.rerun()
 
-# Product rows
-for pid in prod_ids:
-    prod      = prod_map.get(pid, {})
-    nome_prod = str(prod.get("descricao", f"Produto {pid}"))
-    ub        = str(prod.get("unidade_base", ""))
-    apres     = str(prod.get("apresentacao", ""))
-    hist      = _historico(pid)
-    qtds_unid = {u: _get_qtd(pid, u) for u in unidades_cot}
-    qtd_total = sum(qtds_unid.values())
-    cur_sel   = _get_sel(pid)
+    st.markdown("---")
 
-    row = st.columns(col_widths)
+    # ── GRID ──────────────────────────────────────────────────────────────────────
+    W_PROD, W_QTD, W_HIST, W_FORN = 2.5, 1.3, 1.5, 1.6
+    col_widths = [W_PROD, W_QTD, W_HIST] + [W_FORN] * len(forn_ids)
 
-    with row[0]:
-        st.markdown(f"**{nome_prod}**")
-        if apres:
-            st.caption(apres)
-
-    with row[1]:
-        st.markdown(f"**{qtd_total:.1f}**")
-        qtds_pos = {u: q for u, q in qtds_unid.items() if q > 0}
-        if len(qtds_pos) > 1:
-            with st.expander("▸ por hotel"):
-                for u, q in qtds_pos.items():
-                    st.caption(f"{_unid_label(u)}: {q:.1f}")
-
-    with row[2]:
-        if hist:
-            h0 = hist[0]
-            st.markdown(f"R$ {h0['preco']:.2f}")
-            st.caption(f"{h0['data']}  \n{h0['fornecedor'][:14]}")
-            if len(hist) > 1:
-                with st.expander("▸ histórico"):
-                    for h in hist:
-                        st.caption(f"{h['data']}: R$ {h['preco']:.2f}  \n{h['fornecedor'][:18]}")
-        else:
-            st.caption("Sem histórico")
-
+    # Header
+    hdr = st.columns(col_widths)
+    hdr[0].markdown("**Produto**")
+    hdr[1].markdown("**Quantidade**")
+    hdr[2].markdown("**Última Compra**")
     for i, fid in enumerate(forn_ids):
-        with row[3 + i]:
-            if (pid, fid) not in resp_dict:
+        nome = str(forn_map.get(fid, {}).get("nome_fantasia") or forn_map.get(fid, {}).get("razao_social") or f"#{fid}")
+        nome_c   = (nome[:22] + "…") if len(nome) > 22 else nome
+        ped_min  = _safe_float(forn_map.get(fid, {}).get("pedido_minimo", 0))
+        min_txt  = f"*Mín: R$ {ped_min:.0f}*" if ped_min > 0 else ""
+        hdr[3 + i].markdown(f"**{nome_c}**  \n{min_txt}")
+
+    st.markdown("<hr style='margin:2px 0 8px'>", unsafe_allow_html=True)
+
+    # Product rows
+    for pid in prod_ids:
+        prod      = prod_map.get(pid, {})
+        nome_prod = str(prod.get("descricao", f"Produto {pid}"))
+        ub        = str(prod.get("unidade_base", ""))
+        apres     = str(prod.get("apresentacao", ""))
+        hist      = _historico(pid)
+        qtds_unid = {u: _get_qtd(pid, u) for u in unidades_cot}
+        qtd_total = sum(qtds_unid.values())
+        cur_sel   = _get_sel(pid)
+
+        row = st.columns(col_widths)
+
+        with row[0]:
+            st.markdown(f"**{nome_prod}**")
+            if apres:
+                st.caption(apres)
+
+        with row[1]:
+            st.markdown(f"**{qtd_total:.1f}**")
+            qtds_pos = {u: q for u, q in qtds_unid.items() if q > 0}
+            if len(qtds_pos) > 1:
+                with st.expander("▸ por hotel"):
+                    for u, q in qtds_pos.items():
+                        st.caption(f"{_unid_label(u)}: {q:.1f}")
+
+        with row[2]:
+            if hist:
+                h0 = hist[0]
+                st.markdown(f"R$ {h0['preco']:.2f}")
+                st.caption(f"{h0['data']}  \n{h0['fornecedor'][:14]}")
+                if len(hist) > 1:
+                    with st.expander("▸ histórico"):
+                        for h in hist:
+                            st.caption(f"{h['data']}: R$ {h['preco']:.2f}  \n{h['fornecedor'][:18]}")
+            else:
+                st.caption("Sem histórico")
+
+        for i, fid in enumerate(forn_ids):
+            with row[3 + i]:
+                if (pid, fid) not in resp_dict:
+                    st.markdown(
+                        "<span style='color:#bbb;font-size:0.85em'>Não possui</span>",
+                        unsafe_allow_html=True,
+                    )
+                    continue
+
+                rd      = resp_dict[(pid, fid)]
+                pn      = rd["preco_norm"]
+                is_best = pid in melhor_preco and melhor_preco[pid][0] == fid
+                is_sel  = cur_sel == fid
+
+                if is_sel:
+                    bg    = "background:#dbeafe;border:2px solid #3b82f6;border-radius:6px;padding:6px;margin-bottom:4px"
+                    badge = "<br><small style='color:#1d4ed8'>✓ Selecionado</small>"
+                elif is_best:
+                    bg    = "background:#dcfce7;border:1px solid #86efac;border-radius:6px;padding:6px;margin-bottom:4px"
+                    badge = "<br><small style='color:#15803d'>★ Melhor Preço</small>"
+                else:
+                    bg    = "border:1px solid #e5e7eb;border-radius:6px;padding:6px;margin-bottom:4px"
+                    badge = ""
+
                 st.markdown(
-                    "<span style='color:#bbb;font-size:0.85em'>Não possui</span>",
+                    f"<div style='{bg}'><b>R$ {pn:.2f}</b>{badge}</div>",
                     unsafe_allow_html=True,
                 )
-                continue
+                if rd["marca"]:
+                    st.caption(f"🏷️ {rd['marca'][:25]}")
+                if rd["obs"]:
+                    st.caption(rd["obs"][:30])
 
-            rd      = resp_dict[(pid, fid)]
-            pn      = rd["preco_norm"]
-            is_best = pid in melhor_preco and melhor_preco[pid][0] == fid
-            is_sel  = cur_sel == fid
-
-            if is_sel:
-                bg    = "background:#dbeafe;border:2px solid #3b82f6;border-radius:6px;padding:6px;margin-bottom:4px"
-                badge = "<br><small style='color:#1d4ed8'>✓ Selecionado</small>"
-            elif is_best:
-                bg    = "background:#dcfce7;border:1px solid #86efac;border-radius:6px;padding:6px;margin-bottom:4px"
-                badge = "<br><small style='color:#15803d'>★ Melhor Preço</small>"
-            else:
-                bg    = "border:1px solid #e5e7eb;border-radius:6px;padding:6px;margin-bottom:4px"
-                badge = ""
-
-            st.markdown(
-                f"<div style='{bg}'><b>R$ {pn:.2f}</b>{badge}</div>",
-                unsafe_allow_html=True,
-            )
-            if rd["marca"]:
-                st.caption(f"🏷️ {rd['marca'][:25]}")
-            if rd["obs"]:
-                st.caption(rd["obs"][:30])
-
-            if not is_sel:
-                if st.button("Selecionar", key=f"{sk}_s_{pid}_{fid}",
-                             use_container_width=True, type="secondary"):
-                    st.session_state[f"{sk}_sel_{pid}"] = fid
-                    st.rerun()
-            else:
-                if st.button("Remover", key=f"{sk}_r_{pid}_{fid}",
-                             use_container_width=True):
-                    st.session_state.pop(f"{sk}_sel_{pid}", None)
-                    st.rerun()
-
-    st.markdown("<hr style='margin:4px 0'>", unsafe_allow_html=True)
-
-
-# ── Save adjusted quantities to DB ───────────────────────────────────────────
-def _salvar_quantidades():
-    df_itens_upd = ler_df("itens_pedido").copy()
-    next_id = _next_id(df_itens_upd) if not df_itens_upd.empty else 1
-    cols = list(df_itens_upd.columns) if not df_itens_upd.empty else ["id", "pedido_id", "produto_id", "quantidade"]
-    for pid in prod_ids:
-        for unid in unidades_cot:
-            nova_qtd = _get_qtd(pid, unid)
-            peds_unid = peds_cot[peds_cot["unidade"] == unid] if not peds_cot.empty else pd.DataFrame()
-            for _, ped in peds_unid.iterrows():
-                ped_id = _safe_int(ped["id"])
-                if not df_itens_upd.empty:
-                    mask = (
-                        (df_itens_upd["pedido_id"].apply(_safe_int) == ped_id) &
-                        (df_itens_upd["produto_id"].apply(_safe_int) == pid)
-                    )
+                if not is_sel:
+                    if st.button("Selecionar", key=f"{sk}_s_{pid}_{fid}",
+                                 use_container_width=True, type="secondary"):
+                        st.session_state[f"{sk}_sel_{pid}"] = fid
+                        st.rerun()
                 else:
-                    mask = pd.Series([], dtype=bool)
-                if not df_itens_upd.empty and mask.any():
-                    df_itens_upd.loc[mask, "quantidade"] = str(nova_qtd)
-                elif nova_qtd > 0:
-                    new_row = {col: "" for col in cols}
-                    new_row["id"] = str(next_id)
-                    new_row["pedido_id"] = str(ped_id)
-                    new_row["produto_id"] = str(pid)
-                    new_row["quantidade"] = str(nova_qtd)
-                    df_itens_upd = pd.concat([df_itens_upd, pd.DataFrame([new_row])], ignore_index=True)
-                    next_id += 1
-    try:
-        escrever_df("itens_pedido", df_itens_upd)
-        return True, None
-    except Exception as e:
-        return False, str(e)
+                    if st.button("Remover", key=f"{sk}_r_{pid}_{fid}",
+                                 use_container_width=True):
+                        st.session_state.pop(f"{sk}_sel_{pid}", None)
+                        st.rerun()
+
+        st.markdown("<hr style='margin:4px 0'>", unsafe_allow_html=True)
 
 
-# ── Helpers PDF / WhatsApp ────────────────────────────────────────────────────
-_CSS_PDF = """<style>
+    # ── Save adjusted quantities to DB ───────────────────────────────────────────
+    def _salvar_quantidades():
+        df_itens_upd = ler_df("itens_pedido").copy()
+        next_id = _next_id(df_itens_upd) if not df_itens_upd.empty else 1
+        cols = list(df_itens_upd.columns) if not df_itens_upd.empty else ["id", "pedido_id", "produto_id", "quantidade"]
+        for pid in prod_ids:
+            for unid in unidades_cot:
+                nova_qtd = _get_qtd(pid, unid)
+                peds_unid = peds_cot[peds_cot["unidade"] == unid] if not peds_cot.empty else pd.DataFrame()
+                for _, ped in peds_unid.iterrows():
+                    ped_id = _safe_int(ped["id"])
+                    if not df_itens_upd.empty:
+                        mask = (
+                            (df_itens_upd["pedido_id"].apply(_safe_int) == ped_id) &
+                            (df_itens_upd["produto_id"].apply(_safe_int) == pid)
+                        )
+                    else:
+                        mask = pd.Series([], dtype=bool)
+                    if not df_itens_upd.empty and mask.any():
+                        df_itens_upd.loc[mask, "quantidade"] = str(nova_qtd)
+                    elif nova_qtd > 0:
+                        new_row = {col: "" for col in cols}
+                        new_row["id"] = str(next_id)
+                        new_row["pedido_id"] = str(ped_id)
+                        new_row["produto_id"] = str(pid)
+                        new_row["quantidade"] = str(nova_qtd)
+                        df_itens_upd = pd.concat([df_itens_upd, pd.DataFrame([new_row])], ignore_index=True)
+                        next_id += 1
+        try:
+            escrever_df("itens_pedido", df_itens_upd)
+            return True, None
+        except Exception as e:
+            return False, str(e)
+
+
+    # ── Helpers PDF / WhatsApp ────────────────────────────────────────────────────
+    _CSS_PDF = """<style>
 body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:20px}
 h2{font-size:15px;margin:0 0 4px}
 h3{font-size:12px;font-weight:bold;margin:14px 0 5px;
@@ -527,72 +531,72 @@ td{border:1px solid #ddd;padding:4px 6px;vertical-align:top}
 </style>"""
 
 
-def _addr_u(r):
-    parts = [
-        str(r.get("logradouro", "") or ""),
-        str(r.get("numero", "") or ""),
-        str(r.get("complemento", "") or ""),
-        str(r.get("bairro", "") or ""),
-        (str(r.get("cidade", "") or "") +
-         ((" - " + str(r.get("estado", "") or "")) if r.get("estado") else "")),
-    ]
-    return ", ".join(p for p in parts if p.strip())
+    def _addr_u(r):
+        parts = [
+            str(r.get("logradouro", "") or ""),
+            str(r.get("numero", "") or ""),
+            str(r.get("complemento", "") or ""),
+            str(r.get("bairro", "") or ""),
+            (str(r.get("cidade", "") or "") +
+             ((" - " + str(r.get("estado", "") or "")) if r.get("estado") else "")),
+        ]
+        return ", ".join(p for p in parts if p.strip())
 
 
-def _html_pedido_forn(fid):
-    forn = forn_map.get(fid, {})
-    forn_min = _safe_float(forn.get("pedido_minimo", 0))
-    forn_min_str = f"R$ {forn_min:.2f}" if forn_min > 0 else "—"
-    prods_sel = [pid for pid in prod_ids if _get_sel(pid) == fid]
-    secoes = []
-    grand_total = 0.0
-    idx = 1
-    for unid in unidades_cot:
-        itens_det = []
-        for pid in prods_sel:
-            qty = _get_qtd(pid, unid)
-            if qty <= 0:
+    def _html_pedido_forn(fid):
+        forn = forn_map.get(fid, {})
+        forn_min = _safe_float(forn.get("pedido_minimo", 0))
+        forn_min_str = f"R$ {forn_min:.2f}" if forn_min > 0 else "—"
+        prods_sel = [pid for pid in prod_ids if _get_sel(pid) == fid]
+        secoes = []
+        grand_total = 0.0
+        idx = 1
+        for unid in unidades_cot:
+            itens_det = []
+            for pid in prods_sel:
+                qty = _get_qtd(pid, unid)
+                if qty <= 0:
+                    continue
+                rd   = resp_dict.get((pid, fid), {})
+                prod = prod_map.get(pid, {})
+                _qtd_emb = rd.get("qtd_emb", 1.0)
+                _gram_inf = str(rd.get("tipo", ""))
+                if _qtd_emb and float(_qtd_emb) > 1:
+                    _gram_inf = f"{_gram_inf} x{float(_qtd_emb):g}"
+                itens_det.append({
+                    "codigo":    str(prod.get("codigo", "") or "—"),
+                    "descricao": str(prod.get("descricao", f"Produto {pid}")),
+                    "gram_sol":  str(prod.get("apresentacao", "") or ""),
+                    "obs":       str(rd.get("obs", "")),
+                    "marca":     str(rd.get("marca", "")),
+                    "gram_inf":  _gram_inf.strip(),
+                    "preco":     rd.get("preco_norm", 0.0),
+                    "qtd":       qty,
+                })
+            if not itens_det:
                 continue
-            rd   = resp_dict.get((pid, fid), {})
-            prod = prod_map.get(pid, {})
-            _qtd_emb = rd.get("qtd_emb", 1.0)
-            _gram_inf = str(rd.get("tipo", ""))
-            if _qtd_emb and float(_qtd_emb) > 1:
-                _gram_inf = f"{_gram_inf} x{float(_qtd_emb):g}"
-            itens_det.append({
-                "codigo":    str(prod.get("codigo", "") or "—"),
-                "descricao": str(prod.get("descricao", f"Produto {pid}")),
-                "gram_sol":  str(prod.get("apresentacao", "") or ""),
-                "obs":       str(rd.get("obs", "")),
-                "marca":     str(rd.get("marca", "")),
-                "gram_inf":  _gram_inf.strip(),
-                "preco":     rd.get("preco_norm", 0.0),
-                "qtd":       qty,
-            })
-        if not itens_det:
-            continue
-        unid_info = unid_map.get(str(unid), {"nome": unid, "nome_fantasia": unid})
-        total = sum(_safe_float(i["preco"]) * _safe_float(i["qtd"]) for i in itens_det)
-        grand_total += total
-        thead = (
-            "<thead><tr><th>Código</th><th>Produto</th><th>Gram. Solicitada</th>"
-            "<th>Marca</th><th>Obs</th><th>Gram. Informada</th>"
-            "<th>Preço Un.</th><th>Qtde.</th><th>Total</th></tr></thead>"
-        )
-        rows = ""
-        for it in itens_det:
-            obs_cell = it["obs"] if it["obs"] else "—"
-            p, q = _safe_float(it["preco"]), _safe_float(it["qtd"])
-            rows += (
-                f"<tr><td>{it['codigo']}</td><td>{it['descricao']}</td>"
-                f"<td>{it['gram_sol']}</td>"
-                f"<td>{it['marca']}</td>"
-                f"<td style='font-size:10px'>{obs_cell}</td>"
-                f"<td>{it['gram_inf']}</td>"
-                f"<td>R$ {p:.2f}</td><td>{q:g}</td>"
-                f"<td>R$ {p*q:.2f}</td></tr>"
+            unid_info = unid_map.get(str(unid), {"nome": unid, "nome_fantasia": unid})
+            total = sum(_safe_float(i["preco"]) * _safe_float(i["qtd"]) for i in itens_det)
+            grand_total += total
+            thead = (
+                "<thead><tr><th>Código</th><th>Produto</th><th>Gram. Solicitada</th>"
+                "<th>Marca</th><th>Obs</th><th>Gram. Informada</th>"
+                "<th>Preço Un.</th><th>Qtde.</th><th>Total</th></tr></thead>"
             )
-        secoes.append(f"""<div class="section">
+            rows = ""
+            for it in itens_det:
+                obs_cell = it["obs"] if it["obs"] else "—"
+                p, q = _safe_float(it["preco"]), _safe_float(it["qtd"])
+                rows += (
+                    f"<tr><td>{it['codigo']}</td><td>{it['descricao']}</td>"
+                    f"<td>{it['gram_sol']}</td>"
+                    f"<td>{it['marca']}</td>"
+                    f"<td style='font-size:10px'>{obs_cell}</td>"
+                    f"<td>{it['gram_inf']}</td>"
+                    f"<td>R$ {p:.2f}</td><td>{q:g}</td>"
+                    f"<td>R$ {p*q:.2f}</td></tr>"
+                )
+            secoes.append(f"""<div class="section">
   <h2>Pedido nº {idx} | Cotação: {nome_cot_label} | Data: {datetime.date.today().strftime('%d/%m/%Y')}</h2>
   <p class="status">Status do pedido: Pedido realizado - aguardando fornecedor</p>
   <h3>Comprador</h3>
@@ -617,466 +621,469 @@ def _html_pedido_forn(fid):
   <p><b>Comentários Gerais:</b> Pedido criado automaticamente pelo sistema de cotação</p>
   <p class="total">Total do Pedido: R$ {total:.2f}</p>
 </div>""")
-        idx += 1
-    total_geral_html = (
-        f"<div style='margin-top:24px;padding:12px 0;border-top:2px solid #333;text-align:right'>"
-        f"<b style='font-size:14px'>Total Geral do Fornecedor: R$ {grand_total:.2f}</b></div>"
-    )
-    return _CSS_PDF + "<body>" + "".join(secoes) + total_geral_html + "</body>"
+            idx += 1
+        total_geral_html = (
+            f"<div style='margin-top:24px;padding:12px 0;border-top:2px solid #333;text-align:right'>"
+            f"<b style='font-size:14px'>Total Geral do Fornecedor: R$ {grand_total:.2f}</b></div>"
+        )
+        return _CSS_PDF + "<body>" + "".join(secoes) + total_geral_html + "</body>"
 
 
-def _pdf_pedido_forn(fid) -> bytes:
-    """Gera PDF do pedido para um fornecedor usando reportlab."""
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib import colors
-    from reportlab.lib.units import cm
-    from reportlab.platypus import (
-        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
-    )
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.enums import TA_RIGHT
+    def _pdf_pedido_forn(fid) -> bytes:
+        """Gera PDF do pedido para um fornecedor usando reportlab."""
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib import colors
+        from reportlab.lib.units import cm
+        from reportlab.platypus import (
+            SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, PageBreak
+        )
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.enums import TA_RIGHT
 
-    forn = forn_map.get(fid, {})
-    forn_min = _safe_float(forn.get("pedido_minimo", 0))
-    forn_min_str = f"R$ {forn_min:.2f}" if forn_min > 0 else "—"
-    prods_sel = [pid for pid in prod_ids if _get_sel(pid) == fid]
+        forn = forn_map.get(fid, {})
+        forn_min = _safe_float(forn.get("pedido_minimo", 0))
+        forn_min_str = f"R$ {forn_min:.2f}" if forn_min > 0 else "—"
+        prods_sel = [pid for pid in prod_ids if _get_sel(pid) == fid]
 
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buf, pagesize=A4,
-        leftMargin=1.8*cm, rightMargin=1.8*cm,
-        topMargin=1.5*cm, bottomMargin=1.5*cm,
-    )
-    styles = getSampleStyleSheet()
-    s_title  = ParagraphStyle("pt",  parent=styles["Heading2"], fontSize=13, spaceAfter=2)
-    s_small  = ParagraphStyle("ps",  parent=styles["Normal"],   fontSize=8,  leading=11)
-    s_status = ParagraphStyle("pst", parent=styles["Normal"],   fontSize=9,  textColor=colors.red, spaceAfter=8)
-    s_total  = ParagraphStyle("pto", parent=styles["Normal"],   fontSize=11, fontName="Helvetica-Bold")
-    s_gtotal = ParagraphStyle("pg",  parent=styles["Normal"],   fontSize=12, fontName="Helvetica-Bold", alignment=TA_RIGHT)
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buf, pagesize=A4,
+            leftMargin=1.8*cm, rightMargin=1.8*cm,
+            topMargin=1.5*cm, bottomMargin=1.5*cm,
+        )
+        styles = getSampleStyleSheet()
+        s_title  = ParagraphStyle("pt",  parent=styles["Heading2"], fontSize=13, spaceAfter=2)
+        s_small  = ParagraphStyle("ps",  parent=styles["Normal"],   fontSize=8,  leading=11)
+        s_status = ParagraphStyle("pst", parent=styles["Normal"],   fontSize=9,  textColor=colors.red, spaceAfter=8)
+        s_total  = ParagraphStyle("pto", parent=styles["Normal"],   fontSize=11, fontName="Helvetica-Bold")
+        s_gtotal = ParagraphStyle("pg",  parent=styles["Normal"],   fontSize=12, fontName="Helvetica-Bold", alignment=TA_RIGHT)
 
-    col_headers = ["Código", "Produto", "Gram. Sol.", "Marca", "Obs", "Gram. Inf.", "Preço Un.", "Qtde.", "Total"]
-    col_widths  = [1.5*cm, 4.8*cm, 2.2*cm, 2.2*cm, 2.5*cm, 2.2*cm, 1.8*cm, 1.3*cm, 1.8*cm]
+        col_headers = ["Código", "Produto", "Gram. Sol.", "Marca", "Obs", "Gram. Inf.", "Preço Un.", "Qtde.", "Total"]
+        col_widths_pdf  = [1.5*cm, 4.8*cm, 2.2*cm, 2.2*cm, 2.5*cm, 2.2*cm, 1.8*cm, 1.3*cm, 1.8*cm]
 
-    story = []
-    grand_total = 0.0
-    idx = 1
+        story = []
+        grand_total = 0.0
+        idx = 1
 
-    for unid in unidades_cot:
-        itens_det = []
-        for pid in prods_sel:
-            qty = _get_qtd(pid, unid)
-            if qty <= 0:
+        for _sec_idx, unid in enumerate(unidades_cot):
+            itens_det = []
+            for pid in prods_sel:
+                qty = _get_qtd(pid, unid)
+                if qty <= 0:
+                    continue
+                rd   = resp_dict.get((pid, fid), {})
+                prod = prod_map.get(pid, {})
+                _qtd_emb  = rd.get("qtd_emb", 1.0)
+                _gram_inf = str(rd.get("tipo", ""))
+                if _qtd_emb and float(_qtd_emb) > 1:
+                    _gram_inf = f"{_gram_inf} x{float(_qtd_emb):g}"
+                itens_det.append({
+                    "codigo":   str(prod.get("codigo", "") or "—"),
+                    "descricao": str(prod.get("descricao", f"Produto {pid}")),
+                    "gram_sol": Paragraph(str(prod.get("apresentacao", "") or ""), s_small),
+                    "obs":      str(rd.get("obs", "")),
+                    "marca":    Paragraph(str(rd.get("marca", "") or ""), s_small),
+                    "gram_inf": Paragraph(_gram_inf.strip(), s_small),
+                    "preco":    rd.get("preco_norm", 0.0),
+                    "qtd":      qty,
+                })
+            if not itens_det:
                 continue
-            rd   = resp_dict.get((pid, fid), {})
-            prod = prod_map.get(pid, {})
-            _qtd_emb  = rd.get("qtd_emb", 1.0)
-            _gram_inf = str(rd.get("tipo", ""))
-            if _qtd_emb and float(_qtd_emb) > 1:
-                _gram_inf = f"{_gram_inf} x{float(_qtd_emb):g}"
-            itens_det.append({
-                "codigo":   str(prod.get("codigo", "") or "—"),
-                "descricao": str(prod.get("descricao", f"Produto {pid}")),
-                "gram_sol": str(prod.get("apresentacao", "") or ""),
-                "obs":      str(rd.get("obs", "")),
-                "marca":    str(rd.get("marca", "")),
-                "gram_inf": _gram_inf.strip(),
-                "preco":    rd.get("preco_norm", 0.0),
-                "qtd":      qty,
-            })
-        if not itens_det:
-            continue
 
-        unid_info = unid_map.get(str(unid), {"nome": unid, "nome_fantasia": unid})
-        total_sec = sum(_safe_float(i["preco"]) * _safe_float(i["qtd"]) for i in itens_det)
-        grand_total += total_sec
+            if _sec_idx > 0:
+                story.append(PageBreak())
 
-        story.append(Paragraph(
-            f"Pedido nº {idx} | Cotação: {nome_cot_label} | Data: {datetime.date.today().strftime('%d/%m/%Y')}",
-            s_title,
-        ))
-        story.append(Paragraph("Status: Pedido realizado - aguardando fornecedor", s_status))
+            unid_info = unid_map.get(str(unid), {"nome": unid, "nome_fantasia": unid})
+            total_sec = sum(_safe_float(i["preco"]) * _safe_float(i["qtd"]) for i in itens_det)
+            grand_total += total_sec
 
-        comp_text = (
-            f"<b>Razão Social:</b> {str(unid_info.get('nome','') or '')}<br/>"
-            f"<b>Nome Fantasia:</b> {str(unid_info.get('nome_fantasia','') or '')}<br/>"
-            f"<b>CNPJ:</b> {str(unid_info.get('cnpj','') or '')}<br/>"
-            f"<b>Endereço:</b> {_addr_u(unid_info)}"
-        )
-        forn_text = (
-            f"<b>Razão Social:</b> {str(forn.get('razao_social','') or '')}<br/>"
-            f"<b>Nome Fantasia:</b> {str(forn.get('nome_fantasia','') or '')}<br/>"
-            f"<b>CNPJ:</b> {str(forn.get('cnpj','') or '')}<br/>"
-            f"<b>Telefone:</b> {str(forn.get('telefone','') or '')}<br/>"
-            f"<b>Pedido mínimo:</b> {forn_min_str}"
-        )
-        info_t = Table(
-            [[Paragraph(f"<b>Comprador</b><br/>{comp_text}", s_small),
-              Paragraph(f"<b>Fornecedor</b><br/>{forn_text}", s_small)]],
-            colWidths=[9*cm, 9*cm],
-        )
-        info_t.setStyle(TableStyle([
-            ("BOX",        (0,0), (-1,-1), 0.5, colors.grey),
-            ("INNERGRID",  (0,0), (-1,-1), 0.5, colors.grey),
-            ("VALIGN",     (0,0), (-1,-1), "TOP"),
-            ("TOPPADDING", (0,0), (-1,-1), 4),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 4),
-            ("LEFTPADDING",   (0,0), (-1,-1), 6),
-        ]))
-        story.append(info_t)
-        story.append(Spacer(1, 6))
+            story.append(Paragraph(
+                f"Pedido nº {idx} | Cotação: {nome_cot_label} | Data: {datetime.date.today().strftime('%d/%m/%Y')}",
+                s_title,
+            ))
+            story.append(Paragraph("Status: Pedido realizado - aguardando fornecedor", s_status))
 
-        rows = [col_headers]
-        for it in itens_det:
-            p = _safe_float(it["preco"])
-            q = _safe_float(it["qtd"])
-            obs = it["obs"] if it["obs"] else "—"
-            rows.append([
-                it["codigo"],
-                Paragraph(it["descricao"], s_small),
-                it["gram_sol"],
-                it["marca"],
-                Paragraph(obs, s_small),
-                it["gram_inf"],
-                f"R$ {p:.2f}",
-                f"{q:g}",
-                f"R$ {p*q:.2f}",
-            ])
-        items_t = Table(rows, colWidths=col_widths, repeatRows=1)
-        items_t.setStyle(TableStyle([
-            ("BACKGROUND",    (0,0), (-1,0), colors.Color(0.95, 0.95, 0.95)),
-            ("FONTNAME",      (0,0), (-1,0), "Helvetica-Bold"),
-            ("FONTSIZE",      (0,0), (-1,-1), 8),
-            ("BOX",           (0,0), (-1,-1), 0.5, colors.grey),
-            ("INNERGRID",     (0,0), (-1,-1), 0.3, colors.lightgrey),
-            ("VALIGN",        (0,0), (-1,-1), "TOP"),
-            ("TOPPADDING",    (0,0), (-1,-1), 3),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 3),
-        ]))
-        story.append(items_t)
-        story.append(Paragraph(f"Total do Pedido: R$ {total_sec:.2f}", s_total))
-        story.append(HRFlowable(width="100%", thickness=1, color=colors.lightgrey, spaceAfter=8))
-        story.append(Spacer(1, 4))
-        idx += 1
-
-    story.append(Paragraph(f"Total Geral do Fornecedor: R$ {grand_total:.2f}", s_gtotal))
-    doc.build(story)
-    buf.seek(0)
-    return buf.read()
-
-
-def _wa_link_forn(fid):
-    forn = forn_map.get(fid, {})
-    tel_raw = str(forn.get("whatsapp", "") or forn.get("telefone", "") or "")
-    tel = re.sub(r"[^\d]", "", tel_raw)
-    if tel and not tel.startswith("55"):
-        tel = "55" + tel
-    prods_sel = [pid for pid in prod_ids if _get_sel(pid) == fid]
-    nome_forn = str(forn.get("nome_fantasia") or forn.get("razao_social") or f"#{fid}")
-    lines = [
-        "*Pedido de Compra*",
-        f"Data: {datetime.date.today().strftime('%d/%m/%Y')}",
-        f"Fornecedor: {nome_forn}",
-    ]
-    grand_total = 0.0
-    for unid in unidades_cot:
-        itens = [
-            (pid, _get_qtd(pid, unid), resp_dict.get((pid, fid), {}).get("preco_norm", 0))
-            for pid in prods_sel if _get_qtd(pid, unid) > 0
-        ]
-        if not itens:
-            continue
-        total_unid = sum(q * p for _, q, p in itens)
-        grand_total += total_unid
-        lines.append(f"\n*{_unid_label(unid)}*")
-        for pid, q, p in itens:
-            nome_p = str(prod_map.get(pid, {}).get("descricao", f"Produto {pid}"))
-            lines.append(f"• {nome_p}: {q:g} x R$ {p:.2f} = R$ {q*p:.2f}")
-        lines.append(f"Subtotal: R$ {total_unid:.2f}")
-    lines.append(f"\n*Total Geral: R$ {grand_total:.2f}*")
-    msg = "\n".join(lines)
-    base = f"https://wa.me/{tel}" if tel else "https://wa.me/"
-    return base + "?text=" + urllib.parse.quote(msg)
-
-
-# ── FOOTER: resumo por fornecedor ─────────────────────────────────────────────
-st.markdown("## Resumo por Fornecedor")  # layout v2
-
-# ── Notas da compra (admin/comprador) ────────────────────────────────────────
-if usuario["perfil"] in ("admin", "comprador"):
-    _nota_atual = ""
-    if not df_cotacoes.empty and "observacoes_compra" in df_cotacoes.columns:
-        _cot_r = df_cotacoes[df_cotacoes["id"].apply(_safe_int) == cotacao_sel]
-        if not _cot_r.empty:
-            _nota_atual = str(_cot_r.iloc[0].get("observacoes_compra", "") or "").strip()
-    with st.expander("📝 Notas da compra", expanded=bool(_nota_atual)):
-        st.caption("Descreva aqui qualquer ajuste feito: redirecionamentos entre hotéis, aumentos de quantidade por pedido mínimo, etc. Essa nota aparece no relatório do digitador.")
-        _nota_nova = st.text_area(
-            "Notas", value=_nota_atual, height=100,
-            label_visibility="collapsed", key=f"nota_compra_{cotacao_sel}",
-            placeholder="Ex: Margarina do Monte Castelo incluída no pedido do São Jorge por pedido mínimo. Nescau Gold foi para o Roma.",
-        )
-        if st.button("💾 Salvar nota", key=f"salvar_nota_{cotacao_sel}"):
-            atualizar_linha("cotacoes", str(cotacao_sel), {"observacoes_compra": _nota_nova.strip()})
-            st.cache_data.clear()
-            st.toast("✅ Nota salva!", icon="📝")
-
-totais = _calc_totais()
-
-if not forn_ids:
-    st.stop()
-
-for fid in forn_ids:
-    forn      = forn_map.get(fid, {})
-    nome      = str(forn.get("nome_fantasia") or forn.get("razao_social") or f"#{fid}")
-    ped_min   = _safe_float(forn.get("pedido_minimo", 0))
-    tot_geral = sum(totais[fid].values())
-    compra_feita = bool(st.session_state.get(f"{sk}_compra_done_{fid}"))
-
-    # ── Cabeçalho do fornecedor
-    icon_f = "✅" if compra_feita else ("🛒" if tot_geral > 0 else "⬜")
-    h1, h2, h3 = st.columns([5, 2, 2])
-    h1.markdown(f"### {icon_f} {nome}")
-    h2.metric("Total", f"R$ {tot_geral:.2f}" if tot_geral > 0 else "—")
-    if ped_min > 0:
-        h3.caption(f"Pedido mín.: R$ {ped_min:.0f}")
-
-    # Avisos de pedido mínimo
-    avisos = []
-    if ped_min > 0:
-        for unid in unidades_cot:
-            t = totais[fid][unid]
-            if 0 < t < ped_min:
-                avisos.append((unid, ped_min - t))
-
-    if avisos:
-        with st.expander(f"⚠️ {len(avisos)} aviso(s) de mínimo"):
-            for u, falt in avisos:
-                st.caption(f"⚠️ {_unid_label(u)}: faltam R$ {falt:.2f}")
-        ignorar = st.checkbox("Ignorar pedido mínimo", key=f"{sk}_ign_{fid}")
-    else:
-        if tot_geral > 0 and ped_min > 0:
-            st.caption("✅ Mín. atingido")
-        ignorar = True
-
-    pode_comprar = tot_geral > 0 and (not avisos or ignorar)
-
-    if compra_feita:
-        nome_forn_r = str(forn_map.get(fid, {}).get("nome_fantasia") or forn_map.get(fid, {}).get("razao_social") or f"#{fid}")
-        st.success(f"✅ Compra gerada para **{nome_forn_r}**!")
-        nome_safe = re.sub(r"[^\w]", "_", nome_forn_r)[:30]
-        cot_safe = re.sub(r"[^\w]", "_", nome_cot)[:20] if nome_cot else f"cot{cotacao_sel}"
-        base_name = f"{nome_safe}_{cot_safe}_{datetime.date.today()}"
-        _col_pdf, _col_html = st.columns(2)
-        with _col_pdf:
-            try:
-                st.download_button(
-                    "📄 Baixar PDF",
-                    data=_pdf_pedido_forn(fid),
-                    file_name=f"{base_name}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True,
-                    key=f"{sk}_pdf_{fid}",
-                )
-            except Exception as _e:
-                st.caption(f"PDF indisponível: {_e}")
-        with _col_html:
-            st.download_button(
-                "⬇️ Baixar PDF (HTML)",
-                data=_html_pedido_forn(fid).encode("utf-8"),
-                file_name=f"{base_name}.html",
-                mime="text/html",
-                use_container_width=True,
-                key=f"{sk}_html_{fid}",
+            comp_text = (
+                f"<b>Razão Social:</b> {str(unid_info.get('nome','') or '')}<br/>"
+                f"<b>Nome Fantasia:</b> {str(unid_info.get('nome_fantasia','') or '')}<br/>"
+                f"<b>CNPJ:</b> {str(unid_info.get('cnpj','') or '')}<br/>"
+                f"<b>Endereço:</b> {_addr_u(unid_info)}"
             )
-        _unlock_key = f"{sk}_unlock_{fid}"
-        if not st.session_state.get(_unlock_key):
-            if st.button("🔓 Liberar para nova compra", key=f"{sk}_ok_{fid}", use_container_width=True):
-                st.session_state[_unlock_key] = True
-                st.rerun()
+            forn_text = (
+                f"<b>Razão Social:</b> {str(forn.get('razao_social','') or '')}<br/>"
+                f"<b>Nome Fantasia:</b> {str(forn.get('nome_fantasia','') or '')}<br/>"
+                f"<b>CNPJ:</b> {str(forn.get('cnpj','') or '')}<br/>"
+                f"<b>Telefone:</b> {str(forn.get('telefone','') or '')}<br/>"
+                f"<b>Pedido mínimo:</b> {forn_min_str}"
+            )
+            info_t = Table(
+                [[Paragraph(f"<b>Comprador</b><br/>{comp_text}", s_small),
+                  Paragraph(f"<b>Fornecedor</b><br/>{forn_text}", s_small)]],
+                colWidths=[9*cm, 9*cm],
+            )
+            info_t.setStyle(TableStyle([
+                ("BOX",        (0,0), (-1,-1), 0.5, colors.grey),
+                ("INNERGRID",  (0,0), (-1,-1), 0.5, colors.grey),
+                ("VALIGN",     (0,0), (-1,-1), "TOP"),
+                ("TOPPADDING", (0,0), (-1,-1), 4),
+                ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+                ("LEFTPADDING",   (0,0), (-1,-1), 6),
+            ]))
+            story.append(info_t)
+            story.append(Spacer(1, 6))
+
+            rows = [col_headers]
+            for it in itens_det:
+                p = _safe_float(it["preco"])
+                q = _safe_float(it["qtd"])
+                obs = it["obs"] if it["obs"] else "—"
+                rows.append([
+                    it["codigo"],
+                    Paragraph(it["descricao"], s_small),
+                    it["gram_sol"],
+                    it["marca"],
+                    Paragraph(obs, s_small),
+                    it["gram_inf"],
+                    f"R$ {p:.2f}",
+                    f"{q:g}",
+                    f"R$ {p*q:.2f}",
+                ])
+            items_t = Table(rows, colWidths=col_widths_pdf, repeatRows=1)
+            items_t.setStyle(TableStyle([
+                ("BACKGROUND",    (0,0), (-1,0), colors.Color(0.95, 0.95, 0.95)),
+                ("FONTNAME",      (0,0), (-1,0), "Helvetica-Bold"),
+                ("FONTSIZE",      (0,0), (-1,-1), 8),
+                ("BOX",           (0,0), (-1,-1), 0.5, colors.grey),
+                ("INNERGRID",     (0,0), (-1,-1), 0.3, colors.lightgrey),
+                ("VALIGN",        (0,0), (-1,-1), "TOP"),
+                ("TOPPADDING",    (0,0), (-1,-1), 3),
+                ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+            ]))
+            story.append(items_t)
+            story.append(Paragraph(f"Total do Pedido: R$ {total_sec:.2f}", s_total))
+            story.append(HRFlowable(width="100%", thickness=1, color=colors.lightgrey, spaceAfter=8))
+            story.append(Spacer(1, 4))
+            idx += 1
+
+        story.append(Paragraph(f"Total Geral do Fornecedor: R$ {grand_total:.2f}", s_gtotal))
+        doc.build(story)
+        buf.seek(0)
+        return buf.read()
+
+
+    def _wa_link_forn(fid):
+        forn = forn_map.get(fid, {})
+        tel_raw = str(forn.get("whatsapp", "") or forn.get("telefone", "") or "")
+        tel = re.sub(r"[^\d]", "", tel_raw)
+        if tel and not tel.startswith("55"):
+            tel = "55" + tel
+        prods_sel = [pid for pid in prod_ids if _get_sel(pid) == fid]
+        nome_forn = str(forn.get("nome_fantasia") or forn.get("razao_social") or f"#{fid}")
+        lines = [
+            "*Pedido de Compra*",
+            f"Data: {datetime.date.today().strftime('%d/%m/%Y')}",
+            f"Fornecedor: {nome_forn}",
+        ]
+        grand_total = 0.0
+        for unid in unidades_cot:
+            itens = [
+                (pid, _get_qtd(pid, unid), resp_dict.get((pid, fid), {}).get("preco_norm", 0))
+                for pid in prods_sel if _get_qtd(pid, unid) > 0
+            ]
+            if not itens:
+                continue
+            total_unid = sum(q * p for _, q, p in itens)
+            grand_total += total_unid
+            lines.append(f"\n*{_unid_label(unid)}*")
+            for pid, q, p in itens:
+                nome_p = str(prod_map.get(pid, {}).get("descricao", f"Produto {pid}"))
+                lines.append(f"• {nome_p}: {q:g} x R$ {p:.2f} = R$ {q*p:.2f}")
+            lines.append(f"Subtotal: R$ {total_unid:.2f}")
+        lines.append(f"\n*Total Geral: R$ {grand_total:.2f}*")
+        msg = "\n".join(lines)
+        base = f"https://wa.me/{tel}" if tel else "https://wa.me/"
+        return base + "?text=" + urllib.parse.quote(msg)
+
+
+    # ── FOOTER: resumo por fornecedor ─────────────────────────────────────────────
+    st.markdown("## Resumo por Fornecedor")  # layout v2
+
+    # ── Notas da compra (admin/comprador) ────────────────────────────────────────
+    if usuario["perfil"] in ("admin", "comprador"):
+        _nota_atual = ""
+        if not df_cotacoes.empty and "observacoes_compra" in df_cotacoes.columns:
+            _cot_r = df_cotacoes[df_cotacoes["id"].apply(_safe_int) == cotacao_sel]
+            if not _cot_r.empty:
+                _nota_atual = str(_cot_r.iloc[0].get("observacoes_compra", "") or "").strip()
+        with st.expander("📝 Notas da compra", expanded=bool(_nota_atual)):
+            st.caption("Descreva aqui qualquer ajuste feito: redirecionamentos entre hotéis, aumentos de quantidade por pedido mínimo, etc. Essa nota aparece no relatório do digitador.")
+            _nota_nova = st.text_area(
+                "Notas", value=_nota_atual, height=100,
+                label_visibility="collapsed", key=f"nota_compra_{cotacao_sel}",
+                placeholder="Ex: Margarina do Monte Castelo incluída no pedido do São Jorge por pedido mínimo. Nescau Gold foi para o Roma.",
+            )
+            if st.button("💾 Salvar nota", key=f"salvar_nota_{cotacao_sel}"):
+                atualizar_linha("cotacoes", str(cotacao_sel), {"observacoes_compra": _nota_nova.strip()})
+                st.cache_data.clear()
+                st.toast("✅ Nota salva!", icon="📝")
+
+    totais = _calc_totais()
+
+    if not forn_ids:
+        st.stop()
+
+    for fid in forn_ids:
+        forn      = forn_map.get(fid, {})
+        nome      = str(forn.get("nome_fantasia") or forn.get("razao_social") or f"#{fid}")
+        ped_min   = _safe_float(forn.get("pedido_minimo", 0))
+        tot_geral = sum(totais[fid].values())
+        compra_feita = bool(st.session_state.get(f"{sk}_compra_done_{fid}"))
+
+        # ── Cabeçalho do fornecedor
+        icon_f = "✅" if compra_feita else ("🛒" if tot_geral > 0 else "⬜")
+        h1, h2, h3 = st.columns([5, 2, 2])
+        h1.markdown(f"### {icon_f} {nome}")
+        h2.metric("Total", f"R$ {tot_geral:.2f}" if tot_geral > 0 else "—")
+        if ped_min > 0:
+            h3.caption(f"Pedido mín.: R$ {ped_min:.0f}")
+
+        # Avisos de pedido mínimo
+        avisos = []
+        if ped_min > 0:
+            for unid in unidades_cot:
+                t = totais[fid][unid]
+                if 0 < t < ped_min:
+                    avisos.append((unid, ped_min - t))
+
+        if avisos:
+            with st.expander(f"⚠️ {len(avisos)} aviso(s) de mínimo"):
+                for u, falt in avisos:
+                    st.caption(f"⚠️ {_unid_label(u)}: faltam R$ {falt:.2f}")
+            ignorar = st.checkbox("Ignorar pedido mínimo", key=f"{sk}_ign_{fid}")
         else:
-            st.warning("Digite sua senha para confirmar a liberação:")
-            from modules.auth import hash_senha as _hash_senha
-            senha_conf = st.text_input("Senha", type="password", key=f"{sk}_pwd_{fid}", label_visibility="collapsed")
-            col_conf, col_cancel = st.columns(2)
-            with col_conf:
-                if st.button("Confirmar", key=f"{sk}_pwdok_{fid}", use_container_width=True, type="primary"):
-                    if _hash_senha(senha_conf) == st.session_state["usuario"]["senha_hash"]:
-                        _df_itens_compra = ler_df("itens_compra")
-                        _mask = (
-                            (df_compras["cotacao_id"].apply(_safe_int) == cotacao_sel) &
-                            (df_compras["fornecedor_id"].apply(_safe_int) == fid) &
-                            (df_compras["pedido_gerado"].astype(str).str.lower().isin(["false", "0", ""]))
-                        )
-                        _cids_excluir = df_compras[_mask]["id"].apply(_safe_int).tolist()
-                        if _cids_excluir:
-                            df_compras_upd = df_compras[~df_compras["id"].apply(_safe_int).isin(_cids_excluir)].reset_index(drop=True)
-                            df_itens_upd   = _df_itens_compra[~_df_itens_compra["compra_id"].apply(_safe_int).isin(_cids_excluir)].reset_index(drop=True)
-                            escrever_df("compras", df_compras_upd)
-                            escrever_df("itens_compra", df_itens_upd)
-                        st.session_state.pop(f"{sk}_compra_done_{fid}", None)
+            if tot_geral > 0 and ped_min > 0:
+                st.caption("✅ Mín. atingido")
+            ignorar = True
+
+        pode_comprar = tot_geral > 0 and (not avisos or ignorar)
+
+        if compra_feita:
+            nome_forn_r = str(forn_map.get(fid, {}).get("nome_fantasia") or forn_map.get(fid, {}).get("razao_social") or f"#{fid}")
+            st.success(f"✅ Compra gerada para **{nome_forn_r}**!")
+            nome_safe = re.sub(r"[^\w]", "_", nome_forn_r)[:30]
+            cot_safe = re.sub(r"[^\w]", "_", nome_cot)[:20] if nome_cot else f"cot{cotacao_sel}"
+            base_name = f"{nome_safe}_{cot_safe}_{datetime.date.today()}"
+            _col_pdf, _col_html = st.columns(2)
+            with _col_pdf:
+                try:
+                    st.download_button(
+                        "📄 Baixar PDF",
+                        data=_pdf_pedido_forn(fid),
+                        file_name=f"{base_name}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                        key=f"{sk}_pdf_{fid}",
+                    )
+                except Exception as _e:
+                    st.caption(f"PDF indisponível: {_e}")
+            with _col_html:
+                st.download_button(
+                    "⬇️ Baixar PDF (HTML)",
+                    data=_html_pedido_forn(fid).encode("utf-8"),
+                    file_name=f"{base_name}.html",
+                    mime="text/html",
+                    use_container_width=True,
+                    key=f"{sk}_html_{fid}",
+                )
+            _unlock_key = f"{sk}_unlock_{fid}"
+            if not st.session_state.get(_unlock_key):
+                if st.button("🔓 Liberar para nova compra", key=f"{sk}_ok_{fid}", use_container_width=True):
+                    st.session_state[_unlock_key] = True
+                    st.rerun()
+            else:
+                st.warning("Digite sua senha para confirmar a liberação:")
+                from modules.auth import hash_senha as _hash_senha
+                senha_conf = st.text_input("Senha", type="password", key=f"{sk}_pwd_{fid}", label_visibility="collapsed")
+                col_conf, col_cancel = st.columns(2)
+                with col_conf:
+                    if st.button("Confirmar", key=f"{sk}_pwdok_{fid}", use_container_width=True, type="primary"):
+                        if _hash_senha(senha_conf) == st.session_state["usuario"]["senha_hash"]:
+                            _df_itens_compra = ler_df("itens_compra")
+                            _mask = (
+                                (df_compras["cotacao_id"].apply(_safe_int) == cotacao_sel) &
+                                (df_compras["fornecedor_id"].apply(_safe_int) == fid) &
+                                (df_compras["pedido_gerado"].astype(str).str.lower().isin(["false", "0", ""]))
+                            )
+                            _cids_excluir = df_compras[_mask]["id"].apply(_safe_int).tolist()
+                            if _cids_excluir:
+                                df_compras_upd = df_compras[~df_compras["id"].apply(_safe_int).isin(_cids_excluir)].reset_index(drop=True)
+                                df_itens_upd   = _df_itens_compra[~_df_itens_compra["compra_id"].apply(_safe_int).isin(_cids_excluir)].reset_index(drop=True)
+                                escrever_df("compras", df_compras_upd)
+                                escrever_df("itens_compra", df_itens_upd)
+                            st.session_state.pop(f"{sk}_compra_done_{fid}", None)
+                            st.session_state.pop(_unlock_key, None)
+                            st.cache_data.clear()
+                            st.rerun()
+                        else:
+                            st.error("Senha incorreta.")
+                with col_cancel:
+                    if st.button("Cancelar", key=f"{sk}_pwdcanc_{fid}", use_container_width=True):
                         st.session_state.pop(_unlock_key, None)
+                        st.rerun()
+        else:
+            if tot_geral == 0:
+                st.caption("⚠️ Selecione produtos na grade acima.")
+            elif avisos and not ignorar:
+                st.caption("⚠️ Marque Ignorar para prosseguir.")
+
+            if st.button("🛒 Comprar", key=f"{sk}_cpr_{fid}",
+                         use_container_width=True, type="primary"):
+                if tot_geral == 0:
+                    st.toast("Nenhum produto selecionado para este fornecedor. Use os botões 'Selecionar' na grade ou 'Selecionar melhores preços'.", icon="⚠️")
+                elif not pode_comprar:
+                    st.toast("Marque ✅ Ignorar para prosseguir mesmo sem atingir o pedido mínimo.", icon="⚠️")
+                else:
+                    st.session_state[f"{sk}_comprar_fid"] = fid
+
+        # ── Ajustar quantidades (tabela horizontal: produto + coluna por hotel)
+        with st.expander("📦 Ajustar qtd."):
+            prods_fid = [pid for pid in prod_ids if _get_sel(pid) == fid]
+            if not prods_fid:
+                st.caption("Nenhum produto selecionado para este fornecedor.")
+            else:
+                if compra_feita:
+                    st.caption("🔒 Compra já gerada — quantidades bloqueadas.")
+
+                n_unid = len(unidades_cot)
+                col_w  = [3.5] + [1.2] * n_unid
+
+                # Cabeçalho da tabela
+                hdr_r = st.columns(col_w)
+                hdr_r[0].markdown("**Produto**")
+                for j, unid in enumerate(unidades_cot):
+                    hdr_r[j + 1].markdown(f"**{_unid_label(unid)}**")
+                st.markdown("<hr style='margin:4px 0'>", unsafe_allow_html=True)
+
+                # Linhas de produto com inputs
+                for pid in prods_fid:
+                    prod   = prod_map.get(pid, {})
+                    nome_p = str(prod.get("descricao", f"#{pid}"))
+                    ub_p   = str(prod.get("unidade_base", ""))
+                    row_r  = st.columns(col_w)
+                    row_r[0].markdown(f"**{nome_p}**" + (f"  \n*{ub_p}*" if ub_p else ""))
+                    for j, unid in enumerate(unidades_cot):
+                        qkey = f"{sk}_qtd_{pid}_{unid}"
+                        if qkey not in st.session_state:
+                            st.session_state[qkey] = _qtd_orig(pid, unid)
+                        row_r[j + 1].number_input(
+                            "qtd",
+                            min_value=0.0, step=0.5,
+                            key=qkey,
+                            disabled=compra_feita,
+                            label_visibility="collapsed",
+                        )
+                st.markdown("<hr style='margin:4px 0'>", unsafe_allow_html=True)
+
+                # Linha de subtotais
+                sub_r = st.columns(col_w)
+                sub_r[0].markdown("**Subtotal**")
+                tot_now = _calc_totais()
+                for j, unid in enumerate(unidades_cot):
+                    t  = tot_now[fid][unid]
+                    ok = ped_min == 0 or t == 0 or t >= ped_min
+                    color = "#15803d" if ok else "#b45309"
+                    sub_r[j + 1].markdown(
+                        f"<span style='color:{color}'><b>R$ {t:.2f}</b></span>",
+                        unsafe_allow_html=True,
+                    )
+
+                if st.button("💾 Salvar quantidades", key=f"{sk}_save_{fid}",
+                             use_container_width=True, disabled=compra_feita):
+                    ok2, err2 = _salvar_quantidades()
+                    if ok2:
+                        st.toast("✅ Quantidades salvas!", icon="💾")
                         st.cache_data.clear()
                         st.rerun()
                     else:
-                        st.error("Senha incorreta.")
-            with col_cancel:
-                if st.button("Cancelar", key=f"{sk}_pwdcanc_{fid}", use_container_width=True):
-                    st.session_state.pop(_unlock_key, None)
-                    st.rerun()
-    else:
-        if tot_geral == 0:
-            st.caption("⚠️ Selecione produtos na grade acima.")
-        elif avisos and not ignorar:
-            st.caption("⚠️ Marque Ignorar para prosseguir.")
+                        st.toast(f"Erro ao salvar: {err2}", icon="❌")
 
-        if st.button("🛒 Comprar", key=f"{sk}_cpr_{fid}",
-                     use_container_width=True, type="primary"):
-            if tot_geral == 0:
-                st.toast("Nenhum produto selecionado para este fornecedor. Use os botões 'Selecionar' na grade ou 'Selecionar melhores preços'.", icon="⚠️")
-            elif not pode_comprar:
-                st.toast("Marque ✅ Ignorar para prosseguir mesmo sem atingir o pedido mínimo.", icon="⚠️")
-            else:
-                st.session_state[f"{sk}_comprar_fid"] = fid
+        st.markdown("---")
 
-    # ── Ajustar quantidades (tabela horizontal: produto + coluna por hotel)
-    with st.expander("📦 Ajustar qtd."):
-        prods_fid = [pid for pid in prod_ids if _get_sel(pid) == fid]
-        if not prods_fid:
-            st.caption("Nenhum produto selecionado para este fornecedor.")
-        else:
-            if compra_feita:
-                st.caption("🔒 Compra já gerada — quantidades bloqueadas.")
+    # ── Process purchase ──────────────────────────────────────────────────────────
+    comprar_fid = st.session_state.pop(f"{sk}_comprar_fid", None)
+    if comprar_fid is not None:
+        df_compras      = ler_df("compras")
+        df_itens_compra = ler_df("itens_compra")
+        df_hist         = ler_df("historico_precos")
 
-            n_unid = len(unidades_cot)
-            col_w  = [3.5] + [1.2] * n_unid
+        compra_id = _next_id(df_compras)
+        item_id   = _next_id(df_itens_compra)
+        hist_id   = _next_id(df_hist)
 
-            # Cabeçalho da tabela
-            hdr_r = st.columns(col_w)
-            hdr_r[0].markdown("**Produto**")
-            for j, unid in enumerate(unidades_cot):
-                hdr_r[j + 1].markdown(f"**{_unid_label(unid)}**")
-            st.markdown("<hr style='margin:4px 0'>", unsafe_allow_html=True)
+        prods_fid      = [pid for pid in prod_ids if _get_sel(pid) == comprar_fid]
+        linhas_compras = []
+        linhas_itens   = []
+        linhas_hist    = []
 
-            # Linhas de produto com inputs
-            for pid in prods_fid:
-                prod   = prod_map.get(pid, {})
-                nome_p = str(prod.get("descricao", f"#{pid}"))
-                ub_p   = str(prod.get("unidade_base", ""))
-                row_r  = st.columns(col_w)
-                row_r[0].markdown(f"**{nome_p}**" + (f"  \n*{ub_p}*" if ub_p else ""))
-                for j, unid in enumerate(unidades_cot):
-                    qkey = f"{sk}_qtd_{pid}_{unid}"
-                    if qkey not in st.session_state:
-                        st.session_state[qkey] = _qtd_orig(pid, unid)
-                    row_r[j + 1].number_input(
-                        "qtd",
-                        min_value=0.0, step=0.5,
-                        key=qkey,
-                        disabled=compra_feita,
-                        label_visibility="collapsed",
-                    )
-            st.markdown("<hr style='margin:4px 0'>", unsafe_allow_html=True)
-
-            # Linha de subtotais
-            sub_r = st.columns(col_w)
-            sub_r[0].markdown("**Subtotal**")
-            tot_now = _calc_totais()
-            for j, unid in enumerate(unidades_cot):
-                t  = tot_now[fid][unid]
-                ok = ped_min == 0 or t == 0 or t >= ped_min
-                color = "#15803d" if ok else "#b45309"
-                sub_r[j + 1].markdown(
-                    f"<span style='color:{color}'><b>R$ {t:.2f}</b></span>",
-                    unsafe_allow_html=True,
-                )
-
-            if st.button("💾 Salvar quantidades", key=f"{sk}_save_{fid}",
-                         use_container_width=True, disabled=compra_feita):
-                ok2, err2 = _salvar_quantidades()
-                if ok2:
-                    st.toast("✅ Quantidades salvas!", icon="💾")
-                    st.cache_data.clear()
-                    st.rerun()
-                else:
-                    st.toast(f"Erro ao salvar: {err2}", icon="❌")
-
-    st.markdown("---")
-
-# ── Process purchase ──────────────────────────────────────────────────────────
-comprar_fid = st.session_state.pop(f"{sk}_comprar_fid", None)
-if comprar_fid is not None:
-    df_compras      = ler_df("compras")
-    df_itens_compra = ler_df("itens_compra")
-    df_hist         = ler_df("historico_precos")
-
-    compra_id = _next_id(df_compras)
-    item_id   = _next_id(df_itens_compra)
-    hist_id   = _next_id(df_hist)
-
-    prods_fid      = [pid for pid in prod_ids if _get_sel(pid) == comprar_fid]
-    linhas_compras = []
-    linhas_itens   = []
-    linhas_hist    = []
-
-    for unid in unidades_cot:
-        valor_unid = sum(
-            _get_qtd(pid, unid) * resp_dict[(pid, comprar_fid)]["preco_norm"]
-            for pid in prods_fid
-            if (pid, comprar_fid) in resp_dict and _get_qtd(pid, unid) > 0
-        )
-        if valor_unid == 0:
-            continue
-        linhas_compras.append([
-            compra_id, cotacao_sel, comprar_fid,
-            datetime.date.today().isoformat(),
-            round(valor_unid, 2), "False", "", "", "", unid,
-        ])
-        for pid in prods_fid:
-            if (pid, comprar_fid) not in resp_dict:
+        for unid in unidades_cot:
+            valor_unid = sum(
+                _get_qtd(pid, unid) * resp_dict[(pid, comprar_fid)]["preco_norm"]
+                for pid in prods_fid
+                if (pid, comprar_fid) in resp_dict and _get_qtd(pid, unid) > 0
+            )
+            if valor_unid == 0:
                 continue
-            qty = _get_qtd(pid, unid)
-            if qty <= 0:
-                continue
-            rd = resp_dict[(pid, comprar_fid)]
-            linhas_itens.append([
-                item_id, compra_id, pid,
-                qty, rd["preco"], rd["preco_norm"], rd["qtd_emb"],
-            ])
-            item_id += 1
-        compra_id += 1
-
-    # History for all products this supplier won
-    for pid in prods_fid:
-        sel_fid   = _get_sel(pid)
-        resps_pid = respostas[respostas["produto_id"].apply(_safe_int) == pid]
-        for _, rr in resps_pid.iterrows():
-            rfid   = _safe_int(rr["fornecedor_id"])
-            ganhou = rfid == sel_fid
-            linhas_hist.append([
-                hist_id, pid, rfid, cotacao_sel,
-                _safe_float(rr["preco"]),
-                str(rr.get("tipo_embalagem", "")),
-                _safe_float(rr.get("qtd_por_embalagem", 1), 1.0),
-                round(_preco_norm(rr["preco"], rr.get("tipo_embalagem",""), rr.get("qtd_por_embalagem",1)), 4),
-                ganhou,
+            linhas_compras.append([
+                compra_id, cotacao_sel, comprar_fid,
                 datetime.date.today().isoformat(),
+                round(valor_unid, 2), "False", "", "", "", unid,
             ])
-            hist_id += 1
+            for pid in prods_fid:
+                if (pid, comprar_fid) not in resp_dict:
+                    continue
+                qty = _get_qtd(pid, unid)
+                if qty <= 0:
+                    continue
+                rd = resp_dict[(pid, comprar_fid)]
+                linhas_itens.append([
+                    item_id, compra_id, pid,
+                    qty, rd["preco"], rd["preco_norm"], rd["qtd_emb"],
+                ])
+                item_id += 1
+            compra_id += 1
 
-    if not linhas_compras:
-        st.toast(
-            "Nenhum item com quantidade > 0 encontrado. Verifique as seleções e quantidades.",
-            icon="⚠️",
-        )
-    else:
-        try:
-            get_sheet("compras").append_rows(linhas_compras)
-            if linhas_itens:
-                get_sheet("itens_compra").append_rows(linhas_itens)
-            if linhas_hist:
-                get_sheet("historico_precos").append_rows(linhas_hist)
-            st.session_state[f"{sk}_compra_pending"] = comprar_fid
-            st.cache_data.clear()
-            st.rerun()
-        except Exception as e:
-            st.toast(f"Erro ao salvar compra: {e}", icon="❌")
+        # History for all products this supplier won
+        for pid in prods_fid:
+            sel_fid   = _get_sel(pid)
+            resps_pid = respostas[respostas["produto_id"].apply(_safe_int) == pid]
+            for _, rr in resps_pid.iterrows():
+                rfid   = _safe_int(rr["fornecedor_id"])
+                ganhou = rfid == sel_fid
+                linhas_hist.append([
+                    hist_id, pid, rfid, cotacao_sel,
+                    _safe_float(rr["preco"]),
+                    str(rr.get("tipo_embalagem", "")),
+                    _safe_float(rr.get("qtd_por_embalagem", 1), 1.0),
+                    round(_preco_norm(rr["preco"], rr.get("tipo_embalagem",""), rr.get("qtd_por_embalagem",1)), 4),
+                    ganhou,
+                    datetime.date.today().isoformat(),
+                ])
+                hist_id += 1
+
+        if not linhas_compras:
+            st.toast(
+                "Nenhum item com quantidade > 0 encontrado. Verifique as seleções e quantidades.",
+                icon="⚠️",
+            )
+        else:
+            try:
+                get_sheet("compras").append_rows(linhas_compras)
+                if linhas_itens:
+                    get_sheet("itens_compra").append_rows(linhas_itens)
+                if linhas_hist:
+                    get_sheet("historico_precos").append_rows(linhas_hist)
+                st.session_state[f"{sk}_compra_pending"] = comprar_fid
+                st.cache_data.clear()
+                st.rerun()
+            except Exception as e:
+                st.toast(f"Erro ao salvar compra: {e}", icon="❌")
