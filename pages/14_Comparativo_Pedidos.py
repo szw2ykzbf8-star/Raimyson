@@ -1,5 +1,4 @@
-import os
-import json
+import re
 import streamlit as st
 import pandas as pd
 from modules.auth import requer_permissao
@@ -180,36 +179,48 @@ for unidade in unidades_cot:
                 "unidade": unidade,
             })
 
-# ── Interpretar nota com Claude API ──────────────────────────────────────────
+# ── Interpretar nota por padrões fixos (sem API) ─────────────────────────────
+# Padrões suportados:
+#   "Produto X do Y para [o] Z"  → transferência de hotel
+#   "Não comprei X do Y"         → produto não comprado para aquele hotel
 def _interpretar_nota(nota: str, discrepancias: list) -> dict:
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not nota.strip() or not discrepancias or not api_key:
+    if not nota.strip() or not discrepancias:
         return {}
-    try:
-        import anthropic
-        client = anthropic.Anthropic(api_key=api_key)
-        disc_text = "\n".join(
-            f"- {d['produto']} ({d['hotel']}): solicitado {d['solicitado']:g}, comprado {d['comprado']:g}"
-            for d in discrepancias
+
+    def _match(texto, referencia):
+        return texto.lower() in referencia.lower() or referencia.lower() in texto.lower()
+
+    result = {}
+    for sent in re.split(r"[.,;\n]+", nota):
+        sent = sent.strip()
+        if not sent:
+            continue
+
+        m = re.search(
+            r"produto\s+(.+?)\s+do\s+(.+?)\s+para\s+o?\s*(.+)",
+            sent, re.IGNORECASE,
         )
-        prompt = (
-            "Você é um assistente que analisa notas de compras de hotelaria.\n\n"
-            f"Nota do responsável pela compra:\n\"{nota}\"\n\n"
-            "Discrepâncias encontradas entre o pedido e o que foi comprado:\n"
-            f"{disc_text}\n\n"
-            "Para cada discrepância, extraia a explicação relevante da nota (se houver). "
-            "Responda APENAS com um objeto JSON onde a chave é exatamente \"produto (hotel)\" "
-            "conforme listado e o valor é a explicação extraída, ou null se não mencionado.\n"
-            "Exemplo: {\"Margarina (Hotel Monte Castelo)\": \"incluída no pedido do São Jorge por pedido mínimo\"}"
+        if m:
+            prod_txt = m.group(1).strip().rstrip(".,")
+            orig_txt = m.group(2).strip().rstrip(".,")
+            dest_txt = m.group(3).strip().rstrip(".,")
+            for d in discrepancias:
+                if _match(prod_txt, d["produto"]) and _match(orig_txt, d["hotel"]):
+                    result[f"{d['produto']} ({d['hotel']})"] = f"Transferido para {dest_txt}"
+            continue
+
+        m = re.search(
+            r"n[ãa]o\s+comprei\s+(.+?)\s+do\s+(.+)",
+            sent, re.IGNORECASE,
         )
-        msg = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=1024,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return json.loads(msg.content[0].text)
-    except Exception:
-        return {}
+        if m:
+            prod_txt  = m.group(1).strip().rstrip(".,")
+            hotel_txt = m.group(2).strip().rstrip(".,")
+            for d in discrepancias:
+                if _match(prod_txt, d["produto"]) and _match(hotel_txt, d["hotel"]):
+                    result[f"{d['produto']} ({d['hotel']})"] = "Não comprado"
+
+    return result
 
 
 anotacoes = {}
@@ -222,9 +233,6 @@ if nota:
     st.info(f"📝 **Nota do responsável:** {nota}")
 elif usuario["perfil"] in ("admin", "comprador"):
     st.caption("Nenhuma nota registrada para esta cotação. Adicione em Análise de Preços → Notas da compra.")
-
-if not os.environ.get("ANTHROPIC_API_KEY") and all_discrepancias:
-    st.warning("⚠️ Configure a variável `ANTHROPIC_API_KEY` no Railway para ativar as anotações automáticas por produto.")
 
 st.markdown("---")
 
