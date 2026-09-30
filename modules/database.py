@@ -58,6 +58,7 @@ def _criar_tabelas(engine):
         conn.execute(text("ALTER TABLE \"produtos\" ADD COLUMN IF NOT EXISTS \"categoria\" TEXT DEFAULT ''"))
         conn.execute(text("ALTER TABLE \"pedidos\" ADD COLUMN IF NOT EXISTS \"editado_por\" TEXT DEFAULT ''"))
         conn.execute(text("ALTER TABLE \"pedidos\" ADD COLUMN IF NOT EXISTS \"data_edicao\" TEXT DEFAULT ''"))
+        conn.execute(text("ALTER TABLE \"cotacoes\" ADD COLUMN IF NOT EXISTS \"observacoes_compra\" TEXT DEFAULT ''"))
 
     # Seed unidades_medida when empty
     with engine.begin() as conn:

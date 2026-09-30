@@ -197,7 +197,7 @@ def _gerar_pdf(secoes_data: list, nome_fornecedor: str, total_geral: float) -> b
     from reportlab.lib import colors
     from reportlab.lib.units import cm
     from reportlab.platypus import (
-        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, PageBreak
     )
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
@@ -224,12 +224,15 @@ def _gerar_pdf(secoes_data: list, nome_fornecedor: str, total_geral: float) -> b
 
     story = []
 
-    for sec in secoes_data:
+    for _sec_idx, sec in enumerate(secoes_data):
         compra   = sec["compra"]
         forn     = sec["forn"]
         unid     = sec["unid"]
         itens    = sec["itens"]
         nome_cot = sec.get("nome_cot", "")
+
+        if _sec_idx > 0:
+            story.append(PageBreak())
 
         cid = _safe_int(compra["id"])
         data_str = str(compra.get("data_compra", ""))
@@ -285,11 +288,11 @@ def _gerar_pdf(secoes_data: list, nome_fornecedor: str, total_geral: float) -> b
             obs = str(it.get("obs_fornecedor", "") or "") or "—"
             rows.append([
                 it.get("codigo", "—"),
-                Paragraph(it.get("descricao", "—"), s_small),
-                it.get("gram_sol", ""),
-                it.get("marca", ""),
+                Paragraph(str(it.get("descricao", "—") or "—"), s_small),
+                Paragraph(str(it.get("gram_sol", "") or ""), s_small),
+                Paragraph(str(it.get("marca", "") or ""), s_small),
                 Paragraph(obs, s_small),
-                it.get("gram_inf", ""),
+                Paragraph(str(it.get("gram_inf", "") or ""), s_small),
                 f"R$ {p:.2f}",
                 f"{q:g}",
                 f"R$ {p*q:.2f}",

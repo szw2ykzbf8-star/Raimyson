@@ -5,7 +5,7 @@ import urllib.parse
 import re
 import io
 from modules.auth import requer_permissao
-from modules.google_sheets import ler_df, escrever_df, get_sheet
+from modules.google_sheets import ler_df, escrever_df, get_sheet, atualizar_linha
 
 usuario = requer_permissao("analise")
 
@@ -800,6 +800,25 @@ def _wa_link_forn(fid):
 
 # ── FOOTER: resumo por fornecedor ─────────────────────────────────────────────
 st.markdown("## Resumo por Fornecedor")  # layout v2
+
+# ── Notas da compra (admin/comprador) ────────────────────────────────────────
+if usuario["perfil"] in ("admin", "comprador"):
+    _nota_atual = ""
+    if not df_cotacoes.empty and "observacoes_compra" in df_cotacoes.columns:
+        _cot_r = df_cotacoes[df_cotacoes["id"].apply(_safe_int) == cotacao_sel]
+        if not _cot_r.empty:
+            _nota_atual = str(_cot_r.iloc[0].get("observacoes_compra", "") or "").strip()
+    with st.expander("📝 Notas da compra", expanded=bool(_nota_atual)):
+        st.caption("Descreva aqui qualquer ajuste feito: redirecionamentos entre hotéis, aumentos de quantidade por pedido mínimo, etc. Essa nota aparece no relatório do digitador.")
+        _nota_nova = st.text_area(
+            "Notas", value=_nota_atual, height=100,
+            label_visibility="collapsed", key=f"nota_compra_{cotacao_sel}",
+            placeholder="Ex: Margarina do Monte Castelo incluída no pedido do São Jorge por pedido mínimo. Nescau Gold foi para o Roma.",
+        )
+        if st.button("💾 Salvar nota", key=f"salvar_nota_{cotacao_sel}"):
+            atualizar_linha("cotacoes", str(cotacao_sel), {"observacoes_compra": _nota_nova.strip()})
+            st.cache_data.clear()
+            st.toast("✅ Nota salva!", icon="📝")
 
 totais = _calc_totais()
 

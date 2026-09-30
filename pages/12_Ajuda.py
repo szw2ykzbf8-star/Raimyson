@@ -6,9 +6,9 @@ usuario = requer_login()
 perfil  = usuario.get("perfil", "digitador")
 
 _PERFIL_PADRAO = {
-    "admin":     {"pedidos","cotacoes","analise","ordem","recebimento","compra_avulsa","produtos","fornecedores","relatorios","configuracoes"},
-    "comprador": {"pedidos","cotacoes","analise","ordem","recebimento","compra_avulsa","produtos","fornecedores","relatorios"},
-    "digitador": {"pedidos"},
+    "admin":     {"pedidos","cotacoes","analise","ordem","recebimento","compra_avulsa","produtos","fornecedores","relatorios","configuracoes","comparativo_pedidos"},
+    "comprador": {"pedidos","cotacoes","analise","ordem","recebimento","compra_avulsa","produtos","fornecedores","relatorios","comparativo_pedidos"},
+    "digitador": {"pedidos","comparativo_pedidos"},
 }
 _perm_str = str(usuario.get("permissoes", "") or "").strip()
 perm = {p.strip() for p in _perm_str.split(",") if p.strip()} if _perm_str else set(_PERFIL_PADRAO.get(perfil, {"pedidos"}))
@@ -280,8 +280,9 @@ if "ordem"         in perm: tabs_nomes.append("🛒 Ordem de Compra")
 if "recebimento"   in perm: tabs_nomes.append("📥 Recebimento")
 if "compra_avulsa" in perm: tabs_nomes.append("🧾 Compra Avulsa")
 if "produtos" in perm or "fornecedores" in perm: tabs_nomes.append("📦 Cadastros")
-if "relatorios"    in perm: tabs_nomes.append("📈 Relatórios")
-if "configuracoes" in perm: tabs_nomes.append("⚙️ Configurações")
+if "relatorios"           in perm: tabs_nomes.append("📈 Relatórios")
+if "comparativo_pedidos"  in perm: tabs_nomes.append("📋 Comparativo de Pedidos")
+if "configuracoes"        in perm: tabs_nomes.append("⚙️ Configurações")
 tabs_nomes.append("🔑 Minha Conta")
 
 tabs = st.tabs(tabs_nomes)
@@ -535,6 +536,18 @@ Se for necessário desfazer uma compra já gerada e refazer (por exemplo, para c
 4. O botão **Comprar** retorna e o processo pode ser feito novamente.
 
 > **Atenção:** esta ação remove o pedido anterior de forma permanente. Certifique-se de que o PDF já foi salvo antes de liberar, caso ainda precise dele.
+            """)
+
+        with st.expander("📌 Como registrar notas da compra"):
+            st.markdown("""
+Após fechar a compra (ou a qualquer momento), o admin ou comprador pode registrar uma **nota livre** por cotação:
+
+1. Role a página até a seção **Resumo por Fornecedor**.
+2. Clique em **📝 Notas da compra** para expandir o campo.
+3. Descreva em linguagem natural os ajustes realizados — redirecionamentos entre hotéis, aumentos de quantidade por pedido mínimo, etc.
+4. Clique em **💾 Salvar nota**.
+
+A nota é **interna** — não aparece no PDF do fornecedor. Ela é utilizada pelo módulo **Comparativo de Pedidos** para explicar automaticamente as diferenças encontradas.
             """)
 
         with st.expander("⚠️ Pontos de atenção"):
@@ -803,6 +816,46 @@ Download das principais tabelas em formato **.xlsx** (Excel).
 - O histórico de preços é registrado automaticamente a cada compra gerada.
 - O **Comparativo de Preços** exige ao menos 2 caracteres na busca para exibir resultados.
 - A **Curva ABC** e o **Ranking** consideram apenas itens com compra registrada.
+            """)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# COMPARATIVO DE PEDIDOS
+# ══════════════════════════════════════════════════════════════════════════════
+if "📋 Comparativo de Pedidos" in ti:
+    with ti["📋 Comparativo de Pedidos"]:
+        st.subheader("Comparativo de Pedidos")
+        st.markdown(
+            "Este módulo permite visualizar, por cotação, a comparação entre o que foi "
+            "**solicitado** pelos hotéis e o que foi **efetivamente comprado**."
+        )
+        with st.expander("📌 Como usar"):
+            st.markdown("""
+1. Selecione a cotação desejada no dropdown — as mais recentes aparecem primeiro.
+2. O sistema exibe uma tabela por hotel com todas as diferenças entre pedido e compra.
+3. Linhas **amarelas** indicam discrepâncias (quantidade diferente do solicitado).
+4. A coluna **Observação** exibe a explicação extraída automaticamente das notas do responsável pela compra (quando disponível).
+
+**Legenda:**
+- ✅ Conforme — quantidade comprada igual à solicitada
+- ⚠️ Diferença — quantidade diverge; pode ser redirecionamento entre hotéis ou ajuste por pedido mínimo
+            """)
+        with st.expander("📝 Notas da compra"):
+            st.markdown("""
+O responsável pela compra (admin ou comprador) pode registrar uma **nota livre** na tela de **Análise de Preços** → seção *📝 Notas da compra*, após fechar a compra.
+
+Exemplo de nota:
+> *"Margarina do Monte Castelo incluída no pedido do São Jorge por pedido mínimo. Nescau Gold foi para o Roma."*
+
+O sistema usa inteligência artificial para interpretar a nota e exibir a explicação relevante ao lado de cada produto com diferença, sem precisar preencher item por item.
+
+> A nota é interna e **não aparece** no PDF enviado ao fornecedor.
+            """)
+        with st.expander("⚠️ Pontos de atenção"):
+            st.markdown("""
+- O comparativo é **retrospectivo** — mostra os dados após o fechamento da compra.
+- Itens com diferença mas **sem nota** indicam ajuste de quantidade (ex: pedido mínimo) sem redirecionamento entre hotéis.
+- A função de anotação automática por IA requer a variável `ANTHROPIC_API_KEY` configurada no ambiente.
             """)
 
 

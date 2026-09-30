@@ -1,3 +1,4 @@
+import html as _html
 import json
 import streamlit as st
 import streamlit.components.v1 as components
@@ -47,16 +48,18 @@ def _wa_btn(nome_forn: str, link: str, key: str):
         "*Atenciosamente,*\n"
         "*Grupo H Hotéis*"
     )
-    msg_js = json.dumps(msg)
+    uid = "wb_" + "".join(c if c.isalnum() else "_" for c in key)
+    msg_safe = _html.escape(msg)
     components.html(
-        f"""<button onclick="navigator.clipboard.writeText({msg_js}).then(()=>{{
-                this.textContent='✅ Copiado!';
-                setTimeout(()=>this.textContent='📲 Copiar msg',2000)
-            }}).catch(()=>alert('Copie manualmente.'))"
-            style="background:#25D366;color:#fff;border:none;padding:6px 10px;
-                   border-radius:6px;cursor:pointer;font-size:13px;width:100%">
-            📲 Copiar msg
-        </button>""",
+        f"""<textarea id="{uid}" style="display:none">{msg_safe}</textarea>
+<button onclick="var b=this,t=document.getElementById('{uid}').value;
+  navigator.clipboard.writeText(t)
+  .then(function(){{b.textContent='✅ Copiado!';setTimeout(function(){{b.textContent='📲 Copiar msg'}},2000)}})
+  .catch(function(){{alert('Copie manualmente.')}});"
+  style="background:#25D366;color:#fff;border:none;padding:6px 10px;
+         border-radius:6px;cursor:pointer;font-size:13px;width:100%">
+  📲 Copiar msg
+</button>""",
         height=42,
     )
 
