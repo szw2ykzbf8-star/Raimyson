@@ -91,14 +91,15 @@ _PAGINAS_CONFIG = {
     "compra_avulsa":("pages/11_Compra_Avulsa.py","Compra Avulsa",   "🧾"),
     "produtos":     ("pages/01_Produtos.py",     "Produtos",          "📦"),
     "fornecedores": ("pages/02_Fornecedores.py", "Fornecedores",      "🏭"),
-    "relatorios":   ("pages/07_Relatorios.py",   "Relatórios",        "📈"),
-    "configuracoes":("pages/08_Configuracoes.py","Configurações",     "⚙️"),
-    "admin_sistema":("pages/13_Admin.py",        "Administração",      "🔧"),
+    "relatorios":          ("pages/07_Relatorios.py",          "Relatórios",             "📈"),
+    "comparativo_pedidos": ("pages/14_Comparativo_Pedidos.py", "Comparativo de Pedidos", "📋"),
+    "configuracoes":       ("pages/08_Configuracoes.py",       "Configurações",          "⚙️"),
+    "admin_sistema":       ("pages/13_Admin.py",               "Administração",          "🔧"),
 }
 _PERFIL_PADRAO = {
-    "admin":     ["pedidos","cotacoes","analise","ordem","recebimento","compra_avulsa","produtos","fornecedores","relatorios","configuracoes","admin_sistema"],
-    "comprador": ["pedidos","cotacoes","analise","ordem","recebimento","compra_avulsa","produtos","fornecedores","relatorios"],
-    "digitador": ["pedidos"],
+    "admin":     ["pedidos","cotacoes","analise","ordem","recebimento","compra_avulsa","produtos","fornecedores","relatorios","comparativo_pedidos","configuracoes","admin_sistema"],
+    "comprador": ["pedidos","cotacoes","analise","ordem","recebimento","compra_avulsa","produtos","fornecedores","relatorios","comparativo_pedidos"],
+    "digitador": ["pedidos","comparativo_pedidos"],
 }
 
 permissoes_str = str(usuario.get("permissoes", "") or "").strip()
@@ -135,8 +136,9 @@ cadastros = [k for k in ["produtos","fornecedores"] if k in permissoes]
 if cadastros:
     nav["Cadastros"] = [_pg(k) for k in cadastros]
 
-if "relatorios" in permissoes:
-    nav["Análises"] = [_pg("relatorios")]
+analises = [k for k in ["relatorios", "comparativo_pedidos"] if k in permissoes]
+if analises:
+    nav["Análises"] = [_pg(k) for k in analises]
 
 # IMPORTANTE: "Suporte" e "Sistema" devem ser SEMPRE os dois últimos grupos do menu,
 # nesta ordem: Suporte penúltimo, Configurações/Sistema por último.
