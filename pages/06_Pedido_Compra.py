@@ -515,12 +515,22 @@ with tab_direta:
                     prod = prod_map.get(pid, {})
                     desc = str(prod.get("descricao", f"Produto {pid}"))
                     apres = str(prod.get("apresentacao", "") or "")
-                    qtd = _safe_float(cd_row.get("quantidade", 0))
-                    col_cb, col_info = st.columns([1, 7])
+                    qtd_orig = _safe_float(cd_row.get("quantidade", 0))
+                    col_cb, col_info, col_qtd = st.columns([1, 5, 2])
                     with col_cb:
                         st.checkbox("", key=f"cd_chk_{row_id}", value=False, label_visibility="collapsed")
                     with col_info:
-                        st.markdown(f"**{desc}** — {apres} — Qtd: **{qtd:g}**")
+                        st.markdown(f"**{desc}** — {apres}")
+                        st.caption(f"Solicitado: {qtd_orig:g}")
+                    with col_qtd:
+                        st.number_input(
+                            "Qtd comprada",
+                            value=qtd_orig,
+                            min_value=0.0,
+                            step=0.5,
+                            key=f"cd_qtd_{row_id}",
+                            label_visibility="visible",
+                        )
 
                 if st.button("💾 Marcar selecionados como comprado", key=f"cd_save_{unid_nome}", use_container_width=True):
                     ids_to_mark = [
@@ -536,6 +546,9 @@ with tab_direta:
                             idx_cd = df_cd_upd[df_cd_upd["id"].astype(str) == rid].index
                             if len(idx_cd):
                                 df_cd_upd.at[idx_cd[0], "comprado"] = "True"
+                                nova_qtd = st.session_state.get(f"cd_qtd_{rid}")
+                                if nova_qtd is not None:
+                                    df_cd_upd.at[idx_cd[0], "quantidade"] = str(nova_qtd)
                         escrever_df("compras_diretas", df_cd_upd)
 
                         # Encerra cotação se todos os pedidos e compras_diretas concluídos
