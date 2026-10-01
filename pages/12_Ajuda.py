@@ -495,10 +495,11 @@ if "📊 Análise de Preços" in ti:
 
         with st.expander("📌 Como ajustar quantidades por hotel"):
             st.markdown("""
-- Dentro do painel de cada fornecedor, clique em **📦 Ajustar qtd.** para abrir o painel de ajuste.
-- Cada produto é exibido com seu nome e, logo abaixo, um campo de quantidade para cada unidade hoteleira. Altere os valores conforme necessário.
-- Ao final de cada produto, os **subtotais por unidade** são exibidos com indicação colorida: verde se atinge o pedido mínimo, amarelo se não atinge.
+- Na linha de **Totais** ao final da tabela, clique no valor de um fornecedor para abrir o painel de ajuste de quantidades.
+- Cada produto é exibido com seu nome e, ao lado, um campo de quantidade para cada unidade hoteleira. Altere os valores conforme necessário.
+- Os **subtotais por unidade** são atualizados automaticamente com indicação colorida: verde se atinge o pedido mínimo, amarelo se não atinge.
 - Clique em **💾 Salvar quantidades** para confirmar as alterações.
+- Para ver a distribuição de uma quantidade por hotel sem editar, clique no número de quantidade na coluna do produto.
 
 > Após gerar a compra, as quantidades ficam bloqueadas. Para alterar, é necessário liberar a compra (veja abaixo).
             """)
