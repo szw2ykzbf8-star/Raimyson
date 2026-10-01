@@ -52,6 +52,7 @@ df_itens        = ler_df("itens_pedido")
 df_hist_precos  = ler_df("historico_precos")
 df_unidades     = ler_df("unidades")
 df_compras      = ler_df("compras")
+df_itens_compra = ler_df("itens_compra")
 
 # nome → nome_fantasia map for hotel units
 _unid_fantasia = {}
@@ -291,23 +292,29 @@ with tab_ativa:
                 total += _safe_float(item.iloc[0]["quantidade"])
         return total
 
-    # Historical prices (last 3 won purchases per product)
+    # Historical prices: use actual purchase records (compras + itens_compra)
     def _historico(pid):
-        if df_hist_precos.empty:
+        if df_itens_compra.empty or df_compras.empty:
             return []
-        hist = df_hist_precos[
-            (df_hist_precos["produto_id"].apply(_safe_int) == pid) &
-            (df_hist_precos["ganhou"].astype(str).str.lower().isin(["true", "1", "sim"]))
+        items = df_itens_compra[
+            df_itens_compra["produto_id"].apply(_safe_int) == pid
         ].copy()
-        if hist.empty:
+        if items.empty:
             return []
-        hist = hist.sort_values("data", ascending=False)
-        if "cotacao_id" in hist.columns:
-            hist = hist.drop_duplicates(subset=["cotacao_id"])
-        hist = hist.head(3)
+        compras_cols = [c for c in ["id", "cotacao_id", "fornecedor_id", "data"] if c in df_compras.columns]
+        if len(compras_cols) < 3:
+            return []
+        cmp = df_compras[compras_cols].copy().rename(columns={"id": "compra_id"})
+        merged = items.merge(cmp, on="compra_id", how="inner")
+        if merged.empty:
+            return []
+        merged = merged.sort_values("data", ascending=False)
+        if "cotacao_id" in merged.columns:
+            merged = merged.drop_duplicates(subset=["cotacao_id"])
+        merged = merged.head(3)
         result = []
-        for _, h in hist.iterrows():
-            fid  = _safe_int(h["fornecedor_id"])
+        for _, h in merged.iterrows():
+            fid  = _safe_int(h.get("fornecedor_id", 0))
             nome = str(forn_map.get(fid, {}).get("nome_fantasia") or forn_map.get(fid, {}).get("razao_social") or f"#{fid}")
             pn   = _safe_float(h.get("preco_normalizado", h.get("preco", 0)))
             result.append({"data": str(h.get("data", ""))[:10], "preco": pn, "fornecedor": nome})
