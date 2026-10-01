@@ -303,7 +303,7 @@ with tab_ativa:
             return []
         hist = hist.sort_values("data", ascending=False)
         if "cotacao_id" in hist.columns:
-            hist = hist.drop_duplicates(subset=["cotacao_id", "fornecedor_id"])
+            hist = hist.drop_duplicates(subset=["cotacao_id"])
         hist = hist.head(3)
         result = []
         for _, h in hist.iterrows():
