@@ -517,19 +517,18 @@ with tab_abertas:
                                             key = (pid, unid_ped)
                                             cd_agg[key] = cd_agg.get(key, 0) + _safe_float(item.get("quantidade", 0))
                                 if cd_agg:
-                                    # Clear any existing ComprasDiretas for this cotacao first
                                     df_cd_cur = ler_df("compras_diretas")
-                                    if not df_cd_cur.empty:
-                                        df_cd_cur = df_cd_cur[df_cd_cur["cotacao_id"].apply(_safe_int) != cot_id].reset_index(drop=True)
-                                        escrever_df("compras_diretas", df_cd_cur)
-                                    else:
-                                        df_cd_cur = pd.DataFrame(columns=["id", "cotacao_id", "produto_id", "unidade", "quantidade", "comprado"])
-                                    next_id = int(df_cd_cur["id"].apply(_safe_int).max()) + 1 if not df_cd_cur.empty else 1
-                                    novas_cd = []
-                                    for (pid, unid), qtd in cd_agg.items():
-                                        novas_cd.append([next_id, cot_id, pid, unid, qtd, "False"])
-                                        next_id += 1
-                                    get_sheet("compras_diretas").append_rows(novas_cd)
+                                    already_registered = (
+                                        not df_cd_cur.empty and
+                                        (df_cd_cur["cotacao_id"].apply(_safe_int) == cot_id).any()
+                                    )
+                                    if not already_registered:
+                                        next_id = int(df_cd_cur["id"].apply(_safe_int).max()) + 1 if not df_cd_cur.empty else 1
+                                        novas_cd = [
+                                            [next_id + i, cot_id, pid, unid, qtd, "False"]
+                                            for i, ((pid, unid), qtd) in enumerate(cd_agg.items())
+                                        ]
+                                        get_sheet("compras_diretas").append_rows(novas_cd)
 
                         st.success("Prazo fechado. Acesse a Análise para gerar os pedidos de compra.")
                         st.cache_data.clear()
