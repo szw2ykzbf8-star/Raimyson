@@ -374,6 +374,75 @@ with tab_ativa:
 
     st.markdown("---")
 
+    # ── Dialogs ───────────────────────────────────────────────────────────────────
+    @st.dialog("Quantidades por hotel")
+    def _dlg_hotel_popup(pid):
+        prod_d = prod_map.get(pid, {})
+        st.caption(str(prod_d.get("descricao", f"Produto {pid}")))
+        st.markdown("---")
+        for u in unidades_cot:
+            q = _get_qtd(pid, u)
+            c1, c2 = st.columns([3, 1])
+            c1.write(_unid_label(u))
+            c2.write(f"**{q:.1f}**")
+
+    @st.dialog("Ajustar Quantidades")
+    def _dlg_ajustar_qtd(fid):
+        forn_d = forn_map.get(fid, {})
+        nome_d = str(forn_d.get("nome_fantasia") or forn_d.get("razao_social") or f"#{fid}")
+        ped_min_d = _safe_float(forn_d.get("pedido_minimo", 0))
+        compra_feita_d = bool(st.session_state.get(f"{sk}_compra_done_{fid}"))
+        prods_fid_d = [p for p in prod_ids if _get_sel(p) == fid]
+        st.caption(f"Fornecedor: **{nome_d}**")
+        if not prods_fid_d:
+            st.info("Nenhum produto selecionado para este fornecedor.")
+            return
+        if compra_feita_d:
+            st.warning("🔒 Compra já gerada — quantidades bloqueadas.")
+        n_unid = len(unidades_cot)
+        cw = [3.5] + [1.2] * n_unid
+        hd = st.columns(cw)
+        hd[0].markdown("**Produto**")
+        for j, unid in enumerate(unidades_cot):
+            hd[j + 1].markdown(f"**{_unid_label(unid)}**")
+        st.markdown("<hr style='margin:4px 0'>", unsafe_allow_html=True)
+        for pd_ in prods_fid_d:
+            prd = prod_map.get(pd_, {})
+            nm  = str(prd.get("descricao", f"#{pd_}"))
+            ub_ = str(prd.get("unidade_base", ""))
+            rw  = st.columns(cw)
+            rw[0].markdown(f"**{nm}**" + (f"  \n*{ub_}*" if ub_ else ""))
+            for j, unid in enumerate(unidades_cot):
+                qkey = f"{sk}_qtd_{pd_}_{unid}"
+                if qkey not in st.session_state:
+                    st.session_state[qkey] = _qtd_orig(pd_, unid)
+                rw[j + 1].number_input(
+                    "qtd", min_value=0.0, step=0.5,
+                    key=qkey, disabled=compra_feita_d,
+                    label_visibility="collapsed",
+                )
+        st.markdown("<hr style='margin:4px 0'>", unsafe_allow_html=True)
+        sub = st.columns(cw)
+        sub[0].markdown("**Subtotal**")
+        tot_d = _calc_totais()
+        for j, unid in enumerate(unidades_cot):
+            t = tot_d[fid][unid]
+            ok = ped_min_d == 0 or t == 0 or t >= ped_min_d
+            color = "#15803d" if ok else "#b45309"
+            sub[j + 1].markdown(
+                f"<span style='color:{color}'><b>R$ {t:.2f}</b></span>",
+                unsafe_allow_html=True,
+            )
+        if not compra_feita_d:
+            if st.button("💾 Salvar quantidades", use_container_width=True, key=f"{sk}_dlgsave_{fid}"):
+                ok2, err2 = _salvar_quantidades()
+                if ok2:
+                    st.toast("✅ Quantidades salvas!", icon="💾")
+                    st.cache_data.clear()
+                    st.rerun()
+                else:
+                    st.toast(f"Erro ao salvar: {err2}", icon="❌")
+
     # ── GRID ──────────────────────────────────────────────────────────────────────
     W_PROD, W_QTD, W_HIST, W_FORN = 2.5, 1.3, 1.5, 1.6
     col_widths = [W_PROD, W_QTD, W_HIST] + [W_FORN] * len(forn_ids)
@@ -411,12 +480,17 @@ with tab_ativa:
                 st.caption(apres)
 
         with row[1]:
-            st.markdown(f"**{qtd_total:.1f}**")
-            qtds_pos = {u: q for u, q in qtds_unid.items() if q > 0}
-            if len(qtds_pos) > 1:
-                with st.expander("▸ por hotel"):
-                    for u, q in qtds_pos.items():
-                        st.caption(f"{_unid_label(u)}: {q:.1f}")
+            ub_lbl = f" {ub}" if ub else ""
+            if len(unidades_cot) > 1:
+                if st.button(
+                    f"{qtd_total:.1f}{ub_lbl}",
+                    key=f"{sk}_qtdpop_{pid}",
+                    help="Ver por hotel",
+                    use_container_width=True,
+                ):
+                    _dlg_hotel_popup(pid)
+            else:
+                st.markdown(f"**{qtd_total:.1f}**{ub_lbl}")
 
         with row[2]:
             if hist:
@@ -476,6 +550,43 @@ with tab_ativa:
 
         st.markdown("<hr style='margin:4px 0'>", unsafe_allow_html=True)
 
+    # ── Linha de totais por fornecedor ────────────────────────────────────────────
+    totais_foot = _calc_totais()
+    tot_any_warn = any(
+        _safe_float(forn_map.get(f, {}).get("pedido_minimo", 0)) > 0
+        and 0 < sum(totais_foot[f].values()) < _safe_float(forn_map.get(f, {}).get("pedido_minimo", 0))
+        for f in forn_ids
+    )
+    foot_row = st.columns(col_widths)
+    foot_row[0].markdown("**Totais**" + ("  \n⚠️ *Verifique os limites*" if tot_any_warn else ""))
+    foot_row[1].markdown("")
+    foot_row[2].markdown("")
+    for i, fid in enumerate(forn_ids):
+        forn_t   = forn_map.get(fid, {})
+        ped_min_t = _safe_float(forn_t.get("pedido_minimo", 0))
+        tot_fid  = sum(totais_foot[fid].values())
+        ok_t = ped_min_t == 0 or tot_fid == 0 or tot_fid >= ped_min_t
+        if tot_fid > 0:
+            bg_t  = "#dcfce7" if ok_t else "#fef9c3"
+            bd_t  = "#86efac" if ok_t else "#fde047"
+            cl_t  = "#15803d" if ok_t else "#b45309"
+            sub_t = f"<br><small>⚠️ faltam R$ {ped_min_t - tot_fid:.0f}</small>" if not ok_t else ""
+            val_t = f"<b style='color:{cl_t}'>R$ {tot_fid:.2f}</b>{sub_t}"
+        else:
+            bg_t, bd_t = "transparent", "#e5e7eb"
+            val_t = "<span style='color:#aaa'>—</span>"
+        with foot_row[3 + i]:
+            st.markdown(
+                f"<div style='border-radius:6px;padding:6px 4px;background:{bg_t};"
+                f"border:1px solid {bd_t};text-align:center;font-size:13px'>{val_t}</div>",
+                unsafe_allow_html=True,
+            )
+            if tot_fid > 0:
+                if st.button("✏️ Ajustar qtd", key=f"{sk}_foot_{fid}",
+                             use_container_width=True, help="Ajustar quantidades"):
+                    _dlg_ajustar_qtd(fid)
+
+    st.markdown("---")
 
     # ── Save adjusted quantities to DB ───────────────────────────────────────────
     def _salvar_quantidades():
@@ -944,68 +1055,6 @@ td{border:1px solid #ddd;padding:4px 6px;vertical-align:top}
                     st.toast("Marque ✅ Ignorar para prosseguir mesmo sem atingir o pedido mínimo.", icon="⚠️")
                 else:
                     st.session_state[f"{sk}_comprar_fid"] = fid
-
-        # ── Ajustar quantidades (tabela horizontal: produto + coluna por hotel)
-        with st.expander("📦 Ajustar qtd."):
-            prods_fid = [pid for pid in prod_ids if _get_sel(pid) == fid]
-            if not prods_fid:
-                st.caption("Nenhum produto selecionado para este fornecedor.")
-            else:
-                if compra_feita:
-                    st.caption("🔒 Compra já gerada — quantidades bloqueadas.")
-
-                n_unid = len(unidades_cot)
-                col_w  = [3.5] + [1.2] * n_unid
-
-                # Cabeçalho da tabela
-                hdr_r = st.columns(col_w)
-                hdr_r[0].markdown("**Produto**")
-                for j, unid in enumerate(unidades_cot):
-                    hdr_r[j + 1].markdown(f"**{_unid_label(unid)}**")
-                st.markdown("<hr style='margin:4px 0'>", unsafe_allow_html=True)
-
-                # Linhas de produto com inputs
-                for pid in prods_fid:
-                    prod   = prod_map.get(pid, {})
-                    nome_p = str(prod.get("descricao", f"#{pid}"))
-                    ub_p   = str(prod.get("unidade_base", ""))
-                    row_r  = st.columns(col_w)
-                    row_r[0].markdown(f"**{nome_p}**" + (f"  \n*{ub_p}*" if ub_p else ""))
-                    for j, unid in enumerate(unidades_cot):
-                        qkey = f"{sk}_qtd_{pid}_{unid}"
-                        if qkey not in st.session_state:
-                            st.session_state[qkey] = _qtd_orig(pid, unid)
-                        row_r[j + 1].number_input(
-                            "qtd",
-                            min_value=0.0, step=0.5,
-                            key=qkey,
-                            disabled=compra_feita,
-                            label_visibility="collapsed",
-                        )
-                st.markdown("<hr style='margin:4px 0'>", unsafe_allow_html=True)
-
-                # Linha de subtotais
-                sub_r = st.columns(col_w)
-                sub_r[0].markdown("**Subtotal**")
-                tot_now = _calc_totais()
-                for j, unid in enumerate(unidades_cot):
-                    t  = tot_now[fid][unid]
-                    ok = ped_min == 0 or t == 0 or t >= ped_min
-                    color = "#15803d" if ok else "#b45309"
-                    sub_r[j + 1].markdown(
-                        f"<span style='color:{color}'><b>R$ {t:.2f}</b></span>",
-                        unsafe_allow_html=True,
-                    )
-
-                if st.button("💾 Salvar quantidades", key=f"{sk}_save_{fid}",
-                             use_container_width=True, disabled=compra_feita):
-                    ok2, err2 = _salvar_quantidades()
-                    if ok2:
-                        st.toast("✅ Quantidades salvas!", icon="💾")
-                        st.cache_data.clear()
-                        st.rerun()
-                    else:
-                        st.toast(f"Erro ao salvar: {err2}", icon="❌")
 
         st.markdown("---")
 
