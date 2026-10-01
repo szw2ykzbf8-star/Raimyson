@@ -535,6 +535,22 @@ with tab_abertas:
                         st.cache_data.clear()
                         st.rerun()
 
+                    # ── Importar backup de fornecedor ─────────────────────────────────────
+                    if usuario.get("perfil") in ("admin", "comprador"):
+                        st.markdown("---")
+                        st.markdown("##### 📥 Importar backup de fornecedor")
+                        _bkp_file = st.file_uploader(
+                            "Selecione o arquivo .cotbkp recebido do fornecedor",
+                            type=["cotbkp"],
+                            key=f"bkp_upload_{cot_id}",
+                            help="Arquivo gerado pelo formulário de cotação quando o fornecedor clica em 'Salvar rascunho'.",
+                        )
+                        if _bkp_file is not None:
+                            _process_backup(
+                                cot_id, _bkp_file,
+                                df_respostas, df_fornecedores, df_tokens, df_produtos,
+                            )
+
 
 # ── Encerradas ────────────────────────────────────────────────────────────────
 with tab_encerradas:
@@ -606,17 +622,3 @@ with tab_encerradas:
                                     st.session_state.pop(_del_key, None)
                                     st.rerun()
 
-                if usuario.get("perfil") in ("admin", "comprador"):
-                    st.markdown("---")
-                    st.markdown("##### 📥 Importar backup de fornecedor")
-                    _bkp_file = st.file_uploader(
-                        "Selecione o arquivo .cotbkp recebido do fornecedor",
-                        type=["cotbkp"],
-                        key=f"bkp_upload_{cot_id}",
-                        help="Arquivo gerado pelo formulário de cotação quando o fornecedor clica em 'Salvar rascunho'.",
-                    )
-                    if _bkp_file is not None:
-                        _process_backup(
-                            cot_id, _bkp_file,
-                            df_respostas, df_fornecedores, df_tokens, df_produtos,
-                        )

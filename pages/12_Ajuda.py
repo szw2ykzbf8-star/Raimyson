@@ -456,13 +456,13 @@ O formulário de cotação possui dois mecanismos para evitar perda de dados por
 - O arquivo é criptografado e vinculado ao token daquele fornecedor — não pode ser usado para outras cotações.
 
 **Importar backup (Administrador / Comprador)**
-1. Acesse **Cotações** → aba **Encerradas**.
-2. Abra a cotação desejada.
+1. Acesse **Cotações** → aba **Em Andamento**.
+2. Abra a cotação desejada (ainda com status **Aberta**).
 3. Na seção **📥 Importar backup de fornecedor**, carregue o arquivo `.cotbkp` recebido.
 4. O sistema exibirá um resumo dos itens contidos no arquivo.
 5. Clique em **✅ Importar esta cotação** e confirme — os dados serão registrados como resposta daquele fornecedor.
 
-> Se já existia uma resposta desse fornecedor, ela será **substituída** pela do arquivo. O sistema avisa antes de confirmar.
+> Importe antes de fechar o prazo e ir para a Análise de Preços. Se já existia uma resposta desse fornecedor, ela será **substituída** pela do arquivo — o sistema avisa antes de confirmar.
             """)
 
         with st.expander("📌 Como alterar o prazo ou avançar o ciclo da cotação"):
