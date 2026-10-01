@@ -195,6 +195,19 @@ def mostrar_pagina_publica(token: str):
             )
 
         if st.session_state.get(f"pub_status_{pid}", "Atende") == "Atende":
+            if st.session_state.get("pub_tentou_enviar", False):
+                _preco_v = float(st.session_state.get(f"pub_preco_{pid}", 0.0))
+                _marca_v = str(st.session_state.get(f"pub_marca_{pid}", "")).strip()
+                _falt = []
+                if _preco_v <= 0: _falt.append("preço")
+                if not _marca_v:  _falt.append("marca")
+                if _falt:
+                    st.markdown(
+                        f'<div style="background:#fee2e2;border-left:4px solid #dc2626;'
+                        f'padding:5px 12px;border-radius:4px;font-size:12px;color:#991b1b;margin:2px 0 6px">'
+                        f'⚠️ Faltando: <strong>{" e ".join(_falt)}</strong></div>',
+                        unsafe_allow_html=True,
+                    )
             col1, col2, col3 = st.columns([2, 2, 2])
             with col1:
                 st.number_input(
@@ -264,7 +277,8 @@ def mostrar_pagina_publica(token: str):
                 nomes = [str(pid_to_prod.get(p, {}).get("descricao", f"#{p}")) for p in itens_sem_marca]
                 erros.append(f"**Marca não informada:** {', '.join(nomes)}")
             if erros:
-                st.error("⚠️ Corrija os campos obrigatórios antes de enviar:\n\n" + "\n\n".join(erros))
+                st.session_state["pub_tentou_enviar"] = True
+                st.error("⚠️ Verifique os campos obrigatórios marcados acima.")
             else:
                 try:
                     df_resp2 = ler_df("respostas")
@@ -281,6 +295,7 @@ def mostrar_pagina_publica(token: str):
                     from modules.google_sheets import get_sheet as _gs
                     _gs("respostas").append_rows(linhas)
                     st.cache_data.clear()
+                    st.session_state.pop("pub_tentou_enviar", None)
                     st.success(f"✅ Cotação enviada! {len(linhas)} item(ns) respondido(s). Obrigado!")
                     st.balloons()
                     st.rerun()
