@@ -159,7 +159,8 @@ def mostrar_pagina_publica(token: str):
     st.markdown("### Itens para cotação")
     st.caption(
         "Selecione a **situação** de cada item. "
-        "Preço e marca são obrigatórios apenas para itens marcados como **Atende**."
+        "Campos marcados com **\\*** são obrigatórios para itens **Atende** — "
+        "preço 0,00 ou marca em branco bloqueiam o envio."
     )
 
     # ── Pré-montar lista de itens ─────────────────────────────────────────────
@@ -201,6 +202,7 @@ def mostrar_pagina_publica(token: str):
                     value=st.session_state.get(f"pub_preco_{pid}", 0.0),
                     min_value=0.0, step=0.01, format="%.2f",
                     key=f"pub_preco_{pid}",
+                    help="Obrigatório. Valor 0,00 não será aceito.",
                 )
             with col2:
                 tipos = _tipos_embalagem()
@@ -218,6 +220,7 @@ def mostrar_pagina_publica(token: str):
                 st.text_input(
                     "Marca *", key=f"pub_marca_{pid}",
                     placeholder="Ex: Sadia, Nestlé…",
+                    help="Obrigatório. Informe a marca do produto que será entregue.",
                 )
             with col_obs:
                 st.text_input(
@@ -253,12 +256,15 @@ def mostrar_pagina_publica(token: str):
             }
             itens_sem_preco = [pid for pid, c in campos.items() if c["preco"] <= 0]
             itens_sem_marca = [pid for pid, c in campos.items() if not c["marca"].strip()]
+            erros = []
             if itens_sem_preco:
                 nomes = [str(pid_to_prod.get(p, {}).get("descricao", f"#{p}")) for p in itens_sem_preco]
-                st.error(f"⚠️ Informe o preço de todos os itens que você Atende: {', '.join(nomes)}")
-            elif itens_sem_marca:
+                erros.append(f"**Preço não informado (0,00):** {', '.join(nomes)}")
+            if itens_sem_marca:
                 nomes = [str(pid_to_prod.get(p, {}).get("descricao", f"#{p}")) for p in itens_sem_marca]
-                st.error(f"⚠️ Informe a marca de todos os itens que você Atende: {', '.join(nomes)}")
+                erros.append(f"**Marca não informada:** {', '.join(nomes)}")
+            if erros:
+                st.error("⚠️ Corrija os campos obrigatórios antes de enviar:\n\n" + "\n\n".join(erros))
             else:
                 try:
                     df_resp2 = ler_df("respostas")
