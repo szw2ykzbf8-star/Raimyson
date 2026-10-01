@@ -543,34 +543,29 @@ with tab_ativa:
                 is_sel  = cur_sel == fid
 
                 if is_sel:
-                    bg    = "background:#dbeafe;border:2px solid #3b82f6;border-radius:6px;padding:6px;margin-bottom:4px"
-                    badge = "<br><small style='color:#1d4ed8'>✓ Selecionado</small>"
+                    label = f"R$ {pn:.2f}\n✓ Selecionado"
+                    btn_type = "primary"
                 elif is_best:
-                    bg    = "background:#dcfce7;border:1px solid #86efac;border-radius:6px;padding:6px;margin-bottom:4px"
-                    badge = "<br><small style='color:#15803d'>★ Melhor Preço</small>"
+                    label = f"R$ {pn:.2f}\n★ Melhor Preço"
+                    btn_type = "secondary"
                 else:
-                    bg    = "border:1px solid #e5e7eb;border-radius:6px;padding:6px;margin-bottom:4px"
-                    badge = ""
+                    label = f"R$ {pn:.2f}"
+                    btn_type = "secondary"
 
-                st.markdown(
-                    f"<div style='{bg}'><b>R$ {pn:.2f}</b>{badge}</div>",
-                    unsafe_allow_html=True,
-                )
                 if rd["marca"]:
-                    st.caption(f"🏷️ {rd['marca'][:25]}")
+                    label += f"\n🏷️ {rd['marca'][:20]}"
+
+                # Clique seleciona; se já selecionado, clique remove
+                if st.button(label, key=f"{sk}_cell_{pid}_{fid}",
+                             use_container_width=True, type=btn_type):
+                    if is_sel:
+                        st.session_state.pop(f"{sk}_sel_{pid}", None)
+                    else:
+                        st.session_state[f"{sk}_sel_{pid}"] = fid
+                    st.rerun()
+
                 if rd["obs"]:
                     st.caption(rd["obs"][:30])
-
-                if not is_sel:
-                    if st.button("Selecionar", key=f"{sk}_s_{pid}_{fid}",
-                                 use_container_width=True, type="secondary"):
-                        st.session_state[f"{sk}_sel_{pid}"] = fid
-                        st.rerun()
-                else:
-                    if st.button("Remover", key=f"{sk}_r_{pid}_{fid}",
-                                 use_container_width=True):
-                        st.session_state.pop(f"{sk}_sel_{pid}", None)
-                        st.rerun()
 
         st.markdown("<hr style='margin:4px 0'>", unsafe_allow_html=True)
 
