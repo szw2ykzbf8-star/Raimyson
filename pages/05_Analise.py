@@ -399,6 +399,21 @@ with tab_ativa:
             return
         if compra_feita_d:
             st.warning("🔒 Compra já gerada — quantidades bloqueadas.")
+
+        # Chaves temporárias isoladas do dialog — não tocam nas chaves principais da app.
+        # Inicializadas na abertura do dialog (gen muda a cada clique no botão).
+        gen_key  = f"_dlg_gen_{fid}"
+        init_key = f"_dlg_init_{fid}"
+        if st.session_state.get(init_key) != st.session_state.get(gen_key, 0):
+            st.session_state[init_key] = st.session_state.get(gen_key, 0)
+            for pd_ in prods_fid_d:
+                for unid in unidades_cot:
+                    tmp  = f"_dlgtmp_{fid}_{pd_}_{unid}"
+                    main = f"{sk}_qtd_{pd_}_{unid}"
+                    st.session_state[tmp] = _safe_float(
+                        st.session_state.get(main, _qtd_orig(pd_, unid))
+                    )
+
         n_unid = len(unidades_cot)
         cw = [3.5] + [1.2] * n_unid
         hd = st.columns(cw)
@@ -413,20 +428,21 @@ with tab_ativa:
             rw  = st.columns(cw)
             rw[0].markdown(f"**{nm}**" + (f"  \n*{ub_}*" if ub_ else ""))
             for j, unid in enumerate(unidades_cot):
-                qkey = f"{sk}_qtd_{pd_}_{unid}"
-                if qkey not in st.session_state:
-                    st.session_state[qkey] = _qtd_orig(pd_, unid)
+                tmp = f"_dlgtmp_{fid}_{pd_}_{unid}"
                 rw[j + 1].number_input(
                     "qtd", min_value=0.0, step=0.5,
-                    key=qkey, disabled=compra_feita_d,
+                    key=tmp, disabled=compra_feita_d,
                     label_visibility="collapsed",
                 )
         st.markdown("<hr style='margin:4px 0'>", unsafe_allow_html=True)
         sub = st.columns(cw)
         sub[0].markdown("**Subtotal**")
-        tot_d = _calc_totais()
         for j, unid in enumerate(unidades_cot):
-            t = tot_d[fid][unid]
+            t = sum(
+                _safe_float(st.session_state.get(f"_dlgtmp_{fid}_{pd_}_{unid}", 0.0))
+                * resp_dict.get((pd_, fid), {}).get("preco_norm", 0.0)
+                for pd_ in prods_fid_d
+            )
             ok = ped_min_d == 0 or t == 0 or t >= ped_min_d
             color = "#15803d" if ok else "#b45309"
             sub[j + 1].markdown(
@@ -435,6 +451,14 @@ with tab_ativa:
             )
         if not compra_feita_d:
             if st.button("💾 Salvar quantidades", use_container_width=True, key=f"{sk}_dlgsave_{fid}"):
+                # Copia chaves temporárias → chaves principais antes de salvar no banco
+                for pd_ in prods_fid_d:
+                    for unid in unidades_cot:
+                        tmp  = f"_dlgtmp_{fid}_{pd_}_{unid}"
+                        main = f"{sk}_qtd_{pd_}_{unid}"
+                        st.session_state[main] = _safe_float(
+                            st.session_state.get(tmp, 0.0)
+                        )
                 ok2, err2 = _salvar_quantidades()
                 if ok2:
                     st.toast("✅ Quantidades salvas!", icon="💾")
@@ -584,6 +608,9 @@ with tab_ativa:
             if tot_fid > 0:
                 if st.button("✏️ Ajustar qtd", key=f"{sk}_foot_{fid}",
                              use_container_width=True, help="Ajustar quantidades"):
+                    st.session_state[f"_dlg_gen_{fid}"] = (
+                        st.session_state.get(f"_dlg_gen_{fid}", 0) + 1
+                    )
                     _dlg_ajustar_qtd(fid)
 
     st.markdown("---")
