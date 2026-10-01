@@ -99,8 +99,8 @@ th{background:#f2f2f2;border:1px solid #bbb;padding:5px 6px;text-align:left}
 td{border:1px solid #ddd;padding:4px 6px;vertical-align:top}
 .total{font-weight:bold;font-size:13px;margin:10px 0 4px}
 .cmts{font-size:11px;margin-top:8px}
-.section{margin-bottom:20px;page-break-after:always}
-.section:last-child{page-break-after:auto}
+.section{margin-bottom:20px}
+.section + .section{page-break-before:always}
 @media print{.no-print{display:none!important}}
 </style>"""
 

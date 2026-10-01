@@ -524,17 +524,16 @@ with tab_ativa:
                 st.caption(apres)
 
         with row[1]:
-            ub_lbl = f" {ub}" if ub else ""
             if len(unidades_cot) > 1:
                 if st.button(
-                    f"{qtd_total:.1f}{ub_lbl}",
+                    f"{qtd_total:.1f}",
                     key=f"{sk}_qtdpop_{pid}",
                     help="Ver por hotel",
                     use_container_width=True,
                 ):
                     _dlg_hotel_popup(pid)
             else:
-                st.markdown(f"**{qtd_total:.1f}**{ub_lbl}")
+                st.markdown(f"**{qtd_total:.1f}**")
 
         with row[2]:
             if hist:
@@ -622,7 +621,7 @@ with tab_ativa:
             )
             if tot_fid > 0:
                 if st.button("✏️ Ajustar qtd", key=f"{sk}_foot_{fid}",
-                             use_container_width=True, help="Ajustar quantidades"):
+                             use_container_width=True):
                     st.session_state[f"_dlg_gen_{fid}"] = (
                         st.session_state.get(f"_dlg_gen_{fid}", 0) + 1
                     )
