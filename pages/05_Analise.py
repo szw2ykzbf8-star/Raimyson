@@ -133,14 +133,25 @@ with tab_enc:
                 _fn_c = (_fn[:20] + "…") if len(_fn) > 20 else _fn
                 hdr_e[2 + _i].markdown(f"**{_fn_c}**")
 
-            # Checar compras para esta cotação (para marcar vencedores)
+            # Checar compras para esta cotação (para marcar vencedores por produto)
             _compras_enc = (
                 df_compras[df_compras["cotacao_id"].apply(_safe_int) == cot_enc_sel]
                 if not df_compras.empty and "cotacao_id" in df_compras.columns else pd.DataFrame()
             )
-            _forn_comprado = set()
-            if not _compras_enc.empty:
-                _forn_comprado = set(_compras_enc["fornecedor_id"].apply(_safe_int).unique())
+            # _prod_comprado_forn: pid → set of fids that actually supplied that product
+            _prod_comprado_forn: dict = {}
+            if not _compras_enc.empty and not df_itens_compra.empty:
+                _cids_enc = set(_compras_enc["id"].apply(_safe_int).tolist())
+                _itens_enc = df_itens_compra[
+                    df_itens_compra["compra_id"].apply(_safe_int).isin(_cids_enc)
+                ]
+                for _, _it in _itens_enc.iterrows():
+                    _it_pid = _safe_int(_it.get("produto_id", 0))
+                    _it_cid = _safe_int(_it.get("compra_id", 0))
+                    _cmp_row = _compras_enc[_compras_enc["id"].apply(_safe_int) == _it_cid]
+                    if not _cmp_row.empty:
+                        _it_fid = _safe_int(_cmp_row.iloc[0]["fornecedor_id"])
+                        _prod_comprado_forn.setdefault(_it_pid, set()).add(_it_fid)
 
             # Tabela de preços
             peds_enc = (
@@ -182,7 +193,7 @@ with tab_enc:
                             continue
                         _r = _resps_p[_fid]
                         _pn = _preco_norm(_r["preco"], _r.get("tipo_embalagem",""), _r.get("qtd_por_embalagem",1))
-                        _comprou = _fid in _forn_comprado
+                        _comprou = _fid in _prod_comprado_forn.get(_pid, set())
                         _is_best = _fid == _melhor_fid
                         if _comprou:
                             _bg = "background:#dbeafe;border:2px solid #3b82f6;border-radius:6px;padding:5px"
