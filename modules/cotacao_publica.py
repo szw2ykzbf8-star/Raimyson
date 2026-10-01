@@ -1,8 +1,14 @@
+import base64
+import json as _json
+import os
 import secrets
+import time
+import unicodedata
 import streamlit as st
 import pandas as pd
 import datetime
 from zoneinfo import ZoneInfo
+from sqlalchemy import text as _sql_text
 from modules.google_sheets import ler_df, append_linha
 from config import TIPOS_EMBALAGEM as _TIPOS_FALLBACK
 
@@ -42,6 +48,95 @@ def _tipos_embalagem():
 
 def gerar_token() -> str:
     return secrets.token_urlsafe(16)
+
+
+def _slugify_forn(s: str, max_len: int = 10) -> str:
+    """Normalize, remove accents, keep alphanumeric, truncate."""
+    s = unicodedata.normalize("NFD", s)
+    s = "".join(c for c in s if unicodedata.category(c) != "Mn")
+    s = "".join(c if c.isalnum() else "_" for c in s)
+    return s[:max_len].strip("_")
+
+
+def _get_fernet():
+    key = os.environ.get("COTACAO_BACKUP_KEY", "")
+    if not key:
+        return None
+    try:
+        from cryptography.fernet import Fernet
+        return Fernet(key.encode() if isinstance(key, str) else key)
+    except Exception:
+        return None
+
+
+def _encode_backup(data: dict) -> bytes:
+    raw = _json.dumps(data, ensure_ascii=False).encode()
+    f = _get_fernet()
+    if f:
+        return b"COTBKP1:" + base64.b64encode(f.encrypt(raw))
+    return b"COTBKP0:" + base64.b64encode(raw)
+
+
+def _decode_backup(raw: bytes) -> dict:
+    if raw.startswith(b"COTBKP1:"):
+        f = _get_fernet()
+        if f is None:
+            raise ValueError("Chave de backup não configurada no servidor.")
+        payload = base64.b64decode(raw[len(b"COTBKP1:"):])
+        return _json.loads(f.decrypt(payload))
+    if raw.startswith(b"COTBKP0:"):
+        payload = base64.b64decode(raw[len(b"COTBKP0:"):])
+        return _json.loads(payload)
+    raise ValueError("Formato de backup inválido.")
+
+
+def _salvar_rascunho(token: str, dados: dict):
+    from modules.database import get_engine
+    engine = get_engine()
+    agora = datetime.datetime.now(_TZ_BR).isoformat()
+    dados_str = _json.dumps(dados, ensure_ascii=False)
+    with engine.begin() as conn:
+        existing = conn.execute(
+            _sql_text('SELECT token FROM "rascunhos" WHERE token = :t'),
+            {"t": token},
+        ).fetchone()
+        if existing:
+            conn.execute(
+                _sql_text('UPDATE "rascunhos" SET dados_json = :d, salvo_em = :s WHERE token = :t'),
+                {"d": dados_str, "s": agora, "t": token},
+            )
+        else:
+            conn.execute(
+                _sql_text('INSERT INTO "rascunhos" (token, dados_json, salvo_em) VALUES (:t, :d, :s)'),
+                {"t": token, "d": dados_str, "s": agora},
+            )
+
+
+def _carregar_rascunho(token: str):
+    """Returns (dados_dict, salvo_em_str) or (None, None)."""
+    from modules.database import get_engine
+    engine = get_engine()
+    with engine.connect() as conn:
+        row = conn.execute(
+            _sql_text('SELECT dados_json, salvo_em FROM "rascunhos" WHERE token = :t'),
+            {"t": token},
+        ).fetchone()
+    if row is None:
+        return None, None
+    try:
+        return _json.loads(row[0]), str(row[1])
+    except Exception:
+        return None, None
+
+
+def _deletar_rascunho(token: str):
+    from modules.database import get_engine
+    engine = get_engine()
+    with engine.begin() as conn:
+        conn.execute(
+            _sql_text('DELETE FROM "rascunhos" WHERE token = :t'),
+            {"t": token},
+        )
 
 
 def mostrar_pagina_publica(token: str):
@@ -174,6 +269,33 @@ def mostrar_pagina_publica(token: str):
             continue
         pid_list.append((pid, prod, float(row["qtd_total"])))
 
+    # ── Restaurar rascunho (uma vez por sessão) ────────────────────────────────
+    _rasc_flag = f"pub_rascunho_ok_{token}"
+    if not st.session_state.get(_rasc_flag):
+        st.session_state[_rasc_flag] = True
+        _rasc_dados, _rasc_ts = _carregar_rascunho(token)
+        if _rasc_dados:
+            for _pid_str, _vals in _rasc_dados.get("itens", {}).items():
+                _pid_k = int(_pid_str)
+                for _sk, _vk in [
+                    (f"pub_status_{_pid_k}",    _vals.get("status", "Atende")),
+                    (f"pub_preco_{_pid_k}",      float(_vals.get("preco", 0.0))),
+                    (f"pub_emb_{_pid_k}",        _vals.get("tipo_embalagem", "")),
+                    (f"pub_qtdemb_{_pid_k}",     float(_vals.get("qtd_por_embalagem", 1.0))),
+                    (f"pub_marca_{_pid_k}",      _vals.get("marca", "")),
+                    (f"pub_obs_{_pid_k}",        _vals.get("observacao", "")),
+                ]:
+                    if _sk not in st.session_state:
+                        st.session_state[_sk] = _vk
+            try:
+                _ts_dt = datetime.datetime.fromisoformat(_rasc_ts).astimezone(_TZ_BR)
+                st.session_state["pub_rascunho_ts"] = _ts_dt.strftime("%d/%m às %H:%M")
+            except Exception:
+                st.session_state["pub_rascunho_ts"] = ""
+
+    if st.session_state.get("pub_rascunho_ts"):
+        st.info(f"📂 Rascunho restaurado ({st.session_state['pub_rascunho_ts']}). Revise e envie quando estiver pronto.")
+
     # ── Um bloco por produto: situação + campos de preço juntos ──────────────
     for pid, prod, qtd_total in pid_list:
         nome_prod  = str(prod.get("descricao", f"Produto {pid}"))
@@ -256,7 +378,62 @@ def mostrar_pagina_publica(token: str):
             "Caso isso esteja correto, entre em contato com o comprador para registrar sua indisponibilidade."
         )
     else:
-        if st.button("📤 Enviar Cotação", use_container_width=True, type="primary"):
+        # ── Autosave a cada 30 s ──────────────────────────────────────────────
+        _last_save_key = f"pub_last_save_{token}"
+        if time.time() - st.session_state.get(_last_save_key, 0) >= 30:
+            _rasc_itens = {
+                str(_pid): {
+                    "status":            st.session_state.get(f"pub_status_{_pid}", "Atende"),
+                    "preco":             float(st.session_state.get(f"pub_preco_{_pid}", 0.0)),
+                    "tipo_embalagem":    str(st.session_state.get(f"pub_emb_{_pid}", "")),
+                    "qtd_por_embalagem": float(st.session_state.get(f"pub_qtdemb_{_pid}", 1.0)),
+                    "marca":             str(st.session_state.get(f"pub_marca_{_pid}", "")),
+                    "observacao":        str(st.session_state.get(f"pub_obs_{_pid}", "")),
+                }
+                for _pid, _, _ in pid_list
+            }
+            try:
+                _salvar_rascunho(token, {"itens": _rasc_itens})
+                st.session_state[_last_save_key] = time.time()
+            except Exception:
+                pass
+
+        # ── Backup para download ──────────────────────────────────────────────
+        _bkp_itens = {
+            str(_pid): {
+                "status":            st.session_state.get(f"pub_status_{_pid}", "Atende"),
+                "preco":             float(st.session_state.get(f"pub_preco_{_pid}", 0.0)),
+                "tipo_embalagem":    str(st.session_state.get(f"pub_emb_{_pid}", "")),
+                "qtd_por_embalagem": float(st.session_state.get(f"pub_qtdemb_{_pid}", 1.0)),
+                "marca":             str(st.session_state.get(f"pub_marca_{_pid}", "")),
+                "observacao":        str(st.session_state.get(f"pub_obs_{_pid}", "")),
+            }
+            for _pid, _, _ in pid_list
+        }
+        _bkp_payload = _encode_backup({
+            "cotacao_id": cotacao_id,
+            "fornecedor_id": fornec_id,
+            "token": token,
+            "itens": _bkp_itens,
+        })
+        _slug_cot  = _slugify_forn(label_cot)
+        _slug_forn = _slugify_forn(nome_forn)
+        _data_hoje = datetime.datetime.now(_TZ_BR).strftime("%Y%m%d")
+        _fname     = f"cotacao_{_slug_cot}_{_slug_forn}_{_data_hoje}.cotbkp"
+
+        _col_bkp, _col_env = st.columns([1, 2])
+        with _col_bkp:
+            st.download_button(
+                "💾 Salvar rascunho",
+                data=_bkp_payload,
+                file_name=_fname,
+                mime="application/octet-stream",
+                use_container_width=True,
+                help="Salva um arquivo de rascunho. Se perder a conexão, o comprador pode importar este arquivo.",
+            )
+        _enviar = _col_env.button("📤 Enviar Cotação", use_container_width=True, type="primary")
+
+        if _enviar:
             campos = {
                 pid: {
                     "preco":            float(st.session_state.get(f"pub_preco_{pid}", 0)),
@@ -294,6 +471,7 @@ def mostrar_pagina_publica(token: str):
                         prox_id += 1
                     from modules.google_sheets import get_sheet as _gs
                     _gs("respostas").append_rows(linhas)
+                    _deletar_rascunho(token)
                     st.cache_data.clear()
                     st.session_state.pop("pub_tentou_enviar", None)
                     st.success(f"✅ Cotação enviada! {len(linhas)} item(ns) respondido(s). Obrigado!")

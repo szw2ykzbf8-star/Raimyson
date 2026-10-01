@@ -22,6 +22,7 @@ COLUMNS = {
     "nfe_mapeamento":    ["id", "fornecedor_id", "nfe_cprod", "produto_id"],
     "cotacao_tokens":    ["id", "cotacao_id", "fornecedor_id", "token"],
     "compras_diretas":   ["id", "cotacao_id", "produto_id", "unidade", "quantidade", "comprado"],
+    "rascunhos":         ["token", "dados_json", "salvo_em"],
 }
 
 _SEED_UNIDADES_MEDIDA = [

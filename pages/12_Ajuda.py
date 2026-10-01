@@ -441,6 +441,30 @@ if "💰 Cotações" in ti:
 - Se a cotação foi criada antes da funcionalidade de Compra Direta, o botão **🛒 Registrar itens de Compra Direta** aparecerá dentro da cotação. Clique nele para registrar os itens de compra direta correspondentes aos pedidos dessa cotação.
             """)
 
+        with st.expander("📌 Backup e recuperação do formulário do fornecedor"):
+            st.markdown("""
+O formulário de cotação possui dois mecanismos para evitar perda de dados por instabilidade de internet:
+
+**Autosave automático (servidor)**
+- O sistema salva o rascunho no banco de dados a cada 30 segundos enquanto o fornecedor preenche o formulário.
+- Se a conexão cair e o fornecedor reabrir o mesmo link, o formulário é restaurado automaticamente com os dados salvos, exibindo uma mensagem "📂 Rascunho restaurado (DD/MM às HH:MM)".
+- O rascunho é excluído automaticamente após o envio bem-sucedido.
+
+**Arquivo de backup manual (.cotbkp)**
+- O botão **💾 Salvar rascunho** no final do formulário gera um arquivo `.cotbkp` com os dados preenchidos até aquele momento.
+- O fornecedor pode baixar esse arquivo e enviá-lo ao comprador por e-mail ou WhatsApp caso não consiga enviar pela página.
+- O arquivo é criptografado e vinculado ao token daquele fornecedor — não pode ser usado para outras cotações.
+
+**Importar backup (Administrador / Comprador)**
+1. Acesse **Cotações** → aba **Encerradas**.
+2. Abra a cotação desejada.
+3. Na seção **📥 Importar backup de fornecedor**, carregue o arquivo `.cotbkp` recebido.
+4. O sistema exibirá um resumo dos itens contidos no arquivo.
+5. Clique em **✅ Importar esta cotação** e confirme — os dados serão registrados como resposta daquele fornecedor.
+
+> Se já existia uma resposta desse fornecedor, ela será **substituída** pela do arquivo. O sistema avisa antes de confirmar.
+            """)
+
         with st.expander("📌 Como alterar o prazo ou avançar o ciclo da cotação"):
             st.markdown("""
 Uma cotação passa por três status ao longo do ciclo:

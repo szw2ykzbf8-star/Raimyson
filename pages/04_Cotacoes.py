@@ -7,7 +7,7 @@ import datetime
 from zoneinfo import ZoneInfo
 from modules.auth import requer_permissao
 from modules.google_sheets import ler_df, escrever_df, append_linha, get_sheet
-from modules.cotacao_publica import gerar_token, _prazo_br, _agora_br
+from modules.cotacao_publica import gerar_token, _prazo_br, _agora_br, _decode_backup
 from config import TIPOS_EMBALAGEM, BASE_URL
 
 usuario = requer_permissao("cotacoes")
@@ -62,6 +62,128 @@ def _wa_btn(nome_forn: str, link: str, key: str):
 </button>""",
         height=42,
     )
+
+
+def _importar_backup(cot_id: int, fid: int, itens: dict, df_respostas_cur):
+    """Apaga respostas anteriores do fornecedor e insere as do backup. Retorna msg de erro ou None."""
+    from modules.google_sheets import get_sheet as _gs, escrever_df as _edf
+    try:
+        df_upd = df_respostas_cur[
+            ~(
+                (df_respostas_cur["cotacao_id"].apply(_safe_int) == cot_id) &
+                (df_respostas_cur["fornecedor_id"].apply(_safe_int) == fid)
+            )
+        ].reset_index(drop=True)
+        _edf("respostas", df_upd)
+        df_after = ler_df("respostas")
+        prox_id  = int(df_after["id"].apply(_safe_int).max()) + 1 if not df_after.empty else 1
+        now_iso  = datetime.datetime.now().isoformat()
+        linhas   = []
+        for pid_str, vals in itens.items():
+            if vals.get("status", "Atende") != "Atende":
+                continue
+            linhas.append([
+                prox_id, cot_id, fid, int(pid_str),
+                float(vals.get("preco", 0)),
+                str(vals.get("tipo_embalagem", "")),
+                float(vals.get("qtd_por_embalagem", 1)),
+                str(vals.get("observacao", "")),
+                str(vals.get("marca", "")),
+                now_iso,
+            ])
+            prox_id += 1
+        if linhas:
+            _gs("respostas").append_rows(linhas)
+        return None
+    except Exception as exc:
+        return str(exc)
+
+
+def _process_backup(cot_id: int, bkp_file, df_respostas_cur, df_fornecedores_cur,
+                    df_tokens_cur, df_produtos_cur):
+    """Decode, validate and present the import UI for a .cotbkp file."""
+    try:
+        raw = bkp_file.read()
+        data = _decode_backup(raw)
+    except Exception as exc:
+        st.error(f"Arquivo inválido ou corrompido: {exc}")
+        return
+
+    file_cot_id = _safe_int(data.get("cotacao_id", 0))
+    file_fid    = _safe_int(data.get("fornecedor_id", 0))
+    file_token  = str(data.get("token", ""))
+    itens       = data.get("itens", {})
+
+    if file_cot_id != cot_id:
+        st.error(f"Este backup pertence à cotação #{file_cot_id}, não à #{cot_id}.")
+        return
+
+    # Verificar token
+    if not df_tokens_cur.empty:
+        tok_ok = df_tokens_cur[
+            (df_tokens_cur["cotacao_id"].apply(_safe_int) == cot_id) &
+            (df_tokens_cur["fornecedor_id"].apply(_safe_int) == file_fid) &
+            (df_tokens_cur["token"].astype(str) == file_token)
+        ]
+        if tok_ok.empty:
+            st.error("Token do arquivo não corresponde a nenhum fornecedor desta cotação.")
+            return
+
+    forn_row = (
+        df_fornecedores_cur[df_fornecedores_cur["id"].apply(_safe_int) == file_fid]
+        if not df_fornecedores_cur.empty else pd.DataFrame()
+    )
+    nome_f = str(forn_row.iloc[0].get("nome_fantasia") or forn_row.iloc[0]["razao_social"]) if not forn_row.empty else f"Fornecedor #{file_fid}"
+
+    atende_itens = {k: v for k, v in itens.items() if v.get("status", "Atende") == "Atende"}
+    st.info(f"Arquivo de **{nome_f}** — {len(atende_itens)} item(ns) com preço.")
+
+    # Mostrar tabela resumo
+    pid_to_prod_cur = {int(float(r["id"])): r for _, r in df_produtos_cur.iterrows()} if not df_produtos_cur.empty else {}
+    rows_preview = []
+    for pid_str, vals in atende_itens.items():
+        prod_r = pid_to_prod_cur.get(int(pid_str), {})
+        rows_preview.append({
+            "Produto": str(prod_r.get("descricao", f"#{pid_str}")),
+            "Preço (R$)": f"{float(vals.get('preco', 0)):.2f}",
+            "Embalagem": str(vals.get("tipo_embalagem", "")),
+            "Marca": str(vals.get("marca", "")),
+        })
+    if rows_preview:
+        st.dataframe(pd.DataFrame(rows_preview), use_container_width=True, hide_index=True)
+
+    # Verificar se já existe resposta
+    ja_tem = False
+    if not df_respostas_cur.empty:
+        ja_tem = not df_respostas_cur[
+            (df_respostas_cur["cotacao_id"].apply(_safe_int) == cot_id) &
+            (df_respostas_cur["fornecedor_id"].apply(_safe_int) == file_fid)
+        ].empty
+    if ja_tem:
+        st.warning("⚠️ Já existe uma resposta deste fornecedor. Confirmar substituirá os dados anteriores.")
+
+    _confirm_key = f"bkp_confirm_{cot_id}_{file_fid}"
+    if not st.session_state.get(_confirm_key):
+        if st.button("✅ Importar esta cotação", key=f"bkp_imp_{cot_id}_{file_fid}", type="primary"):
+            st.session_state[_confirm_key] = True
+            st.rerun()
+    else:
+        st.warning("Tem certeza? Esta ação substituirá quaisquer respostas existentes deste fornecedor.")
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("Confirmar importação", key=f"bkp_ok_{cot_id}_{file_fid}", type="primary", use_container_width=True):
+                err = _importar_backup(cot_id, file_fid, itens, df_respostas_cur)
+                st.session_state.pop(_confirm_key, None)
+                if err:
+                    st.error(f"Erro ao importar: {err}")
+                else:
+                    st.success(f"✅ Cotação de {nome_f} importada com sucesso!")
+                    st.cache_data.clear()
+                    st.rerun()
+        with c2:
+            if st.button("Cancelar", key=f"bkp_no_{cot_id}_{file_fid}", use_container_width=True):
+                st.session_state.pop(_confirm_key, None)
+                st.rerun()
 
 
 tab_nova, tab_abertas, tab_encerradas = st.tabs(["Nova Cotação", "Em Andamento", "Encerradas"])
@@ -483,3 +605,18 @@ with tab_encerradas:
                                 if st.button("Cancelar", key=f"exc_no_{cot_id}", use_container_width=True):
                                     st.session_state.pop(_del_key, None)
                                     st.rerun()
+
+                if usuario.get("perfil") in ("admin", "comprador"):
+                    st.markdown("---")
+                    st.markdown("##### 📥 Importar backup de fornecedor")
+                    _bkp_file = st.file_uploader(
+                        "Selecione o arquivo .cotbkp recebido do fornecedor",
+                        type=["cotbkp"],
+                        key=f"bkp_upload_{cot_id}",
+                        help="Arquivo gerado pelo formulário de cotação quando o fornecedor clica em 'Salvar rascunho'.",
+                    )
+                    if _bkp_file is not None:
+                        _process_backup(
+                            cot_id, _bkp_file,
+                            df_respostas, df_fornecedores, df_tokens, df_produtos,
+                        )
