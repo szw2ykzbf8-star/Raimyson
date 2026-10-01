@@ -301,10 +301,9 @@ with tab_ativa:
         ].copy()
         if items.empty:
             return []
-        compras_cols = [c for c in ["id", "cotacao_id", "fornecedor_id", "data"] if c in df_compras.columns]
-        if len(compras_cols) < 3:
-            return []
-        cmp = df_compras[compras_cols].copy().rename(columns={"id": "compra_id"})
+        cmp = df_compras[["id", "cotacao_id", "fornecedor_id", "data_compra"]].copy().rename(
+            columns={"id": "compra_id", "data_compra": "data"}
+        )
         merged = items.merge(cmp, on="compra_id", how="inner")
         if merged.empty:
             return []
@@ -316,7 +315,7 @@ with tab_ativa:
         for _, h in merged.iterrows():
             fid  = _safe_int(h.get("fornecedor_id", 0))
             nome = str(forn_map.get(fid, {}).get("nome_fantasia") or forn_map.get(fid, {}).get("razao_social") or f"#{fid}")
-            pn   = _safe_float(h.get("preco_normalizado", h.get("preco", 0)))
+            pn   = _safe_float(h.get("preco_normalizado", h.get("preco_unitario", 0)))
             result.append({"data": str(h.get("data", ""))[:10], "preco": pn, "fornecedor": nome})
         return result
 
