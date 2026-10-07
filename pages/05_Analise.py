@@ -648,6 +648,11 @@ with tab_ativa:
                     else:
                         mask = pd.Series([], dtype=bool)
                     if not df_itens_upd.empty and mask.any():
+                        # Preserve original quantity before first adjustment
+                        if "qtd_original" in df_itens_upd.columns:
+                            orig_empty = mask & (df_itens_upd["qtd_original"].astype(str).str.strip().isin(["", "nan"]))
+                            if orig_empty.any():
+                                df_itens_upd.loc[orig_empty, "qtd_original"] = df_itens_upd.loc[orig_empty, "quantidade"]
                         df_itens_upd.loc[mask, "quantidade"] = str(nova_qtd)
                     elif nova_qtd > 0:
                         new_row = {col: "" for col in cols}
@@ -655,6 +660,8 @@ with tab_ativa:
                         new_row["pedido_id"] = str(ped_id)
                         new_row["produto_id"] = str(pid)
                         new_row["quantidade"] = str(nova_qtd)
+                        if "qtd_original" in cols:
+                            new_row["qtd_original"] = "0"
                         df_itens_upd = pd.concat([df_itens_upd, pd.DataFrame([new_row])], ignore_index=True)
                         next_id += 1
         try:
@@ -968,11 +975,14 @@ td{border:1px solid #ddd;padding:4px 6px;vertical-align:top}
             if not _cot_r.empty:
                 _nota_atual = str(_cot_r.iloc[0].get("observacoes_compra", "") or "").strip()
         with st.expander("📝 Notas da compra", expanded=bool(_nota_atual)):
-            st.caption("Descreva aqui qualquer ajuste feito: redirecionamentos entre hotéis, aumentos de quantidade por pedido mínimo, etc. Essa nota aparece no relatório do digitador.")
+            st.caption(
+                "Para transferências entre hotéis, use o formato: **[produto] de [hotel_origem] para [hotel_destino]** — uma por linha. "
+                "Essa nota aparece no Comparativo de Pedidos como observação de cada produto."
+            )
             _nota_nova = st.text_area(
-                "Notas", value=_nota_atual, height=100,
+                "Notas", value=_nota_atual, height=120,
                 label_visibility="collapsed", key=f"nota_compra_{cotacao_sel}",
-                placeholder="Ex: Margarina do Monte Castelo incluída no pedido do São Jorge por pedido mínimo. Nescau Gold foi para o Roma.",
+                placeholder="Dindin de Gold para Roma\nRodo banheiro de Gold para Roma\nMargarina de Monte Castelo para São Jorge",
             )
             if st.button("💾 Salvar nota", key=f"salvar_nota_{cotacao_sel}"):
                 atualizar_linha("cotacoes", str(cotacao_sel), {"observacoes_compra": _nota_nova.strip()})

@@ -128,11 +128,12 @@ if not unidades_cot:
 # ── Construir dados por hotel ─────────────────────────────────────────────────
 hotel_data = {}
 all_discrepancias = []
+all_prod_hoteis = []
 
 for unidade in unidades_cot:
     label = _unid_label(unidade)
 
-    # Solicitado
+    # Solicitado (usa qtd_original se disponível — preserva quantidades antes de ajustes do comprador)
     sol = {}
     peds_h = pedidos_cot[pedidos_cot["unidade"].astype(str) == str(unidade)]
     for _, ped in peds_h.iterrows():
@@ -141,7 +142,12 @@ for unidade in unidades_cot:
         itens = df_itens_pedido[df_itens_pedido["pedido_id"].apply(_safe_int) == _safe_int(ped["id"])]
         for _, item in itens.iterrows():
             pid = _safe_int(item["produto_id"])
-            sol[pid] = sol.get(pid, 0) + _safe_float(item["quantidade"])
+            if "qtd_original" in df_itens_pedido.columns:
+                qtd_orig = str(item.get("qtd_original", "") or "").strip()
+                qtd = _safe_float(qtd_orig) if qtd_orig not in ("", "nan") else _safe_float(item["quantidade"])
+            else:
+                qtd = _safe_float(item["quantidade"])
+            sol[pid] = sol.get(pid, 0) + qtd
 
     # Comprado via cotação
     comp = {}
@@ -168,8 +174,9 @@ for unidade in unidades_cot:
     for pid in all_pids:
         s = sol.get(pid, 0)
         c = comp.get(pid, 0)
+        prod_name = str(prod_map.get(pid, {}).get("descricao", f"Produto {pid}"))
+        all_prod_hoteis.append({"produto": prod_name, "hotel": label, "pid": pid, "unidade": unidade})
         if abs(s - c) > 0.001:
-            prod_name = str(prod_map.get(pid, {}).get("descricao", f"Produto {pid}"))
             all_discrepancias.append({
                 "produto": prod_name,
                 "hotel":   label,
@@ -179,54 +186,52 @@ for unidade in unidades_cot:
                 "unidade": unidade,
             })
 
-# ── Interpretar nota por padrões fixos (sem API) ─────────────────────────────
-# Padrões suportados:
-#   "Produto X do Y para [o] Z"  → transferência de hotel
-#   "Não comprei X do Y"         → produto não comprado para aquele hotel
-def _interpretar_nota(nota: str, discrepancias: list) -> dict:
-    if not nota.strip() or not discrepancias:
+# ── Interpretar nota por padrões fixos ───────────────────────────────────────
+# Padrões suportados (uma entrada por linha):
+#   "[produto] de [origem] para [destino]"  → transferência entre hotéis
+#   "Não comprei [produto] do [hotel]"      → produto não comprado
+def _interpretar_nota(nota: str, todos_prods: list) -> dict:
+    if not nota.strip():
         return {}
 
     def _match(texto, referencia):
         return texto.lower() in referencia.lower() or referencia.lower() in texto.lower()
 
     result = {}
-    for sent in re.split(r"[.,;\n]+", nota):
+    for sent in re.split(r"[;\n]+", nota):
         sent = sent.strip()
         if not sent:
             continue
 
-        m = re.search(
-            r"produto\s+(.+?)\s+do\s+(.+?)\s+para\s+o?\s*(.+)",
-            sent, re.IGNORECASE,
-        )
+        # Padrão: [produto] de [origem] para [destino]
+        m = re.search(r"(.+?)\s+de\s+(.+?)\s+para\s+(.+)", sent, re.IGNORECASE)
         if m:
             prod_txt = m.group(1).strip().rstrip(".,")
             orig_txt = m.group(2).strip().rstrip(".,")
             dest_txt = m.group(3).strip().rstrip(".,")
-            for d in discrepancias:
-                if _match(prod_txt, d["produto"]) and _match(orig_txt, d["hotel"]):
-                    result[f"{d['produto']} ({d['hotel']})"] = f"Transferido para {dest_txt}"
+            for p in todos_prods:
+                if _match(prod_txt, p["produto"]):
+                    if _match(orig_txt, p["hotel"]):
+                        result[f"{p['produto']} ({p['hotel']})"] = f"Transferido para {dest_txt}"
+                    elif _match(dest_txt, p["hotel"]):
+                        result[f"{p['produto']} ({p['hotel']})"] = f"Recebido do {orig_txt}"
             continue
 
-        m = re.search(
-            r"n[ãa]o\s+comprei\s+(.+?)\s+do\s+(.+)",
-            sent, re.IGNORECASE,
-        )
+        # Padrão: "Não comprei [produto] do [hotel]"
+        m = re.search(r"n[ãa]o\s+comprei\s+(.+?)\s+do\s+(.+)", sent, re.IGNORECASE)
         if m:
             prod_txt  = m.group(1).strip().rstrip(".,")
             hotel_txt = m.group(2).strip().rstrip(".,")
-            for d in discrepancias:
-                if _match(prod_txt, d["produto"]) and _match(hotel_txt, d["hotel"]):
-                    result[f"{d['produto']} ({d['hotel']})"] = "Não comprado"
+            for p in todos_prods:
+                if _match(prod_txt, p["produto"]) and _match(hotel_txt, p["hotel"]):
+                    result[f"{p['produto']} ({p['hotel']})"] = "Não comprado"
 
     return result
 
 
 anotacoes = {}
-if nota and all_discrepancias:
-    with st.spinner("Analisando notas da compra..."):
-        anotacoes = _interpretar_nota(nota, all_discrepancias)
+if nota:
+    anotacoes = _interpretar_nota(nota, all_prod_hoteis)
 
 # ── Exibir nota ───────────────────────────────────────────────────────────────
 if nota:
@@ -260,14 +265,13 @@ for unidade in unidades_cot:
         c = comp.get(pid, 0)
         prod_name = str(prod_map.get(pid, {}).get("descricao", f"Produto {pid}"))
         diff = c - s
+        chave = f"{prod_name} ({label})"
+        obs = str(anotacoes.get(chave, "") or "")
         if abs(diff) < 0.001:
             status = "✅ Conforme"
-            obs = ""
         else:
             n_disc += 1
             status = "⚠️ Diferença"
-            chave = f"{prod_name} ({label})"
-            obs = str(anotacoes.get(chave, "") or "")
 
         rows.append({
             "Produto":     prod_name,

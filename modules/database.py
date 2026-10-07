@@ -10,7 +10,7 @@ COLUMNS = {
     "unidades":          ["id", "nome", "nome_fantasia", "cnpj", "cep", "logradouro", "numero", "complemento", "bairro", "cidade", "estado", "ativo"],
     "usuarios":          ["id", "nome", "login", "senha_hash", "perfil", "unidades_acesso", "ativo", "trocar_senha", "permissoes"],
     "pedidos":           ["id", "unidade", "status", "criado_por", "data_criacao", "data_bloqueio", "cotacao_id", "editado_por", "data_edicao"],
-    "itens_pedido":      ["id", "pedido_id", "produto_id", "quantidade"],
+    "itens_pedido":      ["id", "pedido_id", "produto_id", "quantidade", "qtd_original"],
     "cotacoes":          ["id", "data_criacao", "prazo_limite", "status", "criado_por", "nome"],
     "respostas":         ["id", "cotacao_id", "fornecedor_id", "produto_id", "preco", "tipo_embalagem", "qtd_por_embalagem", "observacao", "marca", "data_resposta"],
     "compras":           ["id", "cotacao_id", "fornecedor_id", "data_compra", "valor_total", "pedido_gerado", "nfe_chave", "nfe_numero", "status_recebimento", "unidade"],
@@ -60,6 +60,7 @@ def _criar_tabelas(engine):
         conn.execute(text("ALTER TABLE \"pedidos\" ADD COLUMN IF NOT EXISTS \"editado_por\" TEXT DEFAULT ''"))
         conn.execute(text("ALTER TABLE \"pedidos\" ADD COLUMN IF NOT EXISTS \"data_edicao\" TEXT DEFAULT ''"))
         conn.execute(text("ALTER TABLE \"cotacoes\" ADD COLUMN IF NOT EXISTS \"observacoes_compra\" TEXT DEFAULT ''"))
+        conn.execute(text("ALTER TABLE \"itens_pedido\" ADD COLUMN IF NOT EXISTS \"qtd_original\" TEXT DEFAULT ''"))
 
     # Seed unidades_medida when empty
     with engine.begin() as conn:
