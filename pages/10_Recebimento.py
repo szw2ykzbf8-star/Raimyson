@@ -1,3 +1,4 @@
+import re
 import streamlit as st
 import pandas as pd
 import xml.etree.ElementTree as ET
@@ -97,6 +98,23 @@ if not df_mapeamento.empty:
     for _, r in df_mapeamento.iterrows():
         key = (int(float(r["fornecedor_id"])), str(r["nfe_cprod"]).strip().lower())
         map_lookup[key] = int(float(r["produto_id"]))
+
+_STOP_WORDS = {"de", "do", "da", "dos", "das", "e", "o", "a", "os", "as",
+               "com", "sem", "un", "und", "pct", "cx", "kg", "lt", "ml",
+               "g", "l", "x", "em", "por", "para", "no", "na"}
+
+
+def _tokenize(texto: str) -> set:
+    tokens = re.sub(r"[^a-z0-9 ]", " ", texto.lower())
+    return {t for t in tokens.split() if t not in _STOP_WORDS and len(t) > 1}
+
+
+def _text_match_score(xprod: str, descricao: str) -> float:
+    a = _tokenize(xprod)
+    b = _tokenize(descricao)
+    if not a or not b:
+        return 0.0
+    return len(a & b) / max(len(a), len(b))
 
 
 def pid_default_idx(produto_id):
@@ -226,8 +244,9 @@ if not nfe["itens"]:
 st.markdown("---")
 st.subheader("3. Vincular Itens da Nota com Produtos")
 st.caption(
-    "✅ = código do produto bate exatamente com o `cProd` da nota  |  "
-    "🔗 = vínculo salvo anteriormente  |  "
+    "✅ = código bate com `cProd`  |  "
+    "🔗 = vínculo salvo  |  "
+    "🔍 = sugestão por nome  |  "
     "❓ = selecione manualmente"
 )
 
@@ -239,29 +258,87 @@ salvar_mapas = st.checkbox(
 vinculacoes = {}   # idx -> produto_id (ou None = ignorar)
 qtds_rec    = {}   # idx -> float
 
+# Build filtered options (only products from this purchase order)
+pedido_pids = set(pid_to_qtd_pedida.keys())
+opts_label_ped = ["— Ignorar item —"]
+opts_id_ped    = [None]
+for _, r in df_produtos.iterrows():
+    if int(r["id"]) in pedido_pids:
+        cod   = str(r.get("codigo", "") or "").strip()
+        label = f"[{cod}] {r['descricao']}" if cod else str(r["descricao"])
+        opts_label_ped.append(label)
+        opts_id_ped.append(int(r["id"]))
+
+# pid → descricao lookup (for text match)
+pid_to_desc_full = {int(r["id"]): str(r["descricao"]) for _, r in df_produtos.iterrows()}
+
+
+def _best_text_match(xprod: str, candidate_pids: set) -> tuple[int | None, float]:
+    best_pid, best_score = None, 0.0
+    for pid in candidate_pids:
+        desc = pid_to_desc_full.get(pid, "")
+        score = _text_match_score(xprod, desc)
+        if score > best_score:
+            best_score, best_pid = score, pid
+    return (best_pid if best_score >= 0.35 else None), best_score
+
+
 for i, item in enumerate(nfe["itens"]):
     cprod_low = item["cprod"].strip().lower()
 
-    # Auto-match priority: exact code > saved mapping
+    # Auto-match priority: 1) exact code  2) saved mapping  3) text similarity (pedido only)
     pid_auto = cod_to_pid.get(cprod_low)
+    tag_auto = "✅"
     if pid_auto is None:
         pid_auto = map_lookup.get((compra_forn_id, cprod_low))
+        tag_auto = "🔗"
+    if pid_auto is None and pedido_pids:
+        pid_auto, _ = _best_text_match(item["xprod"], pedido_pids)
+        tag_auto = "🔍"
+    if pid_auto is None:
+        tag_auto = "❓"
 
-    if pid_auto is not None:
-        tag = "✅" if cprod_low in cod_to_pid else "🔗"
-    else:
-        tag = "❓"
-
-    with st.expander(f"{tag} Item {item['n_item']}: {item['xprod']}  —  {item['qtd']} {item['unidade']}  (cProd: {item['cprod']})"):
+    with st.expander(f"{tag_auto} Item {item['n_item']}: {item['xprod']}  —  {item['qtd']} {item['unidade']}  (cProd: {item['cprod']})"):
         col_a, col_b = st.columns([3, 1])
         with col_a:
-            sel = st.selectbox(
-                "Produto no sistema",
-                opts_label,
-                index=pid_default_idx(pid_auto),
-                key=f"vinc_{i}",
-            )
-            vinculacoes[i] = opts_id[opts_label.index(sel)]
+            # Use filtered list (pedido products only) unless no pedido products exist
+            if pedido_pids:
+                def _idx_ped(pid):
+                    if pid is None:
+                        return 0
+                    try:
+                        return opts_id_ped.index(pid)
+                    except ValueError:
+                        return 0
+
+                sel = st.selectbox(
+                    "Produto no sistema",
+                    opts_label_ped,
+                    index=_idx_ped(pid_auto),
+                    key=f"vinc_{i}",
+                )
+                vinculacoes[i] = opts_id_ped[opts_label_ped.index(sel)]
+
+                with st.expander("🔎 Produto não está na lista? Buscar em todos os cadastrados", expanded=False):
+                    sel_all = st.selectbox(
+                        "Todos os produtos",
+                        opts_label,
+                        index=0,
+                        key=f"vinc_all_{i}",
+                        label_visibility="collapsed",
+                    )
+                    pid_all = opts_id[opts_label.index(sel_all)]
+                    if pid_all is not None:
+                        vinculacoes[i] = pid_all
+            else:
+                sel = st.selectbox(
+                    "Produto no sistema",
+                    opts_label,
+                    index=pid_default_idx(pid_auto),
+                    key=f"vinc_{i}",
+                )
+                vinculacoes[i] = opts_id[opts_label.index(sel)]
+
         with col_b:
             qtd_ped = pid_to_qtd_pedida.get(vinculacoes[i], 0.0) if vinculacoes[i] else 0.0
             qtd_rec = st.number_input(
