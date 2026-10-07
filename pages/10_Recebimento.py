@@ -215,19 +215,27 @@ else:
         elif "_nfe_xml_cache" in st.session_state:
             xml_bytes = st.session_state["_nfe_xml_cache"]
 
-if xml_bytes is None:
+_nfe_cache_key = f"_nfe_parsed_{compra_id}"
+
+# Clear cached NF-e if the purchase order changed
+_last_cid = st.session_state.get("_nfe_last_compra_id")
+if _last_cid is not None and _last_cid != compra_id:
+    for k in [k for k in st.session_state if k.startswith("_nfe_parsed_")]:
+        del st.session_state[k]
+st.session_state["_nfe_last_compra_id"] = compra_id
+
+if xml_bytes is not None:
+    try:
+        nfe = parse_nfe(xml_bytes)
+        st.session_state[_nfe_cache_key] = nfe
+        st.session_state.pop("_nfe_xml_cache", None)
+    except Exception as e:
+        st.error(f"Erro ao interpretar XML: {e}")
+        st.stop()
+elif _nfe_cache_key in st.session_state:
+    nfe = st.session_state[_nfe_cache_key]
+else:
     st.stop()
-
-# ── Parse ─────────────────────────────────────────────────────────────────────
-
-try:
-    nfe = parse_nfe(xml_bytes)
-except Exception as e:
-    st.error(f"Erro ao interpretar XML: {e}")
-    st.stop()
-
-# Clear URL cache after successful parse (don't keep XML in memory)
-st.session_state.pop("_nfe_xml_cache", None)
 
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("NF-e Nº", f"{nfe['numero']}/{nfe['serie']}")
