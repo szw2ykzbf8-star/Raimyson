@@ -283,6 +283,15 @@ def _best_text_match(xprod: str, candidate_pids: set) -> tuple[int | None, float
     return (best_pid if best_score >= 0.35 else None), best_score
 
 
+def _idx_ped(pid):
+    if pid is None:
+        return 0
+    try:
+        return opts_id_ped.index(pid)
+    except ValueError:
+        return 0
+
+
 for i, item in enumerate(nfe["itens"]):
     cprod_low = item["cprod"].strip().lower()
 
@@ -298,58 +307,61 @@ for i, item in enumerate(nfe["itens"]):
     if pid_auto is None:
         tag_auto = "❓"
 
-    with st.expander(f"{tag_auto} Item {item['n_item']}: {item['xprod']}  —  {item['qtd']} {item['unidade']}  (cProd: {item['cprod']})"):
-        col_a, col_b = st.columns([3, 1])
-        with col_a:
-            # Use filtered list (pedido products only) unless no pedido products exist
-            if pedido_pids:
-                def _idx_ped(pid):
-                    if pid is None:
-                        return 0
-                    try:
-                        return opts_id_ped.index(pid)
-                    except ValueError:
-                        return 0
-
-                sel = st.selectbox(
-                    "Produto no sistema",
-                    opts_label_ped,
-                    index=_idx_ped(pid_auto),
-                    key=f"vinc_{i}",
-                )
-                vinculacoes[i] = opts_id_ped[opts_label_ped.index(sel)]
-
-                with st.expander("🔎 Produto não está na lista? Buscar em todos os cadastrados", expanded=False):
-                    sel_all = st.selectbox(
-                        "Todos os produtos",
-                        opts_label,
-                        index=0,
-                        key=f"vinc_all_{i}",
-                        label_visibility="collapsed",
-                    )
-                    pid_all = opts_id[opts_label.index(sel_all)]
-                    if pid_all is not None:
-                        vinculacoes[i] = pid_all
-            else:
-                sel = st.selectbox(
-                    "Produto no sistema",
-                    opts_label,
-                    index=pid_default_idx(pid_auto),
-                    key=f"vinc_{i}",
-                )
-                vinculacoes[i] = opts_id[opts_label.index(sel)]
-
-        with col_b:
-            qtd_ped = pid_to_qtd_pedida.get(vinculacoes[i], 0.0) if vinculacoes[i] else 0.0
-            qtd_rec = st.number_input(
-                "Qtd recebida",
-                value=item["qtd"],
-                min_value=0.0,
-                step=0.5,
-                key=f"qtd_rec_{i}",
-                help=f"Pedido: {qtd_ped}  |  Nota: {item['qtd']}",
+    # Flat layout — sem expander por item para evitar colapso ao selecionar
+    st.markdown(
+        f"**{tag_auto} Item {item['n_item']}:** {item['xprod']}  "
+        f"— {item['qtd']} {item['unidade']}  "
+        f"<span style='color:grey;font-size:0.85em'>(cProd: {item['cprod']})</span>",
+        unsafe_allow_html=True,
+    )
+    col_a, col_b = st.columns([3, 1])
+    with col_a:
+        if pedido_pids:
+            sel = st.selectbox(
+                "Produto no sistema",
+                opts_label_ped,
+                index=_idx_ped(pid_auto),
+                key=f"vinc_{i}",
             )
-            qtds_rec[i] = qtd_rec
+            vinculacoes[i] = opts_id_ped[opts_label_ped.index(sel)]
+
+            # Fallback: buscar em todos os produtos
+            usar_todos = st.checkbox(
+                "🔎 Produto não está na lista acima",
+                key=f"usar_todos_{i}",
+            )
+            if usar_todos:
+                sel_all = st.selectbox(
+                    "Buscar em todos os produtos cadastrados",
+                    opts_label,
+                    index=0,
+                    key=f"vinc_all_{i}",
+                )
+                pid_all = opts_id[opts_label.index(sel_all)]
+                if pid_all is not None:
+                    vinculacoes[i] = pid_all
+        else:
+            sel = st.selectbox(
+                "Produto no sistema",
+                opts_label,
+                index=pid_default_idx(pid_auto),
+                key=f"vinc_{i}",
+            )
+            vinculacoes[i] = opts_id[opts_label.index(sel)]
+
+    with col_b:
+        qtd_ped = pid_to_qtd_pedida.get(vinculacoes[i], 0.0) if vinculacoes[i] else 0.0
+        qtd_rec = st.number_input(
+            "Qtd recebida",
+            value=item["qtd"],
+            min_value=0.0,
+            step=0.5,
+            key=f"qtd_rec_{i}",
+            help=f"Pedido: {qtd_ped}  |  Nota: {item['qtd']}",
+        )
+        qtds_rec[i] = qtd_rec
+
+    st.divider()
 
 # ── Section 4: Confirm ────────────────────────────────────────────────────────
 
