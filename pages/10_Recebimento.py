@@ -432,8 +432,8 @@ for i, item in enumerate(nfe["itens"]):
         fator = st.number_input(
             "Fator (un/emb)",
             value=st.session_state[key_fator],
-            min_value=1.0,
-            step=1.0,
+            min_value=0.01,
+            step=0.5,
             key=key_fator,
             help="Unidades por embalagem/fardo. Pré-preenchido da cotação — ajuste se necessário.",
         )
