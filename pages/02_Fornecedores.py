@@ -35,14 +35,10 @@ def formatar_telefone(raw: str) -> str:
     return raw or ""
 
 
-def consultar_cnpj_api(cnpj_digits: str) -> dict | None:
+def _get_json(url: str) -> dict | None:
     try:
         import requests
-        resp = requests.get(
-            f"https://brasilapi.com.br/api/cnpj/v1/{cnpj_digits}",
-            timeout=15,
-            headers={"User-Agent": "H-Hoteis-Compras/1.0"},
-        )
+        resp = requests.get(url, timeout=15, headers={"User-Agent": "H-Hoteis-Compras/1.0"})
         if resp.status_code == 200:
             return resp.json()
         return None
@@ -50,24 +46,81 @@ def consultar_cnpj_api(cnpj_digits: str) -> dict | None:
         return None
 
 
+def consultar_cnpj_api(cnpj_digits: str) -> tuple[dict | None, str]:
+    """Tenta BrasilAPI → ReceitaWS → CNPJ.ws em sequência.
+    Retorna (dados_normalizados, fonte) ou (None, mensagem_erro)."""
+
+    # 1. BrasilAPI
+    data = _get_json(f"https://brasilapi.com.br/api/cnpj/v1/{cnpj_digits}")
+    if data and data.get("razao_social"):
+        tipo = data.get("descricao_tipo_de_logradouro", "") or ""
+        logr = data.get("logradouro", "") or ""
+        return {
+            "razao_social":  data.get("razao_social",  "") or "",
+            "nome_fantasia": data.get("nome_fantasia",  "") or "",
+            "cnpj":          formatar_cnpj(data.get("cnpj", "") or ""),
+            "telefone":      formatar_telefone(data.get("ddd_telefone_1", "") or ""),
+            "cep":           data.get("cep",        "") or "",
+            "logradouro":    f"{tipo} {logr}".strip() if tipo else logr,
+            "numero":        data.get("numero",     "") or "",
+            "complemento":   data.get("complemento","") or "",
+            "bairro":        data.get("bairro",     "") or "",
+            "cidade":        data.get("municipio",  "") or "",
+            "estado":        data.get("uf",         "") or "",
+            "situacao":      data.get("descricao_situacao_cadastral", "") or "",
+        }, "BrasilAPI"
+
+    # 2. ReceitaWS
+    data = _get_json(f"https://receitaws.com.br/v1/cnpj/{cnpj_digits}")
+    if data and data.get("nome") and data.get("status") != "ERROR":
+        tel = data.get("telefone", "") or ""
+        return {
+            "razao_social":  data.get("nome",      "") or "",
+            "nome_fantasia": data.get("fantasia",   "") or "",
+            "cnpj":          formatar_cnpj(data.get("cnpj", "") or ""),
+            "telefone":      formatar_telefone(tel.split("/")[0].strip()),
+            "cep":           data.get("cep",        "") or "",
+            "logradouro":    data.get("logradouro", "") or "",
+            "numero":        data.get("numero",     "") or "",
+            "complemento":   data.get("complemento","") or "",
+            "bairro":        data.get("bairro",     "") or "",
+            "cidade":        data.get("municipio",  "") or "",
+            "estado":        data.get("uf",         "") or "",
+            "situacao":      data.get("situacao",   "") or "",
+        }, "ReceitaWS"
+
+    # 3. CNPJ.ws
+    data = _get_json(f"https://publica.cnpj.ws/cnpj/{cnpj_digits}")
+    if data and data.get("razao_social"):
+        est = data.get("estabelecimento", {}) or {}
+        ddd = str(est.get("ddd1", "") or "")
+        tel = str(est.get("telefone1", "") or "")
+        tipo = str(est.get("tipo_logradouro", "") or "")
+        logr = str(est.get("logradouro", "") or "")
+        cidade = (est.get("cidade") or {}).get("nome", "") or ""
+        estado = (est.get("estado") or {}).get("sigla", "") or ""
+        sit = (est.get("situacao_cadastral") or "") or ""
+        return {
+            "razao_social":  data.get("razao_social",  "") or "",
+            "nome_fantasia": est.get("nome_fantasia",   "") or "",
+            "cnpj":          formatar_cnpj(cnpj_digits),
+            "telefone":      formatar_telefone(ddd + tel),
+            "cep":           str(est.get("cep", "") or ""),
+            "logradouro":    f"{tipo} {logr}".strip() if tipo else logr,
+            "numero":        str(est.get("numero",      "") or ""),
+            "complemento":   str(est.get("complemento","") or ""),
+            "bairro":        str(est.get("bairro",      "") or ""),
+            "cidade":        cidade,
+            "estado":        estado,
+            "situacao":      str(sit),
+        }, "CNPJ.ws"
+
+    return None, "BrasilAPI, ReceitaWS e CNPJ.ws indisponíveis ou CNPJ não encontrado"
+
+
 def extrair_dados(api: dict) -> dict:
-    tipo = api.get("descricao_tipo_de_logradouro", "") or ""
-    logr = api.get("logradouro", "") or ""
-    logradouro = f"{tipo} {logr}".strip() if tipo else logr
-    return {
-        "razao_social":  api.get("razao_social",  "") or "",
-        "nome_fantasia": api.get("nome_fantasia",  "") or "",
-        "cnpj":          formatar_cnpj(api.get("cnpj", "") or ""),
-        "telefone":      formatar_telefone(api.get("ddd_telefone_1", "") or ""),
-        "cep":           api.get("cep",        "") or "",
-        "logradouro":    logradouro,
-        "numero":        api.get("numero",     "") or "",
-        "complemento":   api.get("complemento","") or "",
-        "bairro":        api.get("bairro",     "") or "",
-        "cidade":        api.get("municipio",  "") or "",
-        "estado":        api.get("uf",         "") or "",
-        "situacao":      api.get("descricao_situacao_cadastral", "") or "",
-    }
+    # Mantido por compatibilidade; dados já vêm normalizados de consultar_cnpj_api
+    return api
 
 
 def _aplicar_lookup(prefix: str, dados: dict, campos: list[str]):
@@ -126,14 +179,13 @@ with tab_lista:
                             st.error("CNPJ inválido.")
                         else:
                             with st.spinner("Consultando…"):
-                                api_data = consultar_cnpj_api(digits)
-                            if api_data:
-                                dados_api = extrair_dados(api_data)
+                                dados_api, fonte = consultar_cnpj_api(digits)
+                            if dados_api:
                                 _aplicar_lookup(f"e", dados_api, _CAMPOS_API)
-                                st.success(f"✅ {dados_api['razao_social']} — {dados_api['situacao']}")
+                                st.success(f"✅ {dados_api['razao_social']} — {dados_api['situacao']} (via {fonte})")
                                 st.rerun()
                             else:
-                                st.error("CNPJ não encontrado ou serviço indisponível.")
+                                st.error(f"❌ {fonte}")
 
                 st.markdown("---")
                 col1, col2 = st.columns(2)
@@ -233,16 +285,15 @@ with tab_novo:
                 st.error("CNPJ deve ter 14 dígitos.")
             else:
                 with st.spinner("Consultando Receita Federal…"):
-                    api_data = consultar_cnpj_api(digits)
-                if api_data:
-                    dados_api = extrair_dados(api_data)
+                    dados_api, fonte = consultar_cnpj_api(digits)
+                if dados_api:
                     st.session_state["novo_cnpj_dados"] = dados_api
                     if dados_api["situacao"] and dados_api["situacao"].upper() != "ATIVA":
-                        st.warning(f"Situação cadastral: **{dados_api['situacao']}**")
+                        st.warning(f"Situação cadastral: **{dados_api['situacao']}** (via {fonte})")
                     else:
-                        st.success(f"✅ {dados_api['razao_social']} — {dados_api['situacao']}")
+                        st.success(f"✅ {dados_api['razao_social']} — {dados_api['situacao']} (via {fonte})")
                 else:
-                    st.error("CNPJ não encontrado ou serviço indisponível.")
+                    st.error(f"❌ {fonte}")
                     st.session_state.pop("novo_cnpj_dados", None)
 
     dados = st.session_state.get("novo_cnpj_dados", {})
