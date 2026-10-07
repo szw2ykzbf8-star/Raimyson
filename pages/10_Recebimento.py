@@ -219,9 +219,17 @@ itens_pedido = df_itens_c[
 ].copy() if not df_itens_c.empty else pd.DataFrame()
 
 pid_to_qtd_pedida = {}
+pid_to_fator      = {}
 if not itens_pedido.empty:
     for _, r in itens_pedido.iterrows():
-        pid_to_qtd_pedida[int(float(r["produto_id"]))] = float(r.get("quantidade") or 0)
+        pid = int(float(r["produto_id"]))
+        pid_to_qtd_pedida[pid] = float(r.get("quantidade") or 0)
+        fator_raw = r.get("fator", "") if "fator" in r.index else ""
+        try:
+            f = float(fator_raw) if str(fator_raw).strip() not in ("", "nan") else 1.0
+        except Exception:
+            f = 1.0
+        pid_to_fator[pid] = f if f > 0 else 1.0
 
 # ── Section 2: Load XML ───────────────────────────────────────────────────────
 
@@ -374,7 +382,7 @@ for i, item in enumerate(nfe["itens"]):
         else:
             st.session_state[key_vinc] = opts_label[pid_default_idx(pid_auto)]
 
-    col_a, col_b = st.columns([3, 1])
+    col_a, col_b, col_c = st.columns([3, 1, 1])
     with col_a:
         if pedido_pids:
             # Garante que o valor salvo ainda existe nas opções (ex.: se lista mudou)
@@ -414,15 +422,33 @@ for i, item in enumerate(nfe["itens"]):
             )
             vinculacoes[i] = opts_id[opts_label.index(sel)]
 
+    # Fator de conversão: pré-preenchido da cotação, editável
+    fator_cotacao = pid_to_fator.get(vinculacoes[i], 1.0) if vinculacoes[i] else 1.0
+    key_fator = f"fator_{i}"
+    if key_fator not in st.session_state:
+        st.session_state[key_fator] = fator_cotacao
+
     with col_b:
+        fator = st.number_input(
+            "Fator (un/emb)",
+            value=st.session_state[key_fator],
+            min_value=1.0,
+            step=1.0,
+            key=key_fator,
+            help="Unidades por embalagem/fardo. Pré-preenchido da cotação — ajuste se necessário.",
+        )
+
+    with col_c:
         qtd_ped = pid_to_qtd_pedida.get(vinculacoes[i], 0.0) if vinculacoes[i] else 0.0
+        qtd_nfe = item["qtd"]
+        qtd_conv = qtd_nfe * fator
         qtd_rec = st.number_input(
-            "Qtd recebida",
-            value=item["qtd"],
+            "Qtd recebida (un)",
+            value=qtd_conv,
             min_value=0.0,
             step=0.5,
             key=f"qtd_rec_{i}",
-            help=f"Pedido: {qtd_ped}  |  Nota: {item['qtd']}",
+            help=f"Nota: {qtd_nfe} emb × fator {fator} = {qtd_conv} un  |  Pedido: {qtd_ped}",
         )
         qtds_rec[i] = qtd_rec
 
@@ -444,16 +470,19 @@ if not itens_para_salvar:
 preview_rows = []
 pid_to_desc = {int(r["id"]): r["descricao"] for _, r in df_produtos.iterrows()}
 for i, pid, qtd_rec in itens_para_salvar:
-    item = nfe["itens"][i]
+    item   = nfe["itens"][i]
+    fator  = st.session_state.get(f"fator_{i}", 1.0)
     qtd_ped = pid_to_qtd_pedida.get(pid, "—")
     diff = qtd_rec - float(qtd_ped) if isinstance(qtd_ped, float) else "—"
+    fator_label = f"×{fator:g}" if fator != 1.0 else "—"
     preview_rows.append({
-        "Produto":      pid_to_desc.get(pid, f"ID {pid}"),
-        "cProd NF-e":   item["cprod"],
-        "Desc. NF-e":   item["xprod"],
-        "Qtd Pedida":   qtd_ped,
-        "Qtd Recebida": qtd_rec,
-        "Diferença":    diff,
+        "Produto":        pid_to_desc.get(pid, f"ID {pid}"),
+        "cProd NF-e":     item["cprod"],
+        "Desc. NF-e":     item["xprod"],
+        "Qtd Pedida":     qtd_ped,
+        "Fator":          fator_label,
+        "Qtd Recebida":   qtd_rec,
+        "Diferença":      diff,
     })
 
 st.dataframe(pd.DataFrame(preview_rows), use_container_width=True, hide_index=True)
