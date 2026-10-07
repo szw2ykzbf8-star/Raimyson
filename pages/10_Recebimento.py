@@ -147,22 +147,66 @@ if not df_unidades.empty:
         if _nm:
             unid_fantasia[_nm] = _nf if _nf else _nm
 
-compras_opts = {"— Selecione —": None}
-for _, r in df_compras.iterrows():
-    fid    = int(float(r.get("fornecedor_id") or 0))
-    fnome  = nome_fornec.get(fid, f"Fornecedor {fid}")
-    unid   = str(r.get("unidade", "") or "").strip()
-    hotel  = unid_fantasia.get(unid, unid)
-    data   = str(r.get("data_compra", ""))[:10]
+def _label_compra(r) -> str:
+    fid   = int(float(r.get("fornecedor_id") or 0))
+    fnome = nome_fornec.get(fid, f"Fornecedor {fid}")
+    unid  = str(r.get("unidade", "") or "").strip()
+    hotel = unid_fantasia.get(unid, unid)
+    data  = str(r.get("data_compra", ""))[:10]
     status = str(r.get("status_recebimento", "") or "pendente")
-    chave  = str(r.get("nfe_chave", "") or "").strip()
-    icone  = "✅" if chave else "🕐"
     hotel_part = f" — {hotel}" if hotel else ""
-    label  = f"{icone} Compra #{int(r['id'])} — {fnome}{hotel_part} — {data} — {status}"
-    compras_opts[label] = int(r["id"])
+    return f"Compra #{int(r['id'])} — {fnome}{hotel_part} — {data} — {status}"
 
-compra_sel_label = st.selectbox("Ordem de Compra", list(compras_opts.keys()))
-compra_id = compras_opts[compra_sel_label]
+
+# Separar pendentes das já importadas
+pendentes_opts  = {"— Selecione —": None}
+importadas_rows = []
+for _, r in df_compras.iterrows():
+    chave = str(r.get("nfe_chave", "") or "").strip()
+    if chave:
+        importadas_rows.append(r)
+    else:
+        pendentes_opts[f"🕐 {_label_compra(r)}"] = int(r["id"])
+
+compra_sel_label = st.selectbox("Ordem de Compra", list(pendentes_opts.keys()))
+compra_id = pendentes_opts[compra_sel_label]
+
+# ── NF-e já importadas ────────────────────────────────────────────────────────
+with st.expander("✅ Ver NF-e já importadas"):
+    if not importadas_rows:
+        st.caption("Nenhuma NF-e importada ainda.")
+    else:
+        hoje = datetime.date.today()
+        col_m, col_a = st.columns(2)
+        with col_m:
+            mes_sel = st.selectbox(
+                "Mês",
+                list(range(1, 13)),
+                index=hoje.month - 1,
+                format_func=lambda m: ["Jan","Fev","Mar","Abr","Mai","Jun",
+                                       "Jul","Ago","Set","Out","Nov","Dez"][m - 1],
+                key="imp_mes",
+            )
+        with col_a:
+            anos = sorted({str(r.get("data_compra", ""))[:4] for r in importadas_rows
+                           if str(r.get("data_compra", ""))[:4].isdigit()}, reverse=True)
+            if not anos:
+                anos = [str(hoje.year)]
+            ano_sel = st.selectbox("Ano", anos, key="imp_ano")
+
+        filtradas = [
+            r for r in importadas_rows
+            if str(r.get("data_compra", ""))[:7] == f"{ano_sel}-{mes_sel:02d}"
+        ]
+
+        if not filtradas:
+            st.caption("Nenhuma importação neste período.")
+        else:
+            for r in filtradas:
+                chave = str(r.get("nfe_chave", "") or "").strip()
+                nfe_num = str(r.get("nfe_numero", "") or "").strip()
+                num_part = f" · NF-e {nfe_num}" if nfe_num else ""
+                st.markdown(f"✅ **{_label_compra(r)}**{num_part}  \n`{chave}`")
 
 if compra_id is None:
     st.stop()
