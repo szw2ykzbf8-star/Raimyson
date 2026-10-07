@@ -314,14 +314,24 @@ for i, item in enumerate(nfe["itens"]):
         f"<span style='color:grey;font-size:0.85em'>(cProd: {item['cprod']})</span>",
         unsafe_allow_html=True,
     )
+    # Inicializa session_state apenas na primeira vez — evita reset a cada rerun
+    key_vinc = f"vinc_{i}"
+    if key_vinc not in st.session_state:
+        if pedido_pids:
+            st.session_state[key_vinc] = opts_label_ped[_idx_ped(pid_auto)]
+        else:
+            st.session_state[key_vinc] = opts_label[pid_default_idx(pid_auto)]
+
     col_a, col_b = st.columns([3, 1])
     with col_a:
         if pedido_pids:
+            # Garante que o valor salvo ainda existe nas opções (ex.: se lista mudou)
+            if st.session_state[key_vinc] not in opts_label_ped:
+                st.session_state[key_vinc] = opts_label_ped[0]
             sel = st.selectbox(
                 "Produto no sistema",
                 opts_label_ped,
-                index=_idx_ped(pid_auto),
-                key=f"vinc_{i}",
+                key=key_vinc,
             )
             vinculacoes[i] = opts_id_ped[opts_label_ped.index(sel)]
 
@@ -331,21 +341,24 @@ for i, item in enumerate(nfe["itens"]):
                 key=f"usar_todos_{i}",
             )
             if usar_todos:
+                key_all = f"vinc_all_{i}"
+                if key_all not in st.session_state:
+                    st.session_state[key_all] = opts_label[0]
                 sel_all = st.selectbox(
                     "Buscar em todos os produtos cadastrados",
                     opts_label,
-                    index=0,
-                    key=f"vinc_all_{i}",
+                    key=key_all,
                 )
                 pid_all = opts_id[opts_label.index(sel_all)]
                 if pid_all is not None:
                     vinculacoes[i] = pid_all
         else:
+            if st.session_state[key_vinc] not in opts_label:
+                st.session_state[key_vinc] = opts_label[0]
             sel = st.selectbox(
                 "Produto no sistema",
                 opts_label,
-                index=pid_default_idx(pid_auto),
-                key=f"vinc_{i}",
+                key=key_vinc,
             )
             vinculacoes[i] = opts_id[opts_label.index(sel)]
 
