@@ -332,6 +332,70 @@ with tab_ativa:
 
     # ── Session state ─────────────────────────────────────────────────────────────
     sk = f"analise_{cotacao_sel}"
+    _RASC_TOKEN = f"analise_{cotacao_sel}"
+
+    # Helpers de rascunho (reutiliza tabela rascunhos existente)
+    def _salvar_rasc_analise():
+        import json as _json
+        from modules.database import get_engine
+        from sqlalchemy import text as _t2
+        import datetime as _dt
+        sel_data = {str(pid): st.session_state.get(f"{sk}_sel_{pid}") for pid in prod_ids}
+        qtd_data = {
+            f"{pid}_{unid}": st.session_state.get(f"{sk}_qtd_{pid}_{unid}")
+            for pid in prod_ids for unid in unidades_cot
+        }
+        payload = _json.dumps({"sel": sel_data, "qtd": qtd_data}, ensure_ascii=False)
+        agora = _dt.datetime.now().isoformat()
+        engine = get_engine()
+        try:
+            with engine.begin() as conn:
+                exists = conn.execute(
+                    _t2('SELECT token FROM "rascunhos" WHERE token = :t'),
+                    {"t": _RASC_TOKEN},
+                ).fetchone()
+                if exists:
+                    conn.execute(
+                        _t2('UPDATE "rascunhos" SET dados_json = :d, salvo_em = :s WHERE token = :t'),
+                        {"d": payload, "s": agora, "t": _RASC_TOKEN},
+                    )
+                else:
+                    conn.execute(
+                        _t2('INSERT INTO "rascunhos" (token, dados_json, salvo_em) VALUES (:t, :d, :s)'),
+                        {"t": _RASC_TOKEN, "d": payload, "s": agora},
+                    )
+        except Exception:
+            pass
+
+    def _carregar_rasc_analise():
+        import json as _json
+        from modules.database import get_engine
+        from sqlalchemy import text as _t2
+        try:
+            engine = get_engine()
+            with engine.connect() as conn:
+                row = conn.execute(
+                    _t2('SELECT dados_json, salvo_em FROM "rascunhos" WHERE token = :t'),
+                    {"t": _RASC_TOKEN},
+                ).fetchone()
+            if row:
+                return _json.loads(row[0]), row[1]
+        except Exception:
+            pass
+        return None, None
+
+    def _deletar_rasc_analise():
+        from modules.database import get_engine
+        from sqlalchemy import text as _t2
+        try:
+            engine = get_engine()
+            with engine.begin() as conn:
+                conn.execute(
+                    _t2('DELETE FROM "rascunhos" WHERE token = :t'),
+                    {"t": _RASC_TOKEN},
+                )
+        except Exception:
+            pass
 
     # Promover resultado pendente para estado exibível (após rerun)
     _compra_pending = st.session_state.pop(f"{sk}_compra_pending", None)
@@ -350,6 +414,23 @@ with tab_ativa:
                 st.session_state[_key_db] = True
 
     if f"{sk}_init" not in st.session_state:
+        # Tentar restaurar rascunho antes de aplicar defaults de melhor preço
+        _rasc, _rasc_ts = _carregar_rasc_analise()
+        if _rasc:
+            for _pid_str, _fid_val in (_rasc.get("sel") or {}).items():
+                _pid_k = int(_pid_str)
+                if _fid_val is not None:
+                    st.session_state[f"{sk}_sel_{_pid_k}"] = int(_fid_val)
+            for _key, _val in (_rasc.get("qtd") or {}).items():
+                if _val is not None:
+                    st.session_state[f"{sk}_qtd_{_key}"] = float(_val)
+            try:
+                import datetime as _dt2
+                _ts_fmt = _dt2.datetime.fromisoformat(_rasc_ts).strftime("%d/%m às %H:%M")
+            except Exception:
+                _ts_fmt = ""
+            st.session_state[f"{sk}_rasc_ts"] = _ts_fmt
+
         for pid in prod_ids:
             skey = f"{sk}_sel_{pid}"
             if skey not in st.session_state and pid in melhor_preco:
@@ -360,6 +441,16 @@ with tab_ativa:
                 if qkey not in st.session_state:
                     st.session_state[qkey] = _qtd_orig(pid, unid)
         st.session_state[f"{sk}_init"] = True
+
+    if st.session_state.get(f"{sk}_rasc_ts"):
+        st.info(f"📂 Seleções restauradas do rascunho salvo em {st.session_state[f'{sk}_rasc_ts']}.")
+
+    # Autosave com debounce de 10s — grava toda vez que houver rerun após init
+    import time as _time
+    _save_key = f"{sk}_last_save"
+    if _time.time() - st.session_state.get(_save_key, 0) >= 10:
+        _salvar_rasc_analise()
+        st.session_state[_save_key] = _time.time()
 
     def _get_sel(pid):
         return st.session_state.get(f"{sk}_sel_{pid}")
