@@ -1203,6 +1203,7 @@ td{border:1px solid #ddd;padding:4px 6px;vertical-align:top}
     # ── Process purchase ──────────────────────────────────────────────────────────
     comprar_fid = st.session_state.pop(f"{sk}_comprar_fid", None)
     if comprar_fid is not None:
+        st.cache_data.clear()
         df_compras      = ler_df("compras")
         df_itens_compra = ler_df("itens_compra")
         df_hist         = ler_df("historico_precos")

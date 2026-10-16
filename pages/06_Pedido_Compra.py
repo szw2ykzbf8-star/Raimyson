@@ -342,8 +342,9 @@ with tab_regular:
 
             with st.expander(f"**{nome_forn}** — {n_hoteis} hotel(is) — R$ {total_forn:.2f}"):
 
-                secoes_html = []
-                secoes_pdf  = []
+                todos_cids   = [_safe_int(r["id"]) for _, r in compras_forn.iterrows()]
+                secoes_html  = []
+                secoes_pdf   = []
                 compras_info = []
                 total_itens  = 0
 
@@ -391,6 +392,8 @@ with tab_regular:
                         })
 
                     nome_cot_compra = cot_map.get(cot_id, "")
+                    if not itens_det:
+                        continue
                     total_itens += len(itens_det)
                     secoes_html.append(_secao(compra, forn, unid_info, itens_det, nome_cot_compra))
                     secoes_pdf.append({
@@ -454,7 +457,6 @@ with tab_regular:
                     resumo_cols[i % min(n_hoteis, 4)].caption(f"{info['label']} — R$ {info['valor']:.2f}")
 
                 # Um único Enviado / Deletar para o fornecedor inteiro
-                todos_cids = [info["cid"] for info in compras_info]
                 col_env, col_del = st.columns(2)
                 with col_env:
                     if st.button("✅ Enviado", key=f"env_{fid}", use_container_width=True):
