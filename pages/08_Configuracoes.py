@@ -31,11 +31,12 @@ PAGINAS_PERMISSOES = {
     "ordem":         "🛒 Ordem de Compra",
     "produtos":      "📦 Produtos",
     "fornecedores":  "🏭 Fornecedores",
-    "relatorios":    "📈 Relatórios",
+    "relatorios":            "📈 Relatórios",
+    "comparativo_pedidos":   "📋 Comparativo de Pedidos",
 }
 PERFIL_PADRAO_PERM = {
     "admin":     list(PAGINAS_PERMISSOES.keys()),
-    "comprador": ["pedidos","cotacoes","analise","ordem","recebimento","compra_avulsa","produtos","fornecedores","relatorios"],
+    "comprador": ["pedidos","cotacoes","analise","ordem","recebimento","compra_avulsa","produtos","fornecedores","relatorios","comparativo_pedidos"],
     "digitador": ["pedidos"],
 }
 
