@@ -171,3 +171,14 @@ class TableProxy:
 
 def get_sheet(nome_chave: str) -> TableProxy:
     return TableProxy(nome_chave)
+
+
+def get_next_id(nome_chave: str) -> int:
+    """Return MAX(id)+1 queried directly from the DB, bypassing all caches."""
+    engine = get_engine()
+    with engine.connect() as conn:
+        result = conn.execute(
+            text(f'SELECT MAX(CAST("id" AS INTEGER)) FROM "{nome_chave}"')
+        )
+        val = result.scalar()
+    return int(val) + 1 if val is not None else 1

@@ -201,6 +201,7 @@ if os.environ.get("DATABASE_URL"):
         get_sheet,
         atualizar_celula,
         atualizar_linha,
+        get_next_id,
     )
 else:
     ler_df           = _gs_ler_df
@@ -208,6 +209,16 @@ else:
     append_linha     = _gs_append_linha
     get_sheet        = _gs_get_sheet
     atualizar_celula = _gs_atualizar_celula
+
+    def get_next_id(nome_chave: str) -> int:
+        df = _gs_ler_df(nome_chave)
+        if df.empty or "id" not in df.columns:
+            return 1
+        try:
+            vals = [int(str(x)) for x in df["id"] if str(x).strip().lstrip("-").isdigit()]
+            return max(vals) + 1 if vals else 1
+        except Exception:
+            return 1
 
     def atualizar_linha(nome_chave: str, id_valor: str, campos: dict):
         # Google Sheets fallback: rewrite full sheet (acceptable for GS mode)

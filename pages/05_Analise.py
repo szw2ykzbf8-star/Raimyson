@@ -5,7 +5,7 @@ import urllib.parse
 import re
 import io
 from modules.auth import requer_permissao
-from modules.google_sheets import ler_df, escrever_df, get_sheet, atualizar_linha
+from modules.google_sheets import ler_df, escrever_df, get_sheet, atualizar_linha, get_next_id
 
 usuario = requer_permissao("analise")
 
@@ -1203,14 +1203,9 @@ td{border:1px solid #ddd;padding:4px 6px;vertical-align:top}
     # ── Process purchase ──────────────────────────────────────────────────────────
     comprar_fid = st.session_state.pop(f"{sk}_comprar_fid", None)
     if comprar_fid is not None:
-        st.cache_data.clear()
-        df_compras      = ler_df("compras")
-        df_itens_compra = ler_df("itens_compra")
-        df_hist         = ler_df("historico_precos")
-
-        compra_id = _next_id(df_compras)
-        item_id   = _next_id(df_itens_compra)
-        hist_id   = _next_id(df_hist)
+        compra_id = get_next_id("compras")
+        item_id   = get_next_id("itens_compra")
+        hist_id   = get_next_id("historico_precos")
 
         prods_fid      = [pid for pid in prod_ids if _get_sel(pid) == comprar_fid]
         linhas_compras = []

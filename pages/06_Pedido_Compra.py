@@ -334,8 +334,13 @@ with tab_regular:
         for fid in forn_ids_list:
             forn = forn_map.get(fid, {})
             nome_forn = str(forn.get("nome_fantasia") or forn.get("razao_social") or f"#{fid}")
+            _cids_com_itens = (
+                set(df_itens_compra["compra_id"].apply(_safe_int).unique())
+                if not df_itens_compra.empty else set()
+            )
             compras_forn = compras_pendentes[
-                compras_pendentes["fornecedor_id"].apply(_safe_int) == fid
+                (compras_pendentes["fornecedor_id"].apply(_safe_int) == fid) &
+                (compras_pendentes["id"].apply(_safe_int).isin(_cids_com_itens))
             ].sort_values("unidade")
             total_forn = compras_forn["valor_total"].apply(_safe_float).sum()
             n_hoteis = len(compras_forn)
