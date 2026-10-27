@@ -159,6 +159,7 @@ def _label_compra(r) -> str:
 
 
 # Separar pendentes das já importadas
+# Valor armazenado é (id, fornecedor_id) para evitar ambiguidade com IDs duplicados
 pendentes_opts  = {"— Selecione —": None}
 importadas_rows = []
 for _, r in df_compras.iterrows():
@@ -166,10 +167,12 @@ for _, r in df_compras.iterrows():
     if chave:
         importadas_rows.append(r)
     else:
-        pendentes_opts[f"🕐 {_label_compra(r)}"] = int(r["id"])
+        _cid  = int(float(r["id"]))
+        _cfid = int(float(r.get("fornecedor_id") or 0))
+        pendentes_opts[f"🕐 {_label_compra(r)}"] = (_cid, _cfid)
 
 compra_sel_label = st.selectbox("Ordem de Compra", list(pendentes_opts.keys()))
-compra_id = pendentes_opts[compra_sel_label]
+compra_key = pendentes_opts[compra_sel_label]  # (id, fornecedor_id) ou None
 
 # ── NF-e já importadas ────────────────────────────────────────────────────────
 with st.expander("✅ Ver NF-e já importadas"):
@@ -208,10 +211,18 @@ with st.expander("✅ Ver NF-e já importadas"):
                 num_part = f" · NF-e {nfe_num}" if nfe_num else ""
                 st.markdown(f"✅ **{_label_compra(r)}**{num_part}  \n`{chave}`")
 
-if compra_id is None:
+if compra_key is None:
     st.stop()
 
-compra_row = df_compras[df_compras["id"].apply(lambda x: int(float(x))) == compra_id].iloc[0]
+compra_id, _sel_forn_id = compra_key
+
+# Usa chave composta (id + fornecedor_id) para evitar pegar a linha errada
+# quando há IDs duplicados no banco de compras de distribuidores diferentes
+_mask_compra = (
+    (df_compras["id"].apply(lambda x: int(float(x))) == compra_id) &
+    (df_compras["fornecedor_id"].apply(lambda x: int(float(x))) == _sel_forn_id)
+)
+compra_row = df_compras[_mask_compra].iloc[0]
 compra_forn_id = int(float(compra_row.get("fornecedor_id") or 0))
 
 itens_pedido = df_itens_c[
@@ -538,7 +549,10 @@ if st.button(f"✅ Confirmar Recebimento ({len(itens_para_salvar)} itens)", use_
 
         # 3. Atualizar Compras: nfe_chave, nfe_numero, status_recebimento
         df_c2 = ler_df("compras")
-        idx_c = df_c2[df_c2["id"].apply(lambda x: int(float(x))) == compra_id].index
+        idx_c = df_c2[
+            (df_c2["id"].apply(lambda x: int(float(x))) == compra_id) &
+            (df_c2["fornecedor_id"].apply(lambda x: int(float(x))) == compra_forn_id)
+        ].index
         if len(idx_c):
             ic = idx_c[0]
             df_c2["nfe_chave"]          = df_c2["nfe_chave"].astype(object)
