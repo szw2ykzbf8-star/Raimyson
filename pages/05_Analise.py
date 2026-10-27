@@ -403,10 +403,11 @@ with tab_ativa:
         st.session_state[f"{sk}_compra_done_{_compra_pending}"] = True
 
     # Inicializar compra_done a partir do banco (persiste refreshes e cache clears)
+    # Inclui compras já enviadas (pedido_gerado=True) para que o botão Comprar
+    # não reapareça após deploys ou expiração de sessão.
     if not df_compras.empty:
         _compras_cot = df_compras[
-            (df_compras["cotacao_id"].apply(_safe_int) == cotacao_sel) &
-            (df_compras["pedido_gerado"].astype(str).str.lower().isin(["false", "0", ""]))
+            df_compras["cotacao_id"].apply(_safe_int) == cotacao_sel
         ]
         for _fid_db in _compras_cot["fornecedor_id"].apply(_safe_int).unique():
             _key_db = f"{sk}_compra_done_{_fid_db}"
