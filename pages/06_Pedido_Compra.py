@@ -326,30 +326,8 @@ tab_regular, tab_direta = st.tabs(["📦 Pedidos Regulares", "🛒 Compra Direta
 
 # ── Aba: Pedidos Regulares ─────────────────────────────────────────────────────
 with tab_regular:
-    # ── Pedidos já enviados (aguardando NF-e) ─────────────────────────────────
-    enviados_sem_nfe = (
-        df_compras[
-            (~df_compras["pedido_gerado"].apply(_is_pending)) &
-            (df_compras["nfe_chave"].astype(str).str.strip() == "")
-        ]
-        if not df_compras.empty else pd.DataFrame()
-    )
-    if not enviados_sem_nfe.empty:
-        with st.expander(f"📋 Pedidos Enviados — aguardando NF-e ({len(enviados_sem_nfe)} ordem(ns))"):
-            st.caption("Estes pedidos já foram enviados ao fornecedor. Para processar a NF-e, acesse **Recebimento NF-e** no menu lateral.")
-            for _, r_env in enviados_sem_nfe.iterrows():
-                fid_e   = _safe_int(r_env.get("fornecedor_id", 0))
-                forn_e  = forn_map.get(fid_e, {})
-                nome_e  = str(forn_e.get("nome_fantasia") or forn_e.get("razao_social") or f"#{fid_e}")
-                unid_e  = str(r_env.get("unidade", "") or "")
-                data_e  = str(r_env.get("data_compra", ""))[:10]
-                val_e   = _safe_float(r_env.get("valor_total", 0))
-                cid_e   = _safe_int(r_env.get("id", 0))
-                st.markdown(f"- **Pedido #{cid_e}** — {nome_e} | {unid_e} | {data_e} — R$ {val_e:.2f}")
-
     if compras_pendentes.empty:
-        if enviados_sem_nfe.empty:
-            st.info("Nenhum pedido de compra pendente para envio.")
+        st.info("Nenhum pedido de compra pendente para envio.")
     else:
         forn_ids_list = sorted(compras_pendentes["fornecedor_id"].apply(_safe_int).unique())
 
