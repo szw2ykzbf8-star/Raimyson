@@ -266,17 +266,49 @@ with tab2:
             k2.metric("Classe B", f"{_cnt.get('B', 0)} produtos", f"R$ {_val.get('B', 0):,.0f}")
             k3.metric("Classe C", f"{_cnt.get('C', 0)} produtos", f"R$ {_val.get('C', 0):,.0f}")
 
-            _cores = {"A": "#C0392B", "B": "#E67E22", "C": "#27AE60"}
+            _filtro_abc = st.radio(
+                "Filtrar por classe",
+                ["Todas", "A", "B", "C"],
+                horizontal=True,
+                key="abc_filtro_grafico",
+            )
+            abc_plot = abc if _filtro_abc == "Todas" else abc[abc["Classe"] == _filtro_abc].reset_index(drop=True)
+
+            # Zonas coloridas de fundo e letras A/B/C
+            _cores         = {"A": "#C0392B", "B": "#E67E22", "C": "#27AE60"}
+            _zone_fill     = {"A": "rgba(192,57,43,0.10)", "B": "rgba(230,126,34,0.10)", "C": "rgba(39,174,96,0.10)"}
+            _annot_color   = {"A": "rgba(192,57,43,0.25)", "B": "rgba(230,126,34,0.25)", "C": "rgba(39,174,96,0.25)"}
+            _shapes, _annots = [], []
+            for _cls in ["A", "B", "C"]:
+                _mask_cls = abc_plot[abc_plot["Classe"] == _cls].index
+                if len(_mask_cls) == 0:
+                    continue
+                _x0 = float(_mask_cls.min()) - 0.5
+                _x1 = float(_mask_cls.max()) + 0.5
+                _shapes.append(dict(
+                    type="rect", layer="below",
+                    xref="x", x0=_x0, x1=_x1,
+                    yref="paper", y0=0, y1=1,
+                    fillcolor=_zone_fill[_cls], line=dict(width=0),
+                ))
+                _annots.append(dict(
+                    xref="x", x=(_x0 + _x1) / 2,
+                    yref="paper", y=0.15,
+                    text=_cls, showarrow=False,
+                    font=dict(color=_annot_color[_cls], size=72),
+                    xanchor="center",
+                ))
+
             fig_abc = go.Figure()
             fig_abc.add_bar(
-                x=abc["descricao"], y=abc["valor"],
-                marker_color=[_cores.get(c, "#888") for c in abc["Classe"]],
+                x=abc_plot["descricao"], y=abc_plot["valor"],
+                marker_color=[_cores.get(c, "#888") for c in abc_plot["Classe"]],
                 name="R$ Total",
-                hovertemplate="<b>%{x}</b><br>R$ %{y:,.2f}<br>Classe: "
-                              + abc["Classe"].tolist()[0] + "<extra></extra>",
+                customdata=abc_plot["Classe"],
+                hovertemplate="<b>%{x}</b><br>R$ %{y:,.2f}<br>Classe: <b>%{customdata}</b><extra></extra>",
             )
             fig_abc.add_scatter(
-                x=abc["descricao"], y=abc["pct_acum"],
+                x=abc_plot["descricao"], y=abc_plot["pct_acum"],
                 yaxis="y2", mode="lines", name="% Acumulado",
                 line=dict(color="#2980B9", width=2),
                 hovertemplate="%{y:.1f}%<extra></extra>",
@@ -285,10 +317,12 @@ with tab2:
                 title="Curva ABC — Pareto de Produtos por Gasto",
                 yaxis=dict(title="R$ Total"),
                 yaxis2=dict(title="% Acumulado", overlaying="y", side="right",
-                            range=[0, 105], ticksuffix="%"),
+                            range=[0, 108], ticksuffix="%"),
                 xaxis_tickangle=45,
                 showlegend=True,
                 height=500,
+                shapes=_shapes,
+                annotations=_annots,
             )
             st.plotly_chart(fig_abc, use_container_width=True)
 
@@ -302,10 +336,8 @@ with tab2:
             )
             st.markdown("")
 
-            classe_fil = st.selectbox("Filtrar por classe", ["Todas", "A", "B", "C"], key="abc_fil")
-            df_abc_show = abc if classe_fil == "Todas" else abc[abc["Classe"] == classe_fil]
             st.dataframe(
-                df_abc_show[["Classe", "descricao", "valor", "pct", "pct_acum"]].rename(columns={
+                abc_plot[["Classe", "descricao", "valor", "pct", "pct_acum"]].rename(columns={
                     "descricao": "Produto", "valor": "R$ Total",
                     "pct": "% do Total", "pct_acum": "% Acumulado",
                 }).assign(**{
