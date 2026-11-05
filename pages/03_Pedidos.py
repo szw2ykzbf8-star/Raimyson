@@ -482,12 +482,16 @@ with tab_importar:
         if not colunas_unid_excel:
             st.error("A planilha não contém colunas de unidades. Verifique se usou o modelo correto.")
         else:
-            # Mapear descricao → produto_id (normalizado)
+            # Mapear produto_id por: codigo, descricao|apresentacao (composto) e descricao (fallback)
             mapa_prod = {}
             if not produtos_ativos.empty:
                 for _, p in produtos_ativos.iterrows():
-                    chave = str(p["descricao"]).strip().lower()
-                    mapa_prod[chave] = p["id"]
+                    _desc  = str(p["descricao"]).strip().lower()
+                    _apres = str(p.get("apresentacao", "") or "").strip().lower()
+                    _chave_composta = f"{_desc}|{_apres}"
+                    mapa_prod[_chave_composta] = p["id"]
+                    if _desc not in mapa_prod:
+                        mapa_prod[_desc] = p["id"]
                     if str(p.get("codigo", "") or "").strip():
                         mapa_prod[str(p["codigo"]).strip().lower()] = p["id"]
 
@@ -501,8 +505,11 @@ with tab_importar:
                 if not descricao or descricao.lower() == "nan":
                     continue
 
+                _apres_plan    = str(row.get("apresentacao", "") or "").strip().lower()
+                _chave_composta = f"{descricao.lower()}|{_apres_plan}"
                 prod_id = (
                     mapa_prod.get(codigo.lower()) or
+                    mapa_prod.get(_chave_composta) or
                     mapa_prod.get(descricao.lower())
                 )
 
