@@ -5,7 +5,7 @@ FinTrack Telegram Bot — polling loop independente do Streamlit.
 Comandos suportados:
   /gasto <valor> <cat> <descrição> <forma> [conta] [Nx]
   /entrada <valor> <fonte> [conta]
-  /saldo
+  /saldo     (saldo de cada banco + total + resumo do mês)
   /resumo
   /ajuda
 
@@ -376,8 +376,61 @@ def cmd_entrada(parts: list[str]) -> str:
     )
 
 
+def _df_aba(tab: str):
+    """Lê uma aba como DataFrame (strings, igual ao app). Aba ausente → vazio."""
+    import pandas as pd
+    try:
+        rows = _get_all(tab)
+    except Exception as e:
+        log.warning("Aba %s indisponível para /saldo: %s", tab, e)
+        return pd.DataFrame()
+    return pd.DataFrame(rows) if rows else pd.DataFrame()
+
+
+def _saldos_bancos() -> list[tuple[str, float]]:
+    """Saldo atual de cada conta ativa — mesmo cálculo da tela Contas do app."""
+    from src.utils import calcular_saldo_conta
+
+    contas_df = _df_aba("contas_bancarias")
+    if contas_df.empty:
+        return []
+    if "ativo" in contas_df.columns:
+        contas_df = contas_df[contas_df["ativo"] == "True"]
+
+    entradas = _df_aba("entradas")
+    gastos   = _df_aba("gastos")
+    transf   = _df_aba("transferencias")
+    invest   = _df_aba("investimentos")
+    pgtos    = _df_aba("pagamentos_contas")
+    criptos  = _df_aba("criptos")
+    if not criptos.empty and "status" in criptos.columns:
+        criptos = criptos[criptos["status"] == "ATIVO"]
+
+    return [
+        (nome, calcular_saldo_conta(nome, entradas, gastos, transf, contas_df,
+                                    invest, pgtos, criptos))
+        for nome in contas_df["nome"]
+    ]
+
+
 def cmd_saldo(_: list[str]) -> str:
     mes = _mes_atual()
+
+    linhas = ["🏦 <b>Saldo nos bancos</b>\n"]
+    try:
+        saldos = _saldos_bancos()
+    except Exception as e:
+        log.exception("Erro ao calcular saldos das contas: %s", e)
+        saldos = None
+    if saldos is None:
+        linhas.append("⚠️ Não consegui calcular os saldos agora.")
+    elif not saldos:
+        linhas.append("Nenhuma conta cadastrada.")
+    else:
+        for nome, valor in saldos:
+            linhas.append(f"  {nome}: {_fmt(valor)}")
+        total = sum(v for _, v in saldos)
+        linhas.append(f"\n💰 <b>TOTAL: {_fmt(total)}</b>")
 
     entradas_rows = _get_all("entradas")
     gastos_rows   = _get_all("gastos")
@@ -392,15 +445,16 @@ def cmd_saldo(_: list[str]) -> str:
         for r in gastos_rows
         if str(r.get("mes_referencia", "")).startswith(mes)
     )
-    saldo = total_ent - total_gas
-    emoji = "✅" if saldo >= 0 else "❌"
+    resultado = total_ent - total_gas
+    emoji = "✅" if resultado >= 0 else "❌"
 
-    return (
-        f"📊 <b>Saldo — {mes}</b>\n\n"
-        f"💰 Entradas: {_fmt(total_ent)}\n"
-        f"💸 Gastos:   {_fmt(total_gas)}\n"
-        f"📈 Saldo:    {_fmt(saldo)} {emoji}"
-    )
+    linhas += [
+        f"\n📊 <b>Mês {mes}</b>",
+        f"💰 Entradas: {_fmt(total_ent)}",
+        f"💸 Gastos:   {_fmt(total_gas)}",
+        f"📈 Resultado do mês: {_fmt(resultado)} {emoji}",
+    ]
+    return "\n".join(linhas)
 
 
 def cmd_resumo(_: list[str]) -> str:
@@ -879,7 +933,7 @@ def cmd_ajuda(_: list[str]) -> str:
         "<code>/entrada valor fonte [conta]</code>\n"
         "  <code>/entrada 3000 Salário nubank</code>\n\n"
         "<b>📊 Consultas:</b>\n"
-        "<code>/saldo</code>  — saldo do mês atual\n"
+        "<code>/saldo</code>  — saldo de cada banco + resumo do mês\n"
         "<code>/resumo</code> — gastos por categoria\n\n"
         "<b>🔗 Acesso:</b>\n"
         "<code>/link</code> — link de acesso ao app\n\n"
