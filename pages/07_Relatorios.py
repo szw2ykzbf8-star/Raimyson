@@ -259,6 +259,13 @@ with tab2:
                 lambda x: "A" if x <= 80 else ("B" if x <= 95 else "C")
             )
 
+            _qtd_tot = df_ic.groupby("produto_id")["quantidade"].sum().rename("qtd_total")
+            abc = abc.merge(_qtd_tot, on="produto_id", how="left")
+            abc["qtd_total"]   = abc["qtd_total"].fillna(0)
+            abc["preco_medio"] = abc.apply(
+                lambda r: r["valor"] / r["qtd_total"] if r["qtd_total"] > 0 else 0, axis=1
+            )
+
             _cnt = abc["Classe"].value_counts()
             _val = abc.groupby("Classe")["valor"].sum()
             k1, k2, k3 = st.columns(3)
@@ -337,11 +344,14 @@ with tab2:
             st.markdown("")
 
             st.dataframe(
-                abc_plot[["Classe", "descricao", "valor", "pct", "pct_acum"]].rename(columns={
-                    "descricao": "Produto", "valor": "R$ Total",
+                abc_plot[["Classe", "descricao", "qtd_total", "valor", "preco_medio", "pct", "pct_acum"]].rename(columns={
+                    "descricao": "Produto", "qtd_total": "Qtd. Total",
+                    "valor": "R$ Total", "preco_medio": "Preço Médio",
                     "pct": "% do Total", "pct_acum": "% Acumulado",
                 }).assign(**{
+                    "Qtd. Total":  lambda d: d["Qtd. Total"].map("{:,.2f}".format),
                     "R$ Total":    lambda d: d["R$ Total"].map("R$ {:,.2f}".format),
+                    "Preço Médio": lambda d: d["Preço Médio"].map("R$ {:,.2f}".format),
                     "% do Total":  lambda d: d["% do Total"].map("{:.2f}%".format),
                     "% Acumulado": lambda d: d["% Acumulado"].map("{:.2f}%".format),
                 }),
