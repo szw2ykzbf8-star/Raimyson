@@ -24,6 +24,143 @@ def _safe_float(v, default=0.0):
     except Exception:
         return default
 
+def _gerar_excel_abc(df: pd.DataFrame, filtro: str = "Todas") -> bytes:
+    """Gera planilha Excel formatada da Curva ABC.
+
+    df deve ter colunas: Classe, descricao, qtd_total, valor, preco_medio, pct, pct_acum
+    """
+    import openpyxl
+    from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    wb  = openpyxl.Workbook()
+    ws  = wb.active
+    ws.title = "Curva ABC"
+
+    # ── Paleta ────────────────────────────────────────────────────────────────
+    _C_TITULO  = "2C3E50"
+    _C_HEADER  = "1A252F"
+    _C_A_BG    = "FDECEA";  _C_A_FG    = "922B21"
+    _C_B_BG    = "FEF0E6";  _C_B_FG    = "935116"
+    _C_C_BG    = "E9F7EF";  _C_C_FG    = "1D6A39"
+    _C_BRANCO  = "FFFFFF"
+    _C_BORDA   = "BDC3C7"
+    _C_TOT_FG  = "BDC3C7"
+
+    _borda = Border(
+        left=Side(style="thin", color=_C_BORDA), right=Side(style="thin", color=_C_BORDA),
+        top=Side(style="thin", color=_C_BORDA),  bottom=Side(style="thin", color=_C_BORDA),
+    )
+    _borda_tot = Border(
+        left=Side(style="medium", color="FFFFFF"), right=Side(style="medium", color="FFFFFF"),
+        top=Side(style="medium", color="FFFFFF"),  bottom=Side(style="medium", color="FFFFFF"),
+    )
+
+    _COLS  = ["Classe", "Produto", "Qtd. Total", "R$ Total", "Preço Médio", "% do Total", "% Acumulado"]
+    _LARG  = [10,       38,        14,            16,          16,            14,            14]
+    N      = len(_COLS)
+
+    # ── Linha 1 — Título ──────────────────────────────────────────────────────
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=N)
+    c = ws.cell(1, 1, "Curva ABC — Análise de Pareto por Produto")
+    c.font      = Font(name="Calibri", bold=True, size=14, color=_C_BRANCO)
+    c.fill      = PatternFill("solid", fgColor=_C_TITULO)
+    c.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 26
+
+    # ── Linha 2 — Subtítulo ───────────────────────────────────────────────────
+    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=N)
+    _hoje    = datetime.date.today().strftime("%d/%m/%Y")
+    _fil_txt = f"Filtro: Classe {filtro}" if filtro != "Todas" else "Todas as classes"
+    c2 = ws.cell(2, 1, f"Gerado em {_hoje}  ·  {_fil_txt}  ·  {len(df)} produto(s)")
+    c2.font      = Font(name="Calibri", italic=True, size=10, color=_C_TOT_FG)
+    c2.fill      = PatternFill("solid", fgColor=_C_TITULO)
+    c2.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[2].height = 18
+
+    # ── Linha 3 — Espaçador ───────────────────────────────────────────────────
+    for col in range(1, N + 1):
+        ws.cell(3, col).fill = PatternFill("solid", fgColor=_C_TITULO)
+    ws.row_dimensions[3].height = 6
+
+    # ── Linha 4 — Cabeçalho ───────────────────────────────────────────────────
+    for ci, (nome, larg) in enumerate(zip(_COLS, _LARG), start=1):
+        c = ws.cell(4, ci, nome)
+        c.font      = Font(name="Calibri", bold=True, size=11, color=_C_BRANCO)
+        c.fill      = PatternFill("solid", fgColor=_C_HEADER)
+        c.alignment = Alignment(horizontal="center", vertical="center")
+        c.border    = _borda
+        ws.column_dimensions[get_column_letter(ci)].width = larg
+    ws.row_dimensions[4].height = 22
+    ws.auto_filter.ref = f"A4:{get_column_letter(N)}4"
+    ws.freeze_panes   = "A5"
+
+    # ── Dados ─────────────────────────────────────────────────────────────────
+    _fill_cls = {
+        "A": PatternFill("solid", fgColor=_C_A_BG),
+        "B": PatternFill("solid", fgColor=_C_B_BG),
+        "C": PatternFill("solid", fgColor=_C_C_BG),
+    }
+    _font_cls = {
+        "A": Font(name="Calibri", bold=True, size=10, color=_C_A_FG),
+        "B": Font(name="Calibri", bold=True, size=10, color=_C_B_FG),
+        "C": Font(name="Calibri", bold=True, size=10, color=_C_C_FG),
+    }
+    _font_dados = Font(name="Calibri", size=10)
+    _FMT_QTD   = "#,##0.00"
+    _FMT_MOE   = '"R$ "#,##0.00'
+    _FMT_PCT   = '0.00"%"'
+
+    _FORMATOS  = [None,     None,     _FMT_QTD, _FMT_MOE, _FMT_MOE, _FMT_PCT, _FMT_PCT]
+    _ALIGNS    = ["center", "left",   "right",  "right",  "right",  "right",  "right"]
+
+    for ri, (_, row) in enumerate(df.iterrows(), start=5):
+        cls  = str(row["Classe"])
+        fill = _fill_cls.get(cls, PatternFill())
+        vals = [
+            cls,
+            row["descricao"],
+            row["qtd_total"],
+            row["valor"],
+            row["preco_medio"],
+            row["pct"],
+            row["pct_acum"],
+        ]
+        for ci, (val, fmt, aln) in enumerate(zip(vals, _FORMATOS, _ALIGNS), start=1):
+            c = ws.cell(ri, ci, val)
+            c.fill      = fill
+            c.border    = _borda
+            c.alignment = Alignment(horizontal=aln, vertical="center")
+            c.font      = _font_cls[cls] if ci == 1 else _font_dados
+            if fmt:
+                c.number_format = fmt
+        ws.row_dimensions[ri].height = 16
+
+    # ── Linha de totais ───────────────────────────────────────────────────────
+    tr = 5 + len(df)
+    ws.merge_cells(start_row=tr, start_column=1, end_row=tr, end_column=2)
+    _ft_tot = Font(name="Calibri", bold=True, size=10, color=_C_BRANCO)
+    _fl_tot = PatternFill("solid", fgColor=_C_HEADER)
+    c = ws.cell(tr, 1, "TOTAL")
+    c.font      = _ft_tot;  c.fill      = _fl_tot;  c.border = _borda_tot
+    c.alignment = Alignment(horizontal="center", vertical="center")
+
+    _tot_vals = [None, None, df["qtd_total"].sum(), df["valor"].sum(), None, None, None]
+    for ci, (val, fmt, aln) in enumerate(zip(_tot_vals, _FORMATOS, _ALIGNS), start=1):
+        if ci <= 2:
+            continue
+        c = ws.cell(tr, ci, val)
+        c.font      = _ft_tot;  c.fill      = _fl_tot;  c.border = _borda_tot
+        c.alignment = Alignment(horizontal=aln, vertical="center")
+        if fmt and val is not None:
+            c.number_format = fmt
+    ws.row_dimensions[tr].height = 20
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf.getvalue()
+
 def _bool_col(series):
     return series.astype(str).str.lower().isin(["true", "1", "sim"])
 
@@ -356,6 +493,15 @@ with tab2:
                     "% Acumulado": lambda d: d["% Acumulado"].map("{:.2f}%".format),
                 }),
                 hide_index=True, use_container_width=True,
+            )
+
+            _excel_bytes = _gerar_excel_abc(abc_plot, _filtro_abc)
+            st.download_button(
+                label="📥 Exportar para Excel",
+                data=_excel_bytes,
+                file_name=f"curva_abc_{datetime.date.today().strftime('%Y-%m-%d')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=False,
             )
 
     # ── Ranking por Valor ─────────────────────────────────────────────────────
