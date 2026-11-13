@@ -32,7 +32,6 @@ def _gerar_excel_abc(df: pd.DataFrame, filtro: str = "Todas") -> bytes:
     import openpyxl
     from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
-    from openpyxl.chart import BarChart, LineChart, Reference, Series
 
     wb  = openpyxl.Workbook()
     ws  = wb.active
@@ -96,11 +95,6 @@ def _gerar_excel_abc(df: pd.DataFrame, filtro: str = "Todas") -> bytes:
     ws.auto_filter.ref = f"A4:{get_column_letter(N)}4"
     ws.freeze_panes   = "A5"
 
-    # Colunas auxiliares ocultas para o gráfico (H=Val.A, I=Val.B, J=Val.C)
-    for _ci_h, _lbl_h in [(8, "Classe A"), (9, "Classe B"), (10, "Classe C")]:
-        c = ws.cell(4, _ci_h, _lbl_h)
-        c.font = Font(name="Calibri", bold=True, size=10, color=_C_BRANCO)
-        c.fill = PatternFill("solid", fgColor=_C_HEADER)
 
     # ── Dados ─────────────────────────────────────────────────────────────────
     _fill_cls = {
@@ -142,10 +136,6 @@ def _gerar_excel_abc(df: pd.DataFrame, filtro: str = "Todas") -> bytes:
             if fmt:
                 c.number_format = fmt
         ws.row_dimensions[ri].height = 16
-        # valores para o gráfico (apenas a série da classe deste produto)
-        ws.cell(ri, 8, row["valor"] if cls == "A" else 0)
-        ws.cell(ri, 9, row["valor"] if cls == "B" else 0)
-        ws.cell(ri, 10, row["valor"] if cls == "C" else 0)
 
     # ── Linha de totais ───────────────────────────────────────────────────────
     tr = 5 + len(df)
@@ -167,57 +157,6 @@ def _gerar_excel_abc(df: pd.DataFrame, filtro: str = "Todas") -> bytes:
             c.number_format = fmt
     ws.row_dimensions[tr].height = 20
 
-    # Oculta colunas auxiliares do gráfico
-    for _ltr in ("H", "I", "J"):
-        ws.column_dimensions[_ltr].hidden = True
-
-    # ── Gráfico nativo na mesma aba (evita problema de cross-sheet reference) ─
-    _n  = len(df)
-    _r0 = 5          # primeira linha de dados
-    _r1 = 4 + _n     # última linha de dados (inclusive)
-
-    # BarChart empilhado — 3 séries (A/B/C), cada produto tem valor em apenas 1
-    # Clique na legenda no Excel mostra/oculta cada classe (filtro nativo)
-    bar = BarChart()
-    bar.type              = "col"
-    bar.grouping          = "stacked"
-    bar.overlap           = 100
-    bar.title             = "Curva ABC — Pareto de Produtos por Gasto"
-    bar.y_axis.title      = "R$ Total"
-    bar.y_axis.numFmt     = '"R$"#,##0'
-    bar.x_axis.tickLblPos = "low"
-    bar.width             = 25
-    bar.height            = 14
-
-    # add_data com título da linha 4 ("Classe A/B/C")
-    _data_bar = Reference(ws, min_col=8, max_col=10, min_row=4, max_row=_r1)
-    bar.add_data(_data_bar, titles_from_data=True)
-    bar.set_categories(Reference(ws, min_col=2, min_row=_r0, max_row=_r1))
-    for _i, _cor in enumerate(["C0392B", "E67E22", "27AE60"]):
-        bar.series[_i].graphicalProperties.solidFill      = _cor
-        bar.series[_i].graphicalProperties.line.solidFill = _cor
-
-    # Posições corretas dos eixos para gráfico de colunas verticais
-    bar.x_axis.axId  = 10
-    bar.x_axis.axPos = "b"   # eixo de categorias na base
-    bar.y_axis.axId  = 100
-    bar.y_axis.axPos = "l"   # eixo de valores à esquerda
-
-    # LineChart % Acumulado no eixo secundário (título vem do cabeçalho G4)
-    line = LineChart()
-    _data_ln = Reference(ws, min_col=7, min_row=4, max_row=_r1)
-    line.add_data(_data_ln, titles_from_data=True)
-    line.series[0].graphicalProperties.line.solidFill = "2980B9"
-    line.series[0].graphicalProperties.line.width     = 25400
-    line.y_axis.axId    = 200
-    line.y_axis.axPos   = "r"    # eixo secundário à direita
-    line.y_axis.crosses = "max"
-    line.y_axis.numFmt  = '0.0"%"'
-    line.y_axis.title   = "% Acumulado"
-    bar += line
-
-    # Posiciona o gráfico à direita dos dados (coluna L, linha 1)
-    ws.add_chart(bar, "L1")
 
     buf = io.BytesIO()
     wb.save(buf)
