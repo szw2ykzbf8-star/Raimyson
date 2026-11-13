@@ -97,7 +97,7 @@ def _gerar_excel_abc(df: pd.DataFrame, filtro: str = "Todas") -> bytes:
     ws.freeze_panes   = "A5"
 
     # Colunas auxiliares ocultas para o gráfico (H=Val.A, I=Val.B, J=Val.C)
-    for _ci_h, _lbl_h in [(8, "Val.A"), (9, "Val.B"), (10, "Val.C")]:
+    for _ci_h, _lbl_h in [(8, "Classe A"), (9, "Classe B"), (10, "Classe C")]:
         c = ws.cell(4, _ci_h, _lbl_h)
         c.font = Font(name="Calibri", bold=True, size=10, color=_C_BRANCO)
         c.fill = PatternFill("solid", fgColor=_C_HEADER)
@@ -171,14 +171,13 @@ def _gerar_excel_abc(df: pd.DataFrame, filtro: str = "Todas") -> bytes:
     for _ltr in ("H", "I", "J"):
         ws.column_dimensions[_ltr].hidden = True
 
-    # ── Aba "Gráfico" com gráfico nativo Excel ────────────────────────────────
-    ws_graf = wb.create_sheet("Gráfico", 0)
-
+    # ── Gráfico nativo na mesma aba (evita problema de cross-sheet reference) ─
     _n  = len(df)
     _r0 = 5          # primeira linha de dados
     _r1 = 4 + _n     # última linha de dados (inclusive)
 
-    # BarChart empilhado — uma série por classe, cada produto só tem valor em 1 série
+    # BarChart empilhado — 3 séries (A/B/C), cada produto tem valor em apenas 1
+    # Clique na legenda no Excel mostra/oculta cada classe (filtro nativo)
     bar = BarChart()
     bar.type              = "col"
     bar.grouping          = "stacked"
@@ -190,24 +189,20 @@ def _gerar_excel_abc(df: pd.DataFrame, filtro: str = "Todas") -> bytes:
     bar.width             = 25
     bar.height            = 14
 
-    _cats = Reference(ws, min_col=2, min_row=_r0, max_row=_r1)
-    for _col_h, _lbl_s, _cor_s in [(8, "Classe A", "C0392B"), (9, "Classe B", "E67E22"), (10, "Classe C", "27AE60")]:
-        _ref = Reference(ws, min_col=_col_h, min_row=_r0, max_row=_r1)
-        _ser = Series(_ref, title=_lbl_s)
-        _ser.graphicalProperties.solidFill         = _cor_s
-        _ser.graphicalProperties.line.solidFill    = _cor_s
-        bar.append(_ser)
-    bar.set_categories(_cats)
+    # add_data com título da linha 4 ("Classe A/B/C")
+    _data_bar = Reference(ws, min_col=8, max_col=10, min_row=4, max_row=_r1)
+    bar.add_data(_data_bar, titles_from_data=True)
+    bar.set_categories(Reference(ws, min_col=2, min_row=_r0, max_row=_r1))
+    for _i, _cor in enumerate(["C0392B", "E67E22", "27AE60"]):
+        bar.series[_i].graphicalProperties.solidFill      = _cor
+        bar.series[_i].graphicalProperties.line.solidFill = _cor
 
-    # LineChart % Acumulado no eixo secundário
+    # LineChart % Acumulado no eixo secundário (título vem do cabeçalho G4)
     line = LineChart()
-    _ref_pct = Reference(ws, min_col=7, min_row=_r0, max_row=_r1)
-    _ser_ln  = Series(_ref_pct, title="% Acumulado")
-    _ser_ln.graphicalProperties.line.solidFill = "2980B9"
-    _ser_ln.graphicalProperties.line.width     = 25400   # 2 pt
-    _ser_ln.smooth                             = True
-    _ser_ln.marker.symbol                      = "none"
-    line.append(_ser_ln)
+    _data_ln = Reference(ws, min_col=7, min_row=4, max_row=_r1)
+    line.add_data(_data_ln, titles_from_data=True)
+    line.series[0].graphicalProperties.line.solidFill = "2980B9"
+    line.series[0].graphicalProperties.line.width     = 25400
     line.y_axis.axId    = 200
     line.y_axis.crosses = "max"
     line.y_axis.numFmt  = '0.0"%"'
@@ -215,12 +210,8 @@ def _gerar_excel_abc(df: pd.DataFrame, filtro: str = "Todas") -> bytes:
     bar.y_axis.axId     = 100
     bar += line
 
-    ws_graf.add_chart(bar, "A1")
-
-    # Torna a aba Gráfico a ativa ao abrir
-    for _s in wb.worksheets:
-        _s.sheet_view.tabSelected = False
-    ws_graf.sheet_view.tabSelected = True
+    # Posiciona o gráfico à direita dos dados (coluna L, linha 1)
+    ws.add_chart(bar, "L1")
 
     buf = io.BytesIO()
     wb.save(buf)
