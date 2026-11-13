@@ -197,6 +197,12 @@ def _gerar_excel_abc(df: pd.DataFrame, filtro: str = "Todas") -> bytes:
         bar.series[_i].graphicalProperties.solidFill      = _cor
         bar.series[_i].graphicalProperties.line.solidFill = _cor
 
+    # Posições corretas dos eixos para gráfico de colunas verticais
+    bar.x_axis.axId  = 10
+    bar.x_axis.axPos = "b"   # eixo de categorias na base
+    bar.y_axis.axId  = 100
+    bar.y_axis.axPos = "l"   # eixo de valores à esquerda
+
     # LineChart % Acumulado no eixo secundário (título vem do cabeçalho G4)
     line = LineChart()
     _data_ln = Reference(ws, min_col=7, min_row=4, max_row=_r1)
@@ -204,10 +210,10 @@ def _gerar_excel_abc(df: pd.DataFrame, filtro: str = "Todas") -> bytes:
     line.series[0].graphicalProperties.line.solidFill = "2980B9"
     line.series[0].graphicalProperties.line.width     = 25400
     line.y_axis.axId    = 200
+    line.y_axis.axPos   = "r"    # eixo secundário à direita
     line.y_axis.crosses = "max"
     line.y_axis.numFmt  = '0.0"%"'
     line.y_axis.title   = "% Acumulado"
-    bar.y_axis.axId     = 100
     bar += line
 
     # Posiciona o gráfico à direita dos dados (coluna L, linha 1)
