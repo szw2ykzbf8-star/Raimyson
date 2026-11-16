@@ -48,7 +48,7 @@ if not produtos_ativos.empty:
     produtos_ativos["categoria"] = produtos_ativos["categoria"].fillna("").astype(str).str.strip()
     produtos_ativos = produtos_ativos.sort_values(
         "descricao", key=lambda x: x.str.lower(), ignore_index=True
-    )
+    ).drop_duplicates(subset=["id"], keep="first")
     _ordem_cats    = ler_categorias() + [""]
     _cats_presentes = [c for c in _ordem_cats if c in produtos_ativos["categoria"].values]
 else:
