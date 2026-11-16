@@ -3,7 +3,7 @@ import pandas as pd
 import datetime
 import io
 from modules.auth import requer_permissao
-from modules.google_sheets import ler_df, escrever_df, append_linha, atualizar_linha, ler_categorias
+from modules.google_sheets import ler_df, escrever_df, append_linha, atualizar_linha, ler_categorias, remover_linha
 
 usuario = requer_permissao("produtos")
 
@@ -153,6 +153,21 @@ with tab_lista:
                             st.success("Produto atualizado!")
                             st.cache_data.clear()
                             st.rerun()
+                    st.markdown("---")
+                    confirmar_exclusao = st.checkbox(
+                        "Confirmar exclusão", key=f"confirmar_del_{i}",
+                        help="Marque para habilitar o botão de exclusão permanente."
+                    )
+                    if st.button(
+                        "🗑️ Excluir produto", key=f"excluir_{i}",
+                        use_container_width=True,
+                        disabled=not confirmar_exclusao,
+                        type="primary" if confirmar_exclusao else "secondary",
+                    ):
+                        remover_linha("produtos", row["id"])
+                        st.success(f"Produto '{row['descricao']}' excluído.")
+                        st.cache_data.clear()
+                        st.rerun()
 
 with tab_novo:
     st.markdown("#### Cadastrar novo produto")
@@ -224,6 +239,14 @@ with tab_novo:
             st.error("Descrição e apresentação são obrigatórias.")
         elif not _qtd_base_ok:
             st.error("Qtd base inválida. Use número maior que zero (ex: 5, 0.75, 269).")
+        elif not df.empty and (
+            (df["descricao"].str.strip().str.lower() == descricao.strip().lower()) &
+            (df["apresentacao"].str.strip().str.lower() == apresentacao.strip().lower())
+        ).any():
+            st.error(
+                f"Já existe um produto com descrição '{descricao.strip()}' e apresentação '{apresentacao.strip()}'. "
+                "Verifique a lista de produtos antes de cadastrar novamente."
+            )
         else:
             novo_id = int(df["id"].max()) + 1 if not df.empty else 1
             append_linha("produtos", [

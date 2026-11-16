@@ -66,6 +66,12 @@ def _gs_append_linha(nome_chave: str, linha: list):
     ws.append_row(linha)
 
 
+def _gs_remover_linha(nome_chave: str, id_valor: str):
+    df = _gs_ler_df(nome_chave)
+    df = df[df["id"].astype(str) != str(id_valor)]
+    _gs_escrever_df(nome_chave, df)
+
+
 def _gs_atualizar_celula(nome_chave: str, row: int, col: int, valor):
     ws = _gs_get_sheet(nome_chave)
     ws.update_cell(row, col, valor)
@@ -202,6 +208,7 @@ if os.environ.get("DATABASE_URL"):
         atualizar_celula,
         atualizar_linha,
         get_next_id,
+        remover_linha,
     )
 else:
     ler_df           = _gs_ler_df
@@ -209,6 +216,7 @@ else:
     append_linha     = _gs_append_linha
     get_sheet        = _gs_get_sheet
     atualizar_celula = _gs_atualizar_celula
+    remover_linha    = _gs_remover_linha
 
     def get_next_id(nome_chave: str) -> int:
         df = _gs_ler_df(nome_chave)

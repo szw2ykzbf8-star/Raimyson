@@ -145,6 +145,16 @@ def atualizar_linha(nome_chave: str, id_valor: str, campos: dict):
         )
 
 
+def remover_linha(nome_chave: str, id_valor: str):
+    """DELETE single row by id."""
+    engine = get_engine()
+    with engine.begin() as conn:
+        conn.execute(
+            text(f'DELETE FROM "{nome_chave}" WHERE "id" = :_id'),
+            {"_id": str(id_valor)},
+        )
+
+
 class TableProxy:
     def __init__(self, nome_chave: str):
         self.nome_chave = nome_chave
