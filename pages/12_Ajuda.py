@@ -528,6 +528,15 @@ if "📊 Análise de Preços" in ti:
 > Após gerar a compra, as quantidades ficam bloqueadas. Para alterar, é necessário liberar a compra (veja abaixo).
             """)
 
+        with st.expander("⚠️ Itens sem proposta de nenhum fornecedor"):
+            st.markdown("""
+Se um produto foi solicitado mas **todos os fornecedores** selecionaram *Não possui* ou *Não trabalha*, ele aparece na tabela normalmente, porém:
+- Todas as colunas de fornecedor mostram **Não possui**.
+- O nome do produto exibe o aviso **⚠️ Nenhum fornecedor cotou** em amarelo.
+
+Isso pode ocorrer quando o produto é muito específico ou saiu de linha. Neste caso é necessário providenciar a compra por outra via (fornecedor alternativo, compra direta, etc.) — sem este alerta, o item seria completamente invisível na análise.
+            """)
+
         with st.expander("📌 Pedido mínimo e como ignorar"):
             st.markdown("""
 - Cada fornecedor pode ter um **pedido mínimo** cadastrado (valor total mínimo de compra).

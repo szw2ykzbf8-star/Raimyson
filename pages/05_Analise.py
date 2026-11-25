@@ -288,6 +288,20 @@ with tab_ativa:
     )
     unidades_cot = sorted(peds_cot["unidade"].unique().tolist()) if not peds_cot.empty else []
 
+    # Produtos solicitados na cotação mas sem nenhuma proposta de fornecedor
+    _prod_ids_sem_resp: set = set()
+    if not peds_cot.empty and not df_itens.empty:
+        _ped_ids_cot = set(peds_cot["id"].apply(_safe_int).tolist())
+        _itens_sem = df_itens[df_itens["pedido_id"].apply(_safe_int).isin(_ped_ids_cot)]
+        _resp_pids = set(prod_ids)
+        for _, _it in _itens_sem.iterrows():
+            _pid = _safe_int(_it["produto_id"])
+            if _pid > 0 and _pid not in _resp_pids:
+                _prod_cd = prod_map.get(_pid, {})
+                if str(_prod_cd.get("compra_direta", "False")).strip().lower() not in ("true", "1"):
+                    _prod_ids_sem_resp.add(_pid)
+    all_prod_ids = sorted(set(prod_ids) | _prod_ids_sem_resp)
+
     # Original quantities per product per unit (from itens_pedido)
     def _qtd_orig(pid, unid):
         if df_itens.empty or peds_cot.empty:
@@ -598,7 +612,7 @@ with tab_ativa:
     st.markdown("<hr style='margin:2px 0 8px'>", unsafe_allow_html=True)
 
     # Product rows
-    for pid in prod_ids:
+    for pid in all_prod_ids:
         prod      = prod_map.get(pid, {})
         nome_prod = str(prod.get("descricao", f"Produto {pid}"))
         ub        = str(prod.get("unidade_base", ""))
@@ -607,11 +621,20 @@ with tab_ativa:
         qtds_unid = {u: _get_qtd(pid, u) for u in unidades_cot}
         qtd_total = sum(qtds_unid.values())
         cur_sel   = _get_sel(pid)
+        sem_resp  = pid in _prod_ids_sem_resp
 
         row = st.columns(col_widths)
 
         with row[0]:
-            st.markdown(f"**{nome_prod}**")
+            if sem_resp:
+                st.markdown(
+                    f"**{nome_prod}**  \n"
+                    f"<small style='color:#b45309;background:#fef3c7;"
+                    f"padding:1px 6px;border-radius:3px'>⚠️ Nenhum fornecedor cotou</small>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(f"**{nome_prod}**")
             if apres:
                 st.caption(apres)
 
