@@ -86,8 +86,7 @@ def _tentar_encerrar_cotacao(cot_id_chk, df_compras_all, df_cd_all):
 
 
 # ── Gerador de HTML (preview inline) ─────────────────────────────────────────
-_CSS = """<style>
-body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:20px}
+_CSS = """body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:20px}
 h2{font-size:15px;margin:0 0 4px}
 h3{font-size:12px;font-weight:bold;margin:14px 0 5px;
    border-bottom:1px solid #bbb;padding-bottom:3px}
@@ -100,9 +99,8 @@ td{border:1px solid #ddd;padding:4px 6px;vertical-align:top}
 .total{font-weight:bold;font-size:13px;margin:10px 0 4px}
 .cmts{font-size:11px;margin-top:8px}
 .section{margin-bottom:20px}
-.section + .section{page-break-before:always}
-@media print{.no-print{display:none!important}}
-</style>"""
+.section+.section{page-break-before:always;break-before:page}
+@media print{.no-print{display:none!important}}"""
 
 
 def _rows_html(itens_det):
@@ -420,7 +418,12 @@ with tab_regular:
                     f"<div style='margin-top:24px;padding:12px 0;border-top:2px solid #333;text-align:right'>"
                     f"<b style='font-size:14px'>Total Geral do Fornecedor: R$ {total_geral:.2f}</b></div>"
                 )
-                html_completo = _CSS + "<body>" + "".join(secoes_html) + total_geral_html + "</body>"
+                html_completo = (
+                    '<!DOCTYPE html><html><head><meta charset="utf-8">'
+                    f"<style>{_CSS}</style></head><body>"
+                    + "".join(secoes_html) + total_geral_html
+                    + "</body></html>"
+                )
                 _nome_cot_grp = next((i["nome_cot"] for i in compras_info if i.get("nome_cot")), "")
                 import re as _re
                 nome_safe = _re.sub(r"[^\w]", "_", nome_forn)[:30]
